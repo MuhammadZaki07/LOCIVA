@@ -1,10 +1,10 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import LandingPage from "@/pages";
-import Login from "@/pages/Login";
-import Register from "@/pages/Register";
-import AdminDashboard from "@/pages/AdminDashboard";
+import Login from "@/pages/auth/Login";
+import Register from "@/pages/auth/Register";
+import AdminDashboard from "@/pages/dashboard/AdminDashboard";
 import AdminUsers from "@/pages/AdminUsers";
-import UserDashboard from "@/pages/UserDashboard";
+import UserDashboard from "@/pages/dashboard/UserDashboard";
 import GuestRoute from "@/components/guard/GuestRoute";
 import ProtectedRoute from "@/components/guard/ProtectedRoute";
 import RoleRoute from "@/components/guard/RoleRoute";
@@ -12,13 +12,11 @@ import AdminLayout from "@/layouts/AdminLayout";
 import MainLayout from "@/layouts/MainLayout";
 
 const router = createBrowserRouter([
-  // Public Landing Page
   {
     path: "/",
     element: <LandingPage />,
   },
 
-  // Guest Routes (restricted to unauthenticated visitors)
   {
     element: <GuestRoute />,
     children: [
@@ -33,7 +31,6 @@ const router = createBrowserRouter([
     ],
   },
 
-  // Protected User Routes (requires authenticated account)
   {
     element: <ProtectedRoute />,
     children: [
@@ -49,7 +46,6 @@ const router = createBrowserRouter([
     ],
   },
 
-  // Protected Admin Routes (requires role="admin")
   {
     element: <RoleRoute allowedRoles={["admin"]} />,
     children: [
@@ -69,7 +65,6 @@ const router = createBrowserRouter([
     ],
   },
 
-  // Fallback redirect
   {
     path: "*",
     element: <Navigate to="/" replace />,
