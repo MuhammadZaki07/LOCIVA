@@ -6,17 +6,17 @@
 
 ---
 
-## 📌 Gambaran Umum
+## Gambaran Umum
 
 **LOCIVA** (*Location Intelligence & Civic Analytics*) adalah platform berbasis web yang mengombinasikan peta interaktif, data spasial kawasan, analisis lokasi, simulasi bisnis, dan laporan masyarakat dalam satu ekosistem digital terpadu. Dikembangkan untuk **Web Development Competition UINIC 8.0** (HMPS Informatika UIN Sunan Kalijaga Yogyakarta) dengan tema utama **"Engineering Interconnected Web Solutions to Empower Digital Ecosystems"** dan subtema SDGs **Artificial Intelligence (AI) & Teknologi Digital**.
 
 LOCIVA dirancang untuk menjawab dua pertanyaan mendasar di kawasan yang sama:
-- 👤 **Bagi Masyarakat:** *"Apa yang sedang terjadi di kawasan ini?"*
-- 🏪 **Bagi Pelaku Usaha:** *"Apakah kawasan ini cocok untuk bisnis saya?"*
+- **Bagi Masyarakat:** *"Apa yang sedang terjadi di kawasan ini?"*
+- **Bagi Pelaku Usaha:** *"Apakah kawasan ini cocok untuk bisnis saya?"*
 
 ---
 
-## 🚀 Masalah & Solusi
+## Masalah & Solusi
 
 ### Masalah
 1. **Keputusan Bisnis yang Spekulatif:** Calon pelaku usaha sering memilih lokasi hanya berdasarkan asumsi visual (seperti "terlihat ramai" atau "dekat jalan besar"). Padahal, lokasi yang ramai kendaraan belum tentu ramah bagi pejalan kaki atau cocok untuk model bisnis tertentu.
@@ -28,9 +28,9 @@ $$\text{Citizen Data} \longrightarrow \text{Area Intelligence} \longrightarrow \
 
 ---
 
-## 🌟 Dua Sisi Utama & Fitur Unggulan
+## Dua Sisi Utama & Fitur Unggulan
 
-### 1. 🏪 Business Intelligence (Pelaku Usaha)
+### 1. Business Intelligence (Pelaku Usaha)
 * **Interactive Business Simulator:** Fitur *drag & drop* untuk menempatkan jenis usaha (seperti *Food Cart*, *Cafe*, *Barber*, *Fashion Store*, *Retail*) langsung pada titik peta yang diinginkan.
 * **Location Potential Score:** Algoritma penilaian potensi berbasis multi-faktor (dikategorikan menjadi 🟢 *Potential*, 🟡 *Consideration*, dan 🔴 *Less Potential*). Contoh pembobotan untuk *Food Cart*:
   - Populasi (25%)
@@ -45,23 +45,23 @@ $$\text{Citizen Data} \longrightarrow \text{Area Intelligence} \longrightarrow \
 * **What-If Simulation:** Fasilitas pengujian skenario ganda untuk membandingkan performa beberapa opsi lokasi (*Location A vs Location B*) atau beberapa variasi jenis usaha (*Cafe vs Food Cart vs Barber*).
 * **AI Differentiation Engine:** Lapisan kecerdasan buatan (*AI enhancement layer*) yang memberikan saran strategi bisnis, *product mix*, penentuan target pasar, USP (*Unique Selling Proposition*), dan strategi promosi ketika pengguna memilih tetap membuka usaha di area bersaing tinggi.
 
-### 2. 🏙️ Civic / Area Intelligence (Masyarakat)
+### 2. Civic / Area Intelligence (Masyarakat)
 * **LOCIVA Report:** Sistem pelaporan masalah infrastruktur kawasan berbasis *pin location*. Kategori laporan mencakup:
-  - 🛣️ Jalan Rusak
-  - 🌊 Banjir
-  - 🗑️ Penumpukan Sampah
-  - 💡 Lampu Jalan Mati
-  - 🚦 Rambu / Lampu Lalu Lintas
-  - 🚶 Trotoar Rusak
-  - 🌳 Pohon Mengganggu
-  - 💧 Drainase Bermasalah
+  -  Jalan Rusak
+  -  Banjir
+  -  Penumpukan Sampah
+  -  Lampu Jalan Mati
+  -  Rambu / Lampu Lalu Lintas
+  -  Trotoar Rusak
+  -  Pohon Mengganggu
+  -  Drainase Bermasalah
 * **Atribut Laporan Lengkap:** Setiap laporan menyertakan foto dokumentasi, koordinat presisi, *timestamp*, dan keterangan detail.
 * **Community Verification:** Mekanisme konfirmasi warga untuk menguji validitas dan keberlanjutan masalah di lapangan.
 * **Transparansi Status Laporan:** Penelusuran status laporan secara *real-time*: `Reported` $\rightarrow$ `Verification` $\rightarrow$ `Confirmed` $\rightarrow$ `Handled` $\rightarrow$ `Resolved`.
 
 ---
 
-## 🔄 Integrasi Citizen Data & Business Intelligence
+##  Integrasi Citizen Data & Business Intelligence
 
 Keunggulan utama LOCIVA terletak pada dinamisnya hubungan antara laporan masyarakat dengan kalkulasi kelayakan bisnis. 
 
@@ -69,7 +69,7 @@ Ketika masyarakat melaporkan gangguan infrastruktur (misalnya marak laporan banj
 
 ---
 
-## 🏗️ Arsitektur Sistem & Teknologi
+## Arsitektur Sistem & Teknologi
 
 LOCIVA dibangun dengan arsitektur web yang *scalable*, aman, dan interoperabel sesuai dengan kriteria rekayasa perangkat lunak UINIC 8.0:
 
@@ -105,7 +105,7 @@ LOCIVA dibangun dengan arsitektur web yang *scalable*, aman, dan interoperabel s
 
 ---
 
-## 📊 Sumber Data
+## Sumber Data
 
 Seluruh data yang ditampilkan di dalam platform dapat dilacak asal-usulnya (*transparent data lineage*):
 1. **Geographic Data:** OpenStreetMap (jaringan jalan, *Point of Interest*/POI, *land use*, fasilitas publik).
@@ -115,7 +115,7 @@ Seluruh data yang ditampilkan di dalam platform dapat dilacak asal-usulnya (*tra
 
 ---
 
-## 🎯 Alur Demo Penggunaan
+## Alur Demo Penggunaan
 
 1. **Akses Map Interaktif:** Buka platform LOCIVA dan pilih area analisis (misal: Kota Malang).
 2. **Pilih & Menempatkan Bisnis:** Pilih ikon bisnis *"Food Cart"* pada modul *Interactive Business Simulator* lalu *drag & drop* ke titik jalan tertentu.
@@ -127,7 +127,7 @@ Seluruh data yang ditampilkan di dalam platform dapat dilacak asal-usulnya (*tra
 
 ---
 
-## 🏆 Relevansi Kompetisi UINIC 8.0
+## Relevansi Kompetisi UINIC 8.0
 
 - **Penyelenggara:** HMPS Informatika UIN Sunan Kalijaga Yogyakarta
 - **Tema Kegiatan:** *"Empowering a Sustainable Digital Ecosystem"*
@@ -137,6 +137,6 @@ Seluruh data yang ditampilkan di dalam platform dapat dilacak asal-usulnya (*tra
 
 ---
 
-## 📝 Lisensi & Hak Cipta
+## Lisensi & Hak Cipta
 
 Dipublikasikan sebagai bagian dari keikutsertaan dalam **Web Development Competition UINIC 8.0 (2026)**. Seluruh hak cipta atas konsep, desain, dan kode sumber dimiliki oleh Tim Pengembang.
