@@ -17,7 +17,7 @@ import { Footer } from "./components/Footer";
 
 function App() {
   return (
-    <div className="min-h-svh bg-canvas text-ink">
+    <div className="min-h-svh bg-white text-ink">
       <Navbar />
       <main className="max-w-9xl mx-auto">
         <Hero />
