@@ -8,10 +8,10 @@ import {
   scoreTone,
   type BusinessId,
   type FactorKey,
-} from "../data/mock";
-import { useCountUp } from "../hooks/useCountUp";
-import { ClayButton } from "./ui/ClayButton";
-import { DemoNote, Eyebrow, Section } from "./ui/Section";
+} from "../../data/mock";
+import { useCountUp } from "../../hooks/useCountUp";
+import { ClayButton } from "../ui/ClayButton";
+import { DemoNote, Eyebrow, Section } from "../ui/Section";
 import { MapPreview } from "./MapPreview";
 import { Coffee, Scissors, ShoppingBag, Store, UtensilsCrossed } from "lucide-react";
 

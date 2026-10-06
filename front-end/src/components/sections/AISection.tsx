@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Eyebrow, Section } from "./ui/Section";
-import { aiScenarios } from "../data/mock";
+import { Eyebrow, Section } from "../ui/Section";
+import { aiScenarios } from "../../data/mock";
 import { MessageSquare } from "lucide-react";
 
 export function AISection() {

@@ -14,8 +14,8 @@ import {
   Trash2,
   UtensilsCrossed,
 } from "lucide-react";
-import { useCountUp } from "../hooks/useCountUp";
-import { scoreCopy, scoreTone, type BusinessId } from "../data/mock";
+import { useCountUp } from "../../hooks/useCountUp";
+import { scoreCopy, scoreTone, type BusinessId } from "../../data/mock";
 
 export type MapVariant = "hero" | "simulation" | "civic" | "layers" | "problem";
 

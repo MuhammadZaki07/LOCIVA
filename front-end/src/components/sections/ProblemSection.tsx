@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eyebrow, Section } from "./ui/Section";
+import { Eyebrow, Section } from "../ui/Section";
 import { MapPreview, type LayerKey } from "./MapPreview";
 import { AlertCircle, Footprints, Navigation, Store, Users, ShieldAlert } from "lucide-react";
 

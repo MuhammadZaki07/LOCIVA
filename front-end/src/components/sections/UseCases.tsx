@@ -1,4 +1,4 @@
-import { Eyebrow, Section } from "./ui/Section";
+import { Eyebrow, Section } from "../ui/Section";
 import { Store, Users, Building2 } from "lucide-react";
 
 const cases = [

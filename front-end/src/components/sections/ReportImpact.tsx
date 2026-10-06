@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useCountUp } from "../hooks/useCountUp";
-import { DemoNote, Eyebrow, Section } from "./ui/Section";
+import { useCountUp } from "../../hooks/useCountUp";
+import { DemoNote, Eyebrow, Section } from "../ui/Section";
 
 export function ReportImpact() {
   const [includeCivicSignals, setIncludeCivicSignals] = useState(true);

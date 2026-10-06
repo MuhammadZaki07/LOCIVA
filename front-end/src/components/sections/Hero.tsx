@@ -1,4 +1,4 @@
-import { ClayButton } from "./ui/ClayButton";
+import { ClayButton } from "../ui/ClayButton";
 import { MapPreview } from "./MapPreview";
 import { Layers, MapPin, Users } from "lucide-react";
 

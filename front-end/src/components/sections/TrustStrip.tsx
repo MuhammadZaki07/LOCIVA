@@ -1,4 +1,4 @@
-import { DemoNote } from "./ui/Section";
+import { DemoNote } from "../ui/Section";
 import { Users, Store, AlertTriangle, Compass } from "lucide-react";
 
 const signals = [

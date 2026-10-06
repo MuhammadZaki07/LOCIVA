@@ -1,4 +1,4 @@
-import { Eyebrow, Section } from "./ui/Section";
+import { Eyebrow, Section } from "../ui/Section";
 import {
   Store,
   MapPin,

@@ -1,4 +1,4 @@
-import { Eyebrow, Section } from "./ui/Section";
+import { Eyebrow, Section } from "../ui/Section";
 import { MousePointerClick, Search, SlidersHorizontal, CheckCircle2 } from "lucide-react";
 
 const steps = [

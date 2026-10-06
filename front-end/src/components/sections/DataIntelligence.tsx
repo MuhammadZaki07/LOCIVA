@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { DemoNote, Eyebrow, Section } from "./ui/Section";
+import { DemoNote, Eyebrow, Section } from "../ui/Section";
 import { MapPreview, type LayerKey } from "./MapPreview";
 import { Map, Users, Compass, Store, Navigation, AlertTriangle } from "lucide-react";
 

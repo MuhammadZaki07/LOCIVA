@@ -1,4 +1,4 @@
-import { ClayButton } from "./ui/ClayButton";
+import { ClayButton } from "../ui/ClayButton";
 
 export function CTA() {
   return (

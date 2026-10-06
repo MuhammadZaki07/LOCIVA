@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { locations, type LocationId } from "../data/mock";
-import { useCountUp } from "../hooks/useCountUp";
-import { DemoNote, Eyebrow, Section } from "./ui/Section";
+import { locations, type LocationId } from "../../data/mock";
+import { useCountUp } from "../../hooks/useCountUp";
+import { DemoNote, Eyebrow, Section } from "../ui/Section";
 import { Sliders } from "lucide-react";
 
 type BusinessOption = "cafe" | "food cart" | "retail";
