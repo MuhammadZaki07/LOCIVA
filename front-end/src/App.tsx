@@ -19,7 +19,7 @@ function App() {
   return (
     <div className="min-h-svh bg-canvas text-ink">
       <Navbar />
-      <main>
+      <main className="max-w-9xl mx-auto">
         <Hero />
         <TrustStrip />
         <ProblemSection />
