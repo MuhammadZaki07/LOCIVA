@@ -16,6 +16,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: mbstring, xml, ctype, json, bcmath, fileinfo, pdo, pdo_mysql
+          tools: composer
+
+      - name: Install Composer dependencies
+        working-directory: ./back-end
+        run: composer install --no-dev --optimize-autoloader --no-interaction
+
       - name: Deploy backend
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
@@ -27,3 +38,4 @@ jobs:
           exclude: |
             **/.env
             **/.htaccess
+
