@@ -2,11 +2,20 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\ApiResponse;
+use App\Http\Requests\BusinessWeightRequest;
+use App\Http\Requests\BusinessWeightUpdateRequest;
 use App\Models\BusinessTypeWeight;
-use Illuminate\Http\Request;
+use App\Repositories\BusinessTypeWeightRepository;
+use Illuminate\Support\Facades\DB;
 
 class BusinessTypeWeightController extends Controller
 {
+    private $businessWeightRepo;
+    public function __construct(BusinessTypeWeightRepository $businessWeightRepo)
+    {
+        $this->businessWeightRepo = $businessWeightRepo;
+    }
     /**
      * Display a listing of the resource.
      */
@@ -26,17 +35,36 @@ class BusinessTypeWeightController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(BusinessWeightRequest $request)
     {
-        //
+        $validate = $request->validated();
+
+        DB::beginTransaction();
+        try {
+            $business = $this->businessWeightRepo->create($validate);
+
+            DB::commit();
+            return ApiResponse::success($business, 'Create business successful', 200);
+        } catch (\Throwable $th) {
+            DB::rollBack();
+            return ApiResponse::error('Failed store data' . $th->getMessage(), 500);
+        }
     }
 
     /**
      * Display the specified resource.
      */
-    public function show(BusinessTypeWeight $businessTypeWeight)
+    public function show(string $id)
     {
-        //
+        try {
+            $data = $this->businessWeightRepo->find($id);
+
+            if (!$data) return ApiResponse::error('Data not found', 404);
+
+            return ApiResponse::success($data, 'Data retrieved successfully');
+        } catch (\Throwable $th) {
+            return ApiResponse::error('Failed get data: ' . $th->getMessage(), 500);
+        }
     }
 
     /**
@@ -50,16 +78,43 @@ class BusinessTypeWeightController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, BusinessTypeWeight $businessTypeWeight)
+    public function update(BusinessWeightUpdateRequest $request, string $id)
     {
-        //
+        $data = $this->businessWeightRepo->find($id);
+        if (!$data) return ApiResponse::error('Data not found', 404);
+
+        $validate = $request->validated();
+
+        DB::beginTransaction();
+        try {
+            $this->businessWeightRepo->update($id, $validate);
+            $newData = $this->businessWeightRepo->find($id);
+
+            DB::commit();
+            return ApiResponse::success($newData, 'Data updated successfully');
+        } catch (\Throwable $th) {
+            DB::rollBack();
+            return ApiResponse::error('Data not updated: ' . $th->getMessage(), 500);
+        }
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(BusinessTypeWeight $businessTypeWeight)
+    public function destroy(string $id)
     {
-        //
+        $data = $this->businessWeightRepo->find($id);
+        if (!$data) return ApiResponse::error('Data not found', 404);
+
+        DB::beginTransaction();
+        try {
+            $delete = $this->businessWeightRepo->delete($id);
+
+            DB::commit();
+            return ApiResponse::success($delete, 'Data deleted successfully');
+        } catch (\Throwable $th) {
+            DB::rollBack();
+            return ApiResponse::error('Data not deleted: ' . $th->getMessage(), 500);
+        }
     }
 }
