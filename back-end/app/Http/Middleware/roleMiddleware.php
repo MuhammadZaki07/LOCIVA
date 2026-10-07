@@ -6,13 +6,27 @@ use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-class roleMiddleware
+class RoleMiddleware
 {
+    public function handle(
+        Request $request,
+        Closure $next,
+        ...$roles
+    ): Response {
+        $user = $request->user();
 
-    public function handle(Request $request, Closure $next, $role): Response
-    {
-        if (! $request->user() || ! $request->user()->hasRole($role)) {
-            return response()->json(['message' => 'Unauthorized.'], 403);
+        if (!$user) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthenticated.',
+            ], 401);
+        }
+
+        if (!in_array($user->role, $roles)) {
+            return response()->json([
+                'status' => false,
+                'message' => 'You do not have permission to access this resource.',
+            ], 403);
         }
 
         return $next($request);
