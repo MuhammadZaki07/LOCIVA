@@ -26,15 +26,6 @@ jobs:
         working-directory: ./back-end
         run: composer install --no-dev --optimize-autoloader
 
-      - name: Prepare Laravel
-        working-directory: ./back-end
-        run: |
-          php artisan optimize:clear
-          php artisan config:cache
-          php artisan route:cache
-          php artisan view:cache
-          php artisan migrate
-
       - name: Deploy backend
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
         with:
