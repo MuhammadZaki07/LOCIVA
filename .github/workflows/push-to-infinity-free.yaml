@@ -23,7 +23,7 @@ jobs:
           username: ${{ secrets.FTP_BACKEND_USERNAME }}
           password: ${{ secrets.FTP_BACKEND_PASS }}
           local-dir: ./back-end/
-          server-dir: /htdocs/
+          server-dir: /lociva.freedev.app/htdocs/
           exclude: |
             **/.env
             **/.htaccess

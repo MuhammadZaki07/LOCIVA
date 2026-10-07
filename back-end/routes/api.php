@@ -9,5 +9,5 @@ Route::get('/user', function (Request $request) {
 
 
 Route::get('/test', function(){
-    return "hello, world"
+    return "hello, world";
 });
