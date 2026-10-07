@@ -10,4 +10,14 @@ class BusinessType extends Model
 {
     use HasUuids, SoftDeletes;
     protected $guarded = ['id'];
+
+    public function businesses()
+    {
+        return $this->hasMany(Business::class);
+    }
+
+    public function businessTypeWeights()
+    {
+        return $this->hasMany(BusinessTypeWeight::class);
+    }
 }

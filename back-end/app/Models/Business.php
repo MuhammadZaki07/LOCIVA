@@ -10,4 +10,9 @@ class Business extends Model
 {
     use HasUuids, SoftDeletes;
     protected $guarded = ['id'];
+
+    public function businessType()
+    {
+        return $this->belongsTo(BusinessType::class);
+    }
 }
