@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Camera, MapPin, Check, ThumbsUp, AlertTriangle, Droplets, Trash2, Lightbulb, Clock } from "lucide-react";
-import { civicReports, reportStatuses, type CivicReportItem } from "../data/mock";
-import { DemoNote, Eyebrow, Section } from "./ui/Section";
+import { civicReports, reportStatuses, type CivicReportItem } from "../../data/mock";
+import { DemoNote, Eyebrow, Section } from "../ui/Section";
 import { MapPreview } from "./MapPreview";
 
 export function CivicReport() {

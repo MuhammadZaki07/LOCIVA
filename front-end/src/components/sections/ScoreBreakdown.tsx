@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { factorExplanations, factorLabels, type FactorKey } from "../data/mock";
-import { useCountUp } from "../hooks/useCountUp";
-import { DemoNote, Eyebrow, Section } from "./ui/Section";
+import { factorExplanations, factorLabels, type FactorKey } from "../../data/mock";
+import { useCountUp } from "../../hooks/useCountUp";
+import { DemoNote, Eyebrow, Section } from "../ui/Section";
 import { HelpCircle } from "lucide-react";
 
 const factors: { key: FactorKey; value: number; tag: string }[] = [
