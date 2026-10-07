@@ -25,7 +25,9 @@ class AuthController extends Controller
             'email' => $request->email,
             'password' => $request->password,
         ]);
+
         $user->assignRole('user');
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return ApiResponse::success(
@@ -33,7 +35,7 @@ class AuthController extends Controller
                 'user' => $user,
                 'token' => $token,
             ],
-            'Registrasi berhasil.',
+            'Registration successful.',
             201
         );
     }
@@ -53,7 +55,7 @@ class AuthController extends Controller
             $user->password
         )) {
             return ApiResponse::unauthorized(
-                'Email atau password salah.'
+                'Invalid email or password.'
             );
         }
 
@@ -68,7 +70,7 @@ class AuthController extends Controller
                 'user' => $user,
                 'token' => $token,
             ],
-            'Login berhasil.'
+            'Login successful.'
         );
     }
 
@@ -79,7 +81,7 @@ class AuthController extends Controller
     {
         return ApiResponse::success(
             $request->user(),
-            'Data user berhasil diambil.'
+            'User data retrieved successfully.'
         );
     }
 
@@ -94,7 +96,7 @@ class AuthController extends Controller
 
         return ApiResponse::success(
             null,
-            'Logout berhasil.'
+            'Logout successful.'
         );
     }
 
@@ -110,14 +112,14 @@ class AuthController extends Controller
 
         if ($status !== Password::RESET_LINK_SENT) {
             return ApiResponse::error(
-                'Email tidak ditemukan atau gagal mengirim link reset password.',
+                'Email not found or failed to send password reset link.',
                 400
             );
         }
 
         return ApiResponse::success(
             null,
-            'Link reset password telah dikirim ke email.'
+            'Password reset link has been sent to your email.'
         );
     }
 
@@ -139,20 +141,21 @@ class AuthController extends Controller
                     'password' => $password,
                     'remember_token' => Str::random(60),
                 ])->save();
+
                 $user->tokens()->delete();
             }
         );
 
         if ($status !== Password::PASSWORD_RESET) {
             return ApiResponse::error(
-                'Token reset password tidak valid atau sudah kadaluarsa.',
+                'The password reset token is invalid or has expired.',
                 400
             );
         }
 
         return ApiResponse::success(
             null,
-            'Password berhasil direset.'
+            'Password has been reset successfully.'
         );
     }
 }

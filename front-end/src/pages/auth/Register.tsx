@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Store,
 } from "lucide-react";
+import Logo from "@/components/sections/Logo";
 
 export default function Register() {
   const { register } = useAuth();
@@ -96,10 +97,7 @@ export default function Register() {
               to="/"
               className="inline-flex items-center gap-2 font-display text-[24px] font-medium tracking-tight text-ink no-underline"
             >
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
-                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
-              </span>
+               <Logo />
               <span>lociva</span>
             </Link>
             <h1 className="mt-3 font-display text-[24px] font-medium text-ink">

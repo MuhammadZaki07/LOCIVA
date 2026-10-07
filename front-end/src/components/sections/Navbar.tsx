@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Menu, X, LogIn, UserPlus, LogOut, ShieldCheck, LayoutDashboard } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import Logo from "./Logo";
 
 const links = [
   { href: "#product", label: "product" },
@@ -53,10 +54,7 @@ export function Navbar() {
             href="#top"
             className="group flex items-center gap-2 font-display text-[20px] font-medium tracking-tight text-ink no-underline pill-bubble-item"
           >
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-            </span>
+           <Logo />
             <span>lociva</span>
           </a>
 
