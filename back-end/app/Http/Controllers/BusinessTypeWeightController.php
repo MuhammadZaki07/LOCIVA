@@ -3,10 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Helpers\ApiResponse;
+use App\Helpers\PaginationHelper;
 use App\Http\Requests\BusinessWeightRequest;
 use App\Http\Requests\BusinessWeightUpdateRequest;
+use App\Http\Resources\BusinessTypeWeightResource;
+use App\Models\Business;
 use App\Models\BusinessTypeWeight;
 use App\Repositories\BusinessTypeWeightRepository;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class BusinessTypeWeightController extends Controller
@@ -19,9 +23,14 @@ class BusinessTypeWeightController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        //
+        try {
+            $fetch = $this->businessWeightRepo->paginate($request->query('per_page', 10));
+            return ApiResponse::success(["mete" => PaginationHelper::meta($fetch), "Data" => BusinessTypeWeightResource::collection($fetch)]);
+        } catch (\Throwable $th) {
+            return ApiResponse::error($th->getMessage());
+        }
     }
 
     /**
@@ -61,7 +70,7 @@ class BusinessTypeWeightController extends Controller
 
             if (!$data) return ApiResponse::error('Data not found', 404);
 
-            return ApiResponse::success($data, 'Data retrieved successfully');
+            return ApiResponse::success(BusinessTypeWeightResource::make($data), 'Data retrieved successfully');
         } catch (\Throwable $th) {
             return ApiResponse::error('Failed get data: ' . $th->getMessage(), 500);
         }

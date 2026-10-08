@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\BusinessTypeController;
 use App\Http\Controllers\BusinessTypeWeightController;
+use App\Http\Controllers\VendorRouteController;
 
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
@@ -30,11 +31,14 @@ Route::middleware('auth:sanctum')->prefix('auth')->group(function () {
 
         //BUSINESS TYPE WEIGHT
         Route::apiResource('business-type-weights', BusinessTypeWeightController::class);
+
+        Route::apiResource('vendor-routes', VendorRouteController::class);
     });
 
     //ROLE USER
-    Route::middleware(['role:user'])->group(function () {
+    Route::middleware(['role:user,admin'])->group(function () {
         //BUSSINESS
         Route::apiResource('businesses', BusinessController::class);
+        
     });
 });

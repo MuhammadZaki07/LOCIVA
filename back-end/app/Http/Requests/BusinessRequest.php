@@ -28,6 +28,7 @@ class BusinessRequest extends FormRequest
             'latitude'         => ['required', 'numeric', 'between:-90,90'],
             'longitude'        => ['required', 'numeric', 'between:-180,180'],
             'address'          => ['nullable', 'string'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
         ];
     }
 
@@ -48,6 +49,9 @@ class BusinessRequest extends FormRequest
             'longitude.numeric'         => 'Longitude coordinate must be a number.',
             'longitude.between'         => 'Longitude coordinate must be between -180 and 180.',
             'address.string'            => 'Address must be a string.',
+            'image.image'               => 'The uploaded file must be an image.',
+            'image.mimes'               => 'The image must be a JPG, JPEG, PNG, or WEBP file.',
+            'image.max'                 => 'The image size must not exceed 2 MB.',
         ];
     }
 }

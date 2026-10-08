@@ -3,14 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Helpers\ApiResponse;
+use App\Helpers\PaginationHelper;
 use App\Http\Requests\BusinessRequest;
 use App\Http\Requests\BusinessUpdateRequest;
+use App\Http\Resources\BusinessResource;
 use App\Models\Business;
 use App\Repositories\BusinessRepository;
+use App\Traits\UploadTrait;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class BusinessController extends Controller
 {
+    use UploadTrait;
     /**
      * Display a listing of the resource.
      */
@@ -20,11 +25,13 @@ class BusinessController extends Controller
         $this->businessRepository = $businessRepository;
     }
 
-    public function index()
+    public function index(Request $request)
     {
         try {
-
+            $fetch = $this->businessRepository->paginate($request->query('per_page', 10));
+            return ApiResponse::success(["mete" => PaginationHelper::meta($fetch), "Data" => BusinessResource::collection($fetch)]);
         } catch (\Throwable $th) {
+            return ApiResponse::error($th->getMessage());
         }
     }
 
@@ -42,6 +49,12 @@ class BusinessController extends Controller
 
         DB::beginTransaction();
         try {
+            if (isset($validate['image'])) {
+                $validate['image'] = $this->upload('businesses', $validate['image']);
+            }
+
+            $validate['user_id'] = auth()->id();
+
             $business = $this->businessRepository->create($validate);
 
             DB::commit();
@@ -62,7 +75,7 @@ class BusinessController extends Controller
 
             if (!$data) return ApiResponse::error('Data not found', 404);
 
-            return ApiResponse::success($data, 'Data retrieved successfully');
+            return ApiResponse::success(BusinessResource::make($data), 'Data retrieved successfully');
         } catch (\Throwable $th) {
             return ApiResponse::error('Failed get data: ' . $th->getMessage(), 500);
         }
@@ -115,7 +128,7 @@ class BusinessController extends Controller
             return ApiResponse::success($delete, 'Data deleted successfully');
         } catch (\Throwable $th) {
             DB::rollBack();
-            return ApiResponse::error('Data not deleted: '. $th->getMessage(), 500);
+            return ApiResponse::error('Data not deleted: ' . $th->getMessage(), 500);
         }
     }
 }

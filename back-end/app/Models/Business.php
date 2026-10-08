@@ -15,4 +15,14 @@ class Business extends Model
     {
         return $this->belongsTo(BusinessType::class);
     }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function vendorRoutes()
+    {
+        return $this->hasMany(VendorRoute::class);
+    }
 }

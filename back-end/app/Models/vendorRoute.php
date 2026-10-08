@@ -10,4 +10,9 @@ class vendorRoute extends Model
 {
     use HasUuids, SoftDeletes;
     protected $guarded = ['id'];
+
+    public function business()
+    {
+        return $this->belongsTo(Business::class);
+    }
 }
