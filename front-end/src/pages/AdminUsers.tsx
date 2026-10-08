@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { ShieldCheck, Store, Search } from "lucide-react";
+import LogoPuzzleLoader from "@/components/ui/Logopuzzleloader";
+import LogoBrushLoader from "@/components/ui/Logobrushloader";
 
 interface ManagedUser {
   id: number;
@@ -79,7 +81,6 @@ export default function AdminUsers() {
 
   return (
     <div className="space-y-6">
-      {/* Title */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-[26px] font-medium tracking-tight text-ink sm:text-[30px]">

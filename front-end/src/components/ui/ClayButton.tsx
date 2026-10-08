@@ -19,7 +19,7 @@ export function ClayButton({
   children,
   ...props
 }: Props) {
-  const classes = `inline-flex items-center justify-center gap-2 rounded-[12px] px-4 py-2.5 text-[14px] font-medium cursor-pointer no-underline ${variants[variant]} ${className}`;
+  const classes = `inline-flex items-center justify-center gap-2 rounded-[12px] px-4 py-2.5 text-[14px] font-medium cursor-pointer no-underline disabled:cursor-not-allowed disabled:opacity-70 ${variants[variant]} ${className}`;
 
   if (href) {
     return (

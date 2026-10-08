@@ -10,65 +10,112 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
-  ShieldCheck,
-  Store,
 } from "lucide-react";
 import Logo from "@/components/sections/Logo";
+import Label from "@/components/ui/Label";
+import Input from "@/components/ui/Input";
+import Spinner from "@/components/ui/Spinner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/Alert";
+import { ButtonGoogle } from "@/components/ui/ButtonGoogle";
+import { useToast } from "@/components/ui/Toast";
+import LogoPuzzleLoader from "@/components/ui/Logopuzzleloader";
+
+interface ValidationErrors {
+  full_name?: string[];
+  email?: string[];
+  password?: string[];
+  password_confirmation?: string[];
+}
 
 export default function Register() {
-  const { register } = useAuth();
+  const { register, loginWithGoogle, user } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
-  const [name, setName] = useState("");
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
-  const [role, setRole] = useState<"user" | "admin">("user");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>(
+    {},
+  );
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (!name || !email || !password || !passwordConfirmation) {
-      setError("Please fill in all required fields.");
-      return;
-    }
+    setLoading(true);
+    setError(null);
+    setValidationErrors({});
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters long.");
-      return;
-    }
+    try {
+      const registeredUser = await register({
+        full_name: fullName,
+        email,
+        password,
+        password_confirmation: passwordConfirmation,
+      });
 
-    if (password !== passwordConfirmation) {
-      setError("Password confirmation does not match.");
-      return;
-    }
+      navigate(registeredUser.role === "admin" ? "/admin" : "/dashboard");
+    } catch (err: unknown) {
+      const errObj = err as {
+        response?: {
+          status?: number;
+          data?: {
+            message?: string;
+            errors?: ValidationErrors | null;
+          };
+        };
+        message?: string;
+      };
 
+      const status = errObj.response?.status;
+      const responseData = errObj.response?.data;
+
+      if (status === 422 && responseData?.errors) {
+        setValidationErrors(responseData.errors);
+        return;
+      }
+
+      setError(
+        responseData?.message ||
+          errObj.message ||
+          "Registration failed. Please try again later.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleClick = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      await register({
-        name,
-        email,
-        password,
-        password_confirmation: passwordConfirmation,
-        role,
-      });
+      await loginWithGoogle();
 
-      if (role === "admin" || email.includes("admin")) {
-        navigate("/admin");
-      } else {
-        navigate("/dashboard");
-      }
+      toast({
+        title: `Welcome, ${user?.name}`,
+        description: "You have successfully signed in with Google.",
+        variant: "success",
+      });
     } catch (err: unknown) {
-      const errObj = err as { response?: { data?: { message?: string } }; message?: string };
+      const errObj = err as {
+        response?: {
+          data?: {
+            message?: string;
+          };
+        };
+        message?: string;
+      };
+
       setError(
         errObj.response?.data?.message ||
-        errObj.message ||
-        "Registration failed. Please check your data."
+          errObj.message ||
+          "Google sign-in failed. Please try again later.",
       );
     } finally {
       setLoading(false);
@@ -77,7 +124,6 @@ export default function Register() {
 
   return (
     <div className="flex min-h-svh flex-col justify-center bg-canvas px-4 py-10 sm:px-6 lg:px-8">
-      {/* Top Floating Back Link */}
       <div className="mx-auto mb-6 w-full max-w-[460px]">
         <Link
           to="/"
@@ -89,133 +135,150 @@ export default function Register() {
       </div>
 
       <div className="mx-auto w-full max-w-[460px]">
-        {/* Claymorphic Card Container */}
+        {error && (
+          <div className="mb-4">
+            <Alert variant="error" icon={<AlertCircle size={17} />}>
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          </div>
+        )}
+
         <div className="clay rounded-[22px] p-6 sm:p-8">
-          {/* Header */}
           <div className="text-center">
             <Link
               to="/"
               className="inline-flex items-center gap-2 font-display text-[24px] font-medium tracking-tight text-ink no-underline"
             >
-               <Logo />
+              <Logo />
               <span>lociva</span>
             </Link>
+
             <h1 className="mt-3 font-display text-[24px] font-medium text-ink">
               Create your account
             </h1>
+
             <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted">
-              Start evaluating locations, simulating business models, and verifying area conditions.
+              Start evaluating locations, simulating business models, and
+              verifying area conditions.
             </p>
+
+            <ButtonGoogle
+              className="w-full"
+              variant="outline"
+              onClick={handleGoogleClick}
+              disabled={loading}
+            >
+              {loading ? "Connecting to Google..." : "Register with Google"}
+            </ButtonGoogle>
           </div>
 
-          {/* Account Role Selector */}
-          <div className="mt-5">
-            <p className="text-[12px] font-medium text-muted">account type</p>
-            <div className="mt-1.5 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setRole("user")}
-                className={`clay-press flex items-center justify-center gap-1.5 rounded-[12px] p-2.5 text-[12.5px] font-medium transition-all ${
-                  role === "user"
-                    ? "clay-primary text-white"
-                    : "clay-soft text-ink"
-                }`}
-              >
-                <Store size={14} />
-                <span>business / community</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setRole("admin")}
-                className={`clay-press flex items-center justify-center gap-1.5 rounded-[12px] p-2.5 text-[12.5px] font-medium transition-all ${
-                  role === "admin"
-                    ? "clay-primary text-white"
-                    : "clay-soft text-ink"
-                }`}
-              >
-                <ShieldCheck size={14} />
-                <span>admin / analyst</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Error Alert */}
-          {error && (
-            <div className="mt-4 flex items-start gap-2.5 rounded-[12px] border border-warning/30 bg-[#fbf0ee] p-3 text-[12.5px] text-warning">
-              <AlertCircle size={15} className="mt-0.5 shrink-0" />
-              <p>{error}</p>
-            </div>
-          )}
-
-          {/* Registration Form */}
-          <form onSubmit={handleSubmit} className="mt-5 space-y-3.5">
+          <form onSubmit={handleSubmit} className="mt-5 space-y-4">
             <div>
-              <label
-                htmlFor="name"
-                className="block text-[12.5px] font-medium text-ink"
-              >
-                full name
-              </label>
-              <div className="relative mt-1">
+              <Label htmlFor="fullName">full name</Label>
+
+              <div className="relative mt-1.5">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-muted">
                   <UserIcon size={15} />
                 </div>
-                <input
-                  id="name"
+
+                <Input
+                  id="fullName"
                   type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Muhammad Zaki"
-                  className="clay-inset w-full rounded-[12px] py-2.5 pl-10 pr-3.5 text-[13.5px] text-ink placeholder:text-muted/60 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  autoComplete="name"
+                  disabled={loading}
+                  value={fullName}
+                  onChange={(e) => {
+                    setFullName(e.target.value);
+
+                    if (validationErrors.full_name) {
+                      setValidationErrors((prev) => ({
+                        ...prev,
+                        full_name: undefined,
+                      }));
+                    }
+                  }}
+                  placeholder="John Doe"
+                  error={!!validationErrors.full_name}
+                  className="pl-10"
                 />
               </div>
+
+              {validationErrors.full_name && (
+                <p className="mt-1.5 flex items-center gap-1 text-[12px] text-warning">
+                  <AlertCircle size={13} />
+                  {validationErrors.full_name[0]}
+                </p>
+              )}
             </div>
 
             <div>
-              <label
-                htmlFor="email"
-                className="block text-[12.5px] font-medium text-ink"
-              >
-                email address
-              </label>
-              <div className="relative mt-1">
+              <Label htmlFor="email">email address</Label>
+
+              <div className="relative mt-1.5">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-muted">
                   <Mail size={15} />
                 </div>
-                <input
+
+                <Input
                   id="email"
                   type="email"
                   autoComplete="email"
-                  required
+                  disabled={loading}
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="zaki@example.com"
-                  className="clay-inset w-full rounded-[12px] py-2.5 pl-10 pr-3.5 text-[13.5px] text-ink placeholder:text-muted/60 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+
+                    if (validationErrors.email) {
+                      setValidationErrors((prev) => ({
+                        ...prev,
+                        email: undefined,
+                      }));
+                    }
+                  }}
+                  placeholder="JhonDoe@gmail.com"
+                  error={!!validationErrors.email}
+                  className="pl-10"
                 />
               </div>
+
+              {validationErrors.email && (
+                <p className="mt-1.5 flex items-center gap-1 text-[12px] text-warning">
+                  <AlertCircle size={13} />
+                  {validationErrors.email[0]}
+                </p>
+              )}
             </div>
 
             <div>
-              <label
-                htmlFor="password"
-                className="block text-[12.5px] font-medium text-ink"
-              >
-                password
-              </label>
-              <div className="relative mt-1">
+              <Label htmlFor="password">password</Label>
+
+              <div className="relative mt-1.5">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-muted">
                   <Lock size={15} />
                 </div>
-                <input
+
+                <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  required
+                  autoComplete="new-password"
+                  disabled={loading}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+
+                    if (validationErrors.password) {
+                      setValidationErrors((prev) => ({
+                        ...prev,
+                        password: undefined,
+                      }));
+                    }
+                  }}
                   placeholder="••••••••"
-                  className="clay-inset w-full rounded-[12px] py-2.5 pl-10 pr-10 text-[13.5px] text-ink placeholder:text-muted/60 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  error={!!validationErrors.password}
+                  className="pl-10 pr-10"
                 />
+
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
@@ -225,45 +288,74 @@ export default function Register() {
                   {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
               </div>
+
+              {validationErrors.password && (
+                <p className="mt-1.5 flex items-center gap-1 text-[12px] text-warning">
+                  <AlertCircle size={13} />
+                  {validationErrors.password[0]}
+                </p>
+              )}
             </div>
 
             <div>
-              <label
-                htmlFor="passwordConfirmation"
-                className="block text-[12.5px] font-medium text-ink"
-              >
-                confirm password
-              </label>
-              <div className="relative mt-1">
+              <Label htmlFor="passwordConfirmation">confirm password</Label>
+
+              <div className="relative mt-1.5">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-muted">
                   <Lock size={15} />
                 </div>
-                <input
+
+                <Input
                   id="passwordConfirmation"
                   type={showPassword ? "text" : "password"}
-                  required
+                  autoComplete="new-password"
+                  disabled={loading}
                   value={passwordConfirmation}
-                  onChange={(e) => setPasswordConfirmation(e.target.value)}
+                  onChange={(e) => {
+                    setPasswordConfirmation(e.target.value);
+
+                    if (validationErrors.password_confirmation) {
+                      setValidationErrors((prev) => ({
+                        ...prev,
+                        password_confirmation: undefined,
+                      }));
+                    }
+                  }}
                   placeholder="••••••••"
-                  className="clay-inset w-full rounded-[12px] py-2.5 pl-10 pr-3.5 text-[13.5px] text-ink placeholder:text-muted/60 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  error={!!validationErrors.password_confirmation}
+                  className="pl-10"
                 />
               </div>
+
+              {validationErrors.password_confirmation && (
+                <p className="mt-1.5 flex items-center gap-1 text-[12px] text-warning">
+                  <AlertCircle size={13} />
+                  {validationErrors.password_confirmation[0]}
+                </p>
+              )}
             </div>
 
             <div className="pt-2">
               <ClayButton
                 type="submit"
                 disabled={loading}
-                className="w-full !rounded-[12px] !py-2.5 text-[14px]"
+                className="inline-flex w-full items-center justify-center gap-2 !rounded-[12px] !py-2.5 text-[14px]"
               >
-                {loading ? "creating account..." : "create account"}
+                {loading ? (
+                  <>
+                    <LogoPuzzleLoader size={15} color="#ffff" />
+                    Creating account...
+                  </>
+                ) : (
+                  "create account"
+                )}
               </ClayButton>
             </div>
           </form>
 
-          {/* Footer Navigation */}
           <div className="mt-6 border-t border-[#ececf6] pt-4 text-center text-[13px] text-muted">
             <span>already have an account? </span>
+
             <Link
               to="/login"
               className="font-medium text-primary hover:underline no-underline"

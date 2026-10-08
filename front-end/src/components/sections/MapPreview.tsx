@@ -412,28 +412,6 @@ export function MapPreview({
           )}
         </svg>
 
-        {/* Tactical Map Floating Controls */}
-        <div className="absolute right-3 top-3 z-20 flex flex-col gap-1">
-          <button
-            type="button"
-            onClick={() => setZoomLevel((z) => Math.min(1.2, z + 0.1))}
-            className="clay clay-press flex h-7 w-7 items-center justify-center rounded-[8px] bg-white text-ink shadow-sm"
-            aria-label="Zoom in"
-          >
-            <Plus size={13} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setZoomLevel((z) => Math.max(0.9, z - 0.1))}
-            className="clay clay-press flex h-7 w-7 items-center justify-center rounded-[8px] bg-white text-ink shadow-sm"
-            aria-label="Zoom out"
-          >
-            <Minus size={13} />
-          </button>
-          <div className="clay flex h-7 w-7 items-center justify-center rounded-[8px] bg-white text-muted">
-            <Compass size={13} className="text-primary" />
-          </div>
-        </div>
 
         {/* Problem Section Layer Legend */}
         {variant === "problem" && (
