@@ -166,6 +166,22 @@ body {
   transform: translateY(0.5px) scale(0.98);
 }
 
+@keyframes skeleton-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #eceef8 0%, #f9f9fe 45%, #eceef8 90%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+  box-shadow: inset 0 1px 2px rgba(71, 71, 184, 0.05);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

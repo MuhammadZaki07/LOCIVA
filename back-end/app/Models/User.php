@@ -25,6 +25,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'google_id',
+        'profile_image'
     ];
 
     /**
@@ -48,5 +50,15 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function getFullNameAttribute(): string
+    {
+        return $this->name;
+    }
+
+    public function getRoleAttribute(): ?string
+    {
+        return $this->getRoleNames()->first();
     }
 }
