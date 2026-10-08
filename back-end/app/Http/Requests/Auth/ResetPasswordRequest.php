@@ -33,17 +33,18 @@ class ResetPasswordRequest extends FormRequest
         ];
     }
 
+
     public function messages(): array
     {
         return [
-            'token.required' => 'Token reset password wajib diisi.',
+            'token.required' => 'The password reset token is required.',
 
-            'email.required' => 'Email wajib diisi.',
-            'email.email' => 'Format email tidak valid.',
+            'email.required' => 'Email is required.',
+            'email.email' => 'Please enter a valid email address.',
 
-            'password.required' => 'Password wajib diisi.',
-            'password.min' => 'Password minimal 8 karakter.',
-            'password.confirmed' => 'Konfirmasi password tidak cocok.',
+            'password.required' => 'Password is required.',
+            'password.min' => 'Password must be at least 8 characters.',
+            'password.confirmed' => 'Password confirmation does not match.',
         ];
     }
 }

@@ -191,7 +191,7 @@ class AuthController extends Controller
                 ),
                 function (User $user, string $password) {
                     $user->forceFill([
-                        'password' => $password,
+                        'password' => Hash::make($password),
                         'remember_token' => Str::random(60),
                     ])->save();
 

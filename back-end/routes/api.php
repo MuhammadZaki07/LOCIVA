@@ -12,6 +12,8 @@ Route::prefix('auth')->group(function () {
     Route::post('/reset-password', [AuthController::class, 'resetPassword']);
     Route::get('/google', [GoogleAuthController::class, 'redirectToGoogle'])->name('google.login');
     Route::get('/google/callback', [GoogleAuthController::class, 'handleGoogleCallback']);
+    Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+    Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 });
 
 Route::middleware('auth:sanctum')->prefix('auth')->group(function () {
