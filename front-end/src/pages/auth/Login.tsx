@@ -252,7 +252,7 @@ export default function Login() {
             </div>
 
             <div className="flex justify-end">
-              <Link className="text-xs text-[#5E5ED8] font-semibold" to={'/reset-password'}>Reset Password?</Link>
+              <Link className="text-xs text-[#5E5ED8] font-semibold" to={'/forget-password'}>Forget Password?</Link>
             </div>
 
             <div className="pt-2">

@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 
+use App\Notifications\CustomResetPasswordNotification;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -60,5 +61,14 @@ class User extends Authenticatable
     public function getRoleAttribute(): ?string
     {
         return $this->getRoleNames()->first();
+    }
+
+    public function sendPasswordResetNotification($token)
+    {
+        $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
+
+        $url = "{$frontendUrl}/reset-password?token={$token}&email={$this->email}";
+
+        $this->notify(new CustomResetPasswordNotification($url));
     }
 }
