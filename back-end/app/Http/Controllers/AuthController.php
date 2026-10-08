@@ -10,152 +10,216 @@ use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
+use Throwable;
 
 class AuthController extends Controller
 {
-    /**
-     * Register
-     */
+
     public function register(RegisterRequest $request)
     {
-        $user = User::create([
-            'full_name' => $request->full_name,
-            'email' => $request->email,
-            'password' => $request->password,
-        ]);
+        try {
+            $user = User::create([
+                'name' => $request->full_name,
+                'email' => $request->email,
+                'password' => $request->password,
+            ]);
 
-        $user->assignRole('user');
+            $user->assignRole('user');
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+            $token = $user
+                ->createToken('auth_token')
+                ->plainTextToken;
 
-        return ApiResponse::success(
-            [
-                'user' => $user,
-                'token' => $token,
-            ],
-            'Registration successful.',
-            201
-        );
-    }
+            return ApiResponse::success(
+                [
+                    'user' => $user,
+                    'token' => $token,
+                ],
+                'Registration successful.',
+                201
+            );
+        } catch (Throwable $e) {
+            Log::error('Registration failed.', [
+                'email' => $request->email,
+                'error' => $e->getMessage(),
+            ]);
 
-    /**
-     * Login
-     */
-    public function login(LoginRequest $request)
-    {
-        $user = User::where(
-            'email',
-            $request->email
-        )->first();
-
-        if (!$user || !Hash::check(
-            $request->password,
-            $user->password
-        )) {
-            return ApiResponse::unauthorized(
-                'Invalid email or password.'
+            return ApiResponse::error(
+                'Registration failed. Please try again later.',
+                500
             );
         }
-
-        $user->tokens()->delete();
-
-        $token = $user->createToken(
-            'auth_token'
-        )->plainTextToken;
-
-        return ApiResponse::success(
-            [
-                'user' => $user,
-                'token' => $token,
-            ],
-            'Login successful.'
-        );
     }
 
-    /**
-     * Get current authenticated user
-     */
+    public function login(LoginRequest $request)
+    {
+        try {
+            $user = User::where(
+                'email',
+                $request->email
+            )->first();
+
+            if (
+                !$user ||
+                !Hash::check(
+                    $request->password,
+                    $user->password
+                )
+            ) {
+                return ApiResponse::unauthorized(
+                    'Invalid email or password.'
+                );
+            }
+
+            $user->tokens()->delete();
+
+            $token = $user
+                ->createToken('auth_token')
+                ->plainTextToken;
+
+            return ApiResponse::success(
+                [
+                    'user' => $user,
+                    'token' => $token,
+                ],
+                'Login successful.'
+            );
+        } catch (Throwable $e) {
+            Log::error('Login failed.', [
+                'email' => $request->email,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ApiResponse::error(
+                'Login failed. Please try again later.',
+                500
+            );
+        }
+    }
+
     public function user(Request $request)
     {
-        return ApiResponse::success(
-            $request->user(),
-            'User data retrieved successfully.'
-        );
+        try {
+            $user = $request->user();
+
+            $user->role = $user->getRoleNames()->first();
+
+            return ApiResponse::success(
+                $user,
+                'User data retrieved successfully.'
+            );
+        } catch (Throwable $e) {
+            Log::error('Failed to retrieve authenticated user.', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return ApiResponse::error(
+                'Failed to retrieve user data.',
+                500
+            );
+        }
     }
 
-    /**
-     * Logout
-     */
     public function logout(Request $request)
     {
-        $request->user()
-            ->currentAccessToken()
-            ->delete();
+        try {
+            $request->user()
+                ->currentAccessToken()
+                ->delete();
 
-        return ApiResponse::success(
-            null,
-            'Logout successful.'
-        );
+            return ApiResponse::success(
+                null,
+                'Logout successful.'
+            );
+        } catch (Throwable $e) {
+            Log::error('Logout failed.', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return ApiResponse::error(
+                'Logout failed. Please try again later.',
+                500
+            );
+        }
     }
 
-    /**
-     * Forgot password
-     */
     public function forgotPassword(
         ForgotPasswordRequest $request
     ) {
-        $status = Password::sendResetLink(
-            $request->only('email')
-        );
+        try {
+            $status = Password::sendResetLink(
+                $request->only('email')
+            );
 
-        if ($status !== Password::RESET_LINK_SENT) {
+            if ($status !== Password::RESET_LINK_SENT) {
+                return ApiResponse::error(
+                    'Email not found or failed to send password reset link.',
+                    400
+                );
+            }
+
+            return ApiResponse::success(
+                null,
+                'Password reset link has been sent to your email.'
+            );
+        } catch (Throwable $e) {
+            Log::error('Forgot password failed.', [
+                'email' => $request->email,
+                'error' => $e->getMessage(),
+            ]);
+
             return ApiResponse::error(
-                'Email not found or failed to send password reset link.',
-                400
+                'Failed to send password reset link. Please try again later.',
+                500
             );
         }
-
-        return ApiResponse::success(
-            null,
-            'Password reset link has been sent to your email.'
-        );
     }
 
-    /**
-     * Reset password
-     */
     public function resetPassword(
         ResetPasswordRequest $request
     ) {
-        $status = Password::reset(
-            $request->only(
-                'email',
-                'password',
-                'password_confirmation',
-                'token'
-            ),
-            function (User $user, string $password) {
-                $user->forceFill([
-                    'password' => $password,
-                    'remember_token' => Str::random(60),
-                ])->save();
+        try {
+            $status = Password::reset(
+                $request->only(
+                    'email',
+                    'password',
+                    'password_confirmation',
+                    'token'
+                ),
+                function (User $user, string $password) {
+                    $user->forceFill([
+                        'password' => Hash::make($password),
+                        'remember_token' => Str::random(60),
+                    ])->save();
 
-                $user->tokens()->delete();
+                    $user->tokens()->delete();
+                }
+            );
+
+            if ($status !== Password::PASSWORD_RESET) {
+                return ApiResponse::error(
+                    'The password reset token is invalid or has expired.',
+                    400
+                );
             }
-        );
 
-        if ($status !== Password::PASSWORD_RESET) {
+            return ApiResponse::success(
+                null,
+                'Password has been reset successfully.'
+            );
+        } catch (Throwable $e) {
+            Log::error('Password reset failed.', [
+                'email' => $request->email,
+                'error' => $e->getMessage(),
+            ]);
+
             return ApiResponse::error(
-                'The password reset token is invalid or has expired.',
-                400
+                'Password reset failed. Please try again later.',
+                500
             );
         }
-
-        return ApiResponse::success(
-            null,
-            'Password has been reset successfully.'
-        );
     }
 }

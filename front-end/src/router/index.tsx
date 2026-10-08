@@ -1,73 +1,95 @@
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import type { ComponentType } from "react";
+import { createBrowserRouter } from "react-router-dom";
 import LandingPage from "@/pages";
 import Login from "@/pages/auth/Login";
 import Register from "@/pages/auth/Register";
-import AdminDashboard from "@/pages/dashboard/AdminDashboard";
-import AdminUsers from "@/pages/AdminUsers";
-import UserDashboard from "@/pages/dashboard/UserDashboard";
 import GuestRoute from "@/components/guard/GuestRoute";
 import ProtectedRoute from "@/components/guard/ProtectedRoute";
 import RoleRoute from "@/components/guard/RoleRoute";
 import AdminLayout from "@/layouts/AdminLayout";
 import MainLayout from "@/layouts/MainLayout";
+import AuthCallback from "@/pages/auth/AuthCallback";
+import RootLayout from "@/layouts/Rootlayout";
+import { ForgetPassword } from "@/pages/auth/ForgetPassword";
+import { ResetPassword } from "@/components/ui/ResetPassword";
+
+const page = (load: () => Promise<{ default: ComponentType }>) => async () => ({
+  Component: (await load()).default,
+});
 
 const router = createBrowserRouter([
   {
-    path: "/",
-    element: <LandingPage />,
-  },
-
-  {
-    element: <GuestRoute />,
+    element: <RootLayout />,
     children: [
       {
-        path: "/login",
-        element: <Login />,
+        path: "/",
+        element: <LandingPage />,
       },
       {
-        path: "/register",
-        element: <Register />,
+        path: "/auth/callback",
+        element: <AuthCallback />,
       },
-    ],
-  },
-
-  {
-    element: <ProtectedRoute />,
-    children: [
       {
-        element: <MainLayout />,
+        element: <GuestRoute />,
         children: [
           {
-            path: "/dashboard",
-            element: <UserDashboard />,
+            path: "/login",
+            element: <Login />,
+          },
+          {
+            path: "/register",
+            element: <Register />,
+          },
+          {
+            path: "/forget-password",
+            element: <ForgetPassword/>,
+          },
+          {
+            path: "/reset-password",
+            element: <ResetPassword/>,
           },
         ],
       },
-    ],
-  },
 
-  {
-    element: <RoleRoute allowedRoles={["admin"]} />,
-    children: [
       {
-        element: <AdminLayout />,
+        element: <ProtectedRoute />,
         children: [
           {
-            path: "/admin",
-            element: <AdminDashboard />,
-          },
-          {
-            path: "/admin/users",
-            element: <AdminUsers />,
+            element: <MainLayout />,
+            children: [
+              {
+                path: "/dashboard",
+                lazy: page(() => import("@/pages/dashboard/UserDashboard")),
+              },
+            ],
           },
         ],
       },
-    ],
-  },
 
-  {
-    path: "*",
-    element: <Navigate to="/" replace />,
+      {
+        element: <RoleRoute allowedRoles={["admin"]} />,
+        children: [
+          {
+            element: <AdminLayout />,
+            children: [
+              {
+                path: "/admin",
+                lazy: page(() => import("@/pages/dashboard/AdminDashboard")),
+              },
+              {
+                path: "/admin/users",
+                lazy: page(() => import("@/pages/AdminUsers")),
+              },
+            ],
+          },
+        ],
+      },
+
+      {
+        path: "*",
+        element: "404 Not found",
+      },
+    ],
   },
 ]);
 

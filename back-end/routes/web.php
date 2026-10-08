@@ -2,6 +2,8 @@
 
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return view('welcome');
+Route::fallback(function () {
+    return response("Lociva backend", 200, [
+        'Content-Type' => 'text/plain'
+    ]);
 });

@@ -1,6 +1,7 @@
 import { Link, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { LogOut, Compass, LayoutDashboard, ShieldCheck } from "lucide-react";
+import Logo from "@/components/sections/Logo";
 
 export default function MainLayout() {
   const { user, logout } = useAuth();
@@ -13,7 +14,6 @@ export default function MainLayout() {
 
   return (
     <div className="min-h-svh bg-canvas text-ink flex flex-col">
-      {/* Top Navbar */}
       <header className="sticky top-0 z-40 border-b border-[#ececf6] bg-white/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 md:px-8">
           {/* Logo */}
@@ -21,14 +21,10 @@ export default function MainLayout() {
             to="/dashboard"
             className="flex items-center gap-2 font-display text-[21px] font-medium tracking-tight text-ink no-underline"
           >
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-            </span>
+           <Logo/>
             <span>lociva</span>
           </Link>
 
-          {/* Nav links */}
           <nav className="flex items-center gap-4 sm:gap-6">
             <Link
               to="/dashboard"
@@ -56,7 +52,6 @@ export default function MainLayout() {
               </Link>
             )}
 
-            {/* User Pill & Logout */}
             <div className="flex items-center gap-2 border-l border-[#ececf6] pl-4">
               <div className="hidden sm:block text-right">
                 <p className="text-[12.5px] font-medium text-ink leading-tight">
@@ -79,7 +74,6 @@ export default function MainLayout() {
         </div>
       </header>
 
-      {/* Main Page Area */}
       <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8 md:px-8">
         <Outlet />
       </main>

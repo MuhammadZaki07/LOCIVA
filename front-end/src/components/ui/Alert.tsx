@@ -41,7 +41,7 @@ export function Alert({
         <div
             role="alert"
             className={cn(
-                "clay-card flex items-start gap-3 rounded-[14px] border px-4 py-3",
+                "clay-card flex items-start gap-3 rounded-[14px] border my-3 px-4 py-3",
                 variants[variant],
                 className
             )}

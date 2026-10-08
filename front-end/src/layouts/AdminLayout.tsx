@@ -11,6 +11,7 @@ import {
   X,
   ExternalLink,
 } from "lucide-react";
+import Logo from "@/components/sections/Logo";
 
 export default function AdminLayout() {
   const { user, logout } = useAuth();
@@ -29,18 +30,13 @@ export default function AdminLayout() {
 
   return (
     <div className="flex min-h-svh bg-canvas text-ink">
-      {/* Desktop Claymorphic Sidebar */}
       <aside className="hidden w-64 flex-col justify-between border-r border-[#ececf6] bg-white/70 p-6 backdrop-blur-md lg:flex">
         <div>
-          {/* Logo & Platform Tag */}
           <Link
             to="/admin"
             className="flex items-center gap-2 font-display text-[21px] font-medium tracking-tight text-ink no-underline"
           >
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
-            </span>
+            <Logo/>
             <span>lociva admin</span>
           </Link>
           <div className="mt-1.5 flex items-center gap-1.5 text-[11px] font-medium text-muted">

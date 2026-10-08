@@ -10,4 +10,24 @@ class Area extends Model
 {
     use HasUuids, SoftDeletes;
     protected $guarded = ['id'];
+
+    public function locations()
+    {
+        return $this->hasMany(Location::class);
+    }
+
+    public function reports()
+    {
+        return $this->hasMany(Report::class);
+    }
+
+    public function roads()
+    {
+        return $this->hasMany(Road::class);
+    }
+
+    public function populationStatistics()
+    {
+        return $this->hasMany(PopulationStatistic::class);
+    }
 }
