@@ -11,6 +11,11 @@ class Business extends Model
     use HasUuids, SoftDeletes;
     protected $guarded = ['id'];
 
+    protected $casts = [
+        'latitude' => 'float',
+        'longitude' => 'float',
+    ];
+
     public function businessType()
     {
         return $this->belongsTo(BusinessType::class);

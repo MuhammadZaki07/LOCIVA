@@ -12,6 +12,7 @@ use App\Repositories\BusinessRepository;
 use App\Traits\UploadTrait;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class BusinessController extends Controller
 {
@@ -101,6 +102,19 @@ class BusinessController extends Controller
 
         DB::beginTransaction();
         try {
+            if (isset($validate['profile_image'])) {
+                $oldImage = $data->image;
+
+                $validate['image'] = $this->upload(
+                    'businesses',
+                    $validate['image']
+                );
+
+                if ($oldImage && Storage::disk('public')->exists($oldImage)) {
+                    Storage::disk('public')->delete($oldImage);
+                }
+            }
+
             $this->businessRepository->update($id, $validate);
             $newData = $this->businessRepository->find($id);
 

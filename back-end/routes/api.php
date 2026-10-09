@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\BusinessTypeController;
 use App\Http\Controllers\BusinessTypeWeightController;
+use App\Http\Controllers\UserController;
 use App\Http\Controllers\VendorRouteController;
 
 Route::prefix('auth')->group(function () {
@@ -39,6 +40,8 @@ Route::middleware('auth:sanctum')->prefix('auth')->group(function () {
     Route::middleware(['role:user,admin'])->group(function () {
         //BUSSINESS
         Route::apiResource('businesses', BusinessController::class);
-        
+
+        //USER
+        Route::apiResource('users', UserController::class)->except('store');
     });
 });
