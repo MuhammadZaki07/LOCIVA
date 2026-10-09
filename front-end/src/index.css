@@ -208,10 +208,27 @@ body {
     background: transparent !important;
     border: none !important;
   }
-  .leaflet-popup-content-wrapper, 
-  .leaflet-popup-content, 
+  .leaflet-popup-content-wrapper {
+    all: unset !important;
+    display: block !important;
+  }
+  .leaflet-popup-content {
+    all: unset !important;
+    display: block !important;
+  }
   .leaflet-popup-content p {
     all: unset !important;
+  }
+  /* Solid Claymorphism card for popup wrapper */
+  .lociva-popup-wrapper {
+    background: #ffffff !important;
+    border-radius: 16px !important;
+    border: 1px solid rgba(203, 213, 225, 0.7) !important;
+    box-shadow: 0 8px 32px rgba(71, 71, 184, 0.13), 0 2px 8px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.9) !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    min-width: 220px !important;
+    max-width: 288px !important;
   }
   .leaflet-popup {
     animation: none !important;
