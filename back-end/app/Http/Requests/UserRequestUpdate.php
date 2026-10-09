@@ -54,6 +54,13 @@ class UserRequestUpdate extends FormRequest
                 'mimes:jpg,jpeg,png,webp',
                 'max:2048',
             ],
+
+            'role' => [
+                'sometimes',
+                'required',
+                'string',
+                Rule::in(['admin', 'user']),
+            ],
         ];
     }
 
@@ -78,6 +85,11 @@ class UserRequestUpdate extends FormRequest
             'profile_image.image' => 'The profile image must be a valid image file.',
             'profile_image.mimes' => 'The profile image must be a JPG, JPEG, PNG, or WEBP file.',
             'profile_image.max' => 'The profile image must not exceed 2 MB.',
+
+            'role.sometimes' => 'The role field must be provided when updating the role.',
+            'role.required' => 'The role field is required.',
+            'role.string' => 'The role must be a string.',
+            'role.in' => 'The selected role must be either admin or user.',
         ];
     }
 }

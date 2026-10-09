@@ -1,6 +1,6 @@
 import { Link, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { LogOut, Compass, LayoutDashboard, ShieldCheck } from "lucide-react";
+import { LogOut, Compass, LayoutDashboard, ShieldCheck, User as UserIcon } from "lucide-react";
 import Logo from "@/components/sections/Logo";
 
 export default function MainLayout() {
@@ -35,6 +35,14 @@ export default function MainLayout() {
             </Link>
 
             <Link
+              to="/profile"
+              className="flex items-center gap-1.5 text-[13px] font-medium text-muted hover:text-ink no-underline transition-colors"
+            >
+              <UserIcon size={14} className="text-primary" />
+              <span>profile</span>
+            </Link>
+
+            <Link
               to="/"
               className="flex items-center gap-1.5 text-[13px] font-medium text-muted hover:text-ink no-underline transition-colors"
             >
@@ -53,12 +61,12 @@ export default function MainLayout() {
             )}
 
             <div className="flex items-center gap-2 border-l border-[#ececf6] pl-4">
-              <div className="hidden sm:block text-right">
-                <p className="text-[12.5px] font-medium text-ink leading-tight">
+              <Link to="/profile" className="hidden sm:block text-right no-underline group">
+                <p className="text-[12.5px] font-medium text-ink leading-tight group-hover:text-primary transition-colors">
                   {user?.name}
                 </p>
                 <p className="text-[10.5px] text-muted">{user?.email}</p>
-              </div>
+              </Link>
 
               <button
                 type="button"

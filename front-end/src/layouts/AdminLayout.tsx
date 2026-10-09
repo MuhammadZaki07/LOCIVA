@@ -10,6 +10,7 @@ import {
   Menu,
   X,
   ExternalLink,
+  User as UserIcon,
 } from "lucide-react";
 import Logo from "@/components/sections/Logo";
 
@@ -26,6 +27,7 @@ export default function AdminLayout() {
   const navLinks = [
     { to: "/admin", label: "dashboard & reports", icon: LayoutDashboard },
     { to: "/admin/users", label: "user management", icon: Users },
+    { to: "/admin/profile", label: "my profile", icon: UserIcon },
   ];
 
   return (
@@ -87,24 +89,27 @@ export default function AdminLayout() {
 
         {/* Profile Card & Logout */}
         <div className="clay rounded-[16px] p-3.5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-soft text-[13px] font-bold text-primary">
+          <Link to="/admin/profile" className="flex items-center gap-3 no-underline group">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-soft text-[13px] font-bold text-primary group-hover:scale-105 transition-transform">
               {user?.name?.charAt(0).toUpperCase() || "A"}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-medium text-ink">
+              <p className="truncate text-[13px] font-medium text-ink group-hover:text-primary transition-colors">
                 {user?.name || "Admin"}
               </p>
               <p className="truncate text-[11px] text-muted">
                 {user?.email || "admin@lociva.id"}
               </p>
             </div>
-          </div>
+          </Link>
 
           <div className="mt-2.5 flex items-center justify-between border-t border-[#f0f0f8] pt-2.5">
-            <span className="rounded-[6px] bg-primary-soft px-1.5 py-0.5 text-[10.5px] font-medium text-primary">
+            <Link
+              to="/admin/profile"
+              className="rounded-[6px] bg-primary-soft px-1.5 py-0.5 text-[10.5px] font-medium text-primary no-underline hover:bg-primary/20"
+            >
               administrator
-            </span>
+            </Link>
             <button
               type="button"
               onClick={handleLogout}

@@ -69,6 +69,11 @@ class UserController extends Controller
 
         DB::beginTransaction();
         try {
+            if (isset($validate['role'])) {
+                $data->syncRoles([$validate['role']]);
+                unset($validate['role']);
+            }
+
             if (isset($validate['profile_image'])) {
                 $oldImage = $data->profile_image;
 
@@ -86,7 +91,7 @@ class UserController extends Controller
             $newData = $this->userRepo->find($id);
 
             DB::commit();
-            return ApiResponse::success($newData, 'Data updated successfully');
+            return ApiResponse::success(UserResource::make($newData), 'Data updated successfully');
         } catch (\Throwable $th) {
             DB::rollBack();
             return ApiResponse::error('Data not updated: ' . $th->getMessage(), 500);
@@ -98,6 +103,10 @@ class UserController extends Controller
      */
     public function destroy(string $id)
     {
+        if (auth()->id() === $id) {
+            return ApiResponse::error('Anda tidak dapat menghapus akun Anda sendiri.', 400);
+        }
+
         $data = $this->userRepo->find($id);
         if (!$data) return ApiResponse::error('Data not found', 404);
 

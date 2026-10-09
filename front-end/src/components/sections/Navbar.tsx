@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Menu, X, LogIn, UserPlus, LogOut, ShieldCheck, LayoutDashboard } from "lucide-react";
+import { Menu, X, LogIn, UserPlus, LogOut, ShieldCheck, LayoutDashboard, User as UserIcon } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import Logo from "./Logo";
 
@@ -90,6 +90,15 @@ export function Navbar() {
                     <LayoutDashboard size={13} />
                   )}
                   <span className="max-w-[110px] truncate">{user.name}</span>
+                </Link>
+
+                <Link
+                  to={user.role === "admin" ? "/admin/profile" : "/profile"}
+                  className="pill-bubble-item hidden sm:inline-flex items-center gap-1 rounded-full border border-[#ececf6] bg-white px-2.5 py-1 text-[11.5px] font-medium text-muted hover:text-ink transition-colors no-underline"
+                  title="Profile"
+                >
+                  <UserIcon size={12} className="text-primary" />
+                  <span>profil</span>
                 </Link>
 
                 <button
