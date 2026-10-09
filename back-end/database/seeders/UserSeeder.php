@@ -25,7 +25,6 @@ class UserSeeder extends Seeder
 
         $admin = User::updateOrCreate(
             [
-                'id' => (string) Str::uuid(),
                 'email' => 'admin@gmail.com',
             ],
             [
@@ -39,7 +38,6 @@ class UserSeeder extends Seeder
 
         $user = User::updateOrCreate(
             [
-                'id' => (string) Str::uuid(),
                 'email' => 'user@gmail.com',
             ],
             [

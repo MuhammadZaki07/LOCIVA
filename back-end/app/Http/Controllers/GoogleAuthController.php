@@ -21,11 +21,15 @@ class GoogleAuthController extends Controller
             $user = User::updateOrCreate(
                 ['email' => $googleUser->getEmail()],
                 [
-                    'name'     => $googleUser->getName(),
+                    'name'          => $googleUser->getName(),
                     'google_id'     => $googleUser->getId(),
                     'profile_image' => $googleUser->getAvatar(),
                 ]
             );
+
+            if (!$user->hasAnyRole(['admin', 'user'])) {
+                $user->assignRole('user');
+            }
 
             $token = $user->createToken('auth_token')->plainTextToken;
             $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');

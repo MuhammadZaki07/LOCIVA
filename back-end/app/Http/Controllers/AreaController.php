@@ -3,63 +3,38 @@
 namespace App\Http\Controllers;
 
 use App\Models\Area;
+use App\Helpers\ApiResponse;
 use Illuminate\Http\Request;
 
 class AreaController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function index(Request $request)
     {
-        //
+        $query = Area::select('id', 'name', 'type', 'code', 'latitude', 'longitude');
+
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+
+        if ($request->filled('search')) {
+            $query->where('name', 'like', '%' . $request->search . '%');
+        }
+
+        $areas = $query->orderBy('name')->paginate(50);
+
+        return ApiResponse::success($areas, 'Areas retrieved successfully');
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
+    public function show(string $id)
     {
-        //
-    }
+        $area = Area::with([
+            'populationStatistics' => fn ($q) => $q->latest('year')->limit(1),
+        ])->find($id);
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
-    }
+        if (! $area) {
+            return ApiResponse::notFound('Area not found.');
+        }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(Area $area)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(Area $area)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, Area $area)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Area $area)
-    {
-        //
+        return ApiResponse::success($area, 'Area retrieved successfully');
     }
 }

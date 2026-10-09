@@ -12,6 +12,7 @@ import AuthCallback from "@/pages/auth/AuthCallback";
 import RootLayout from "@/layouts/Rootlayout";
 import { ForgetPassword } from "@/pages/auth/ForgetPassword";
 import { ResetPassword } from "@/components/ui/ResetPassword";
+import { MapPage } from "@/pages/Maps/MapPage";
 
 const page = (load: () => Promise<{ default: ComponentType }>) => async () => ({
   Component: (await load()).default,
@@ -28,6 +29,10 @@ const router = createBrowserRouter([
       {
         path: "/auth/callback",
         element: <AuthCallback />,
+      },
+      {
+        path:"/view-maps",
+        element:<MapPage/>
       },
       {
         element: <GuestRoute />,

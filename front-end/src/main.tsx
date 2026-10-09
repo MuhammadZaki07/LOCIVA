@@ -6,6 +6,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import "./index.css";
 import { ToastProvider } from "./components/ui/Toast";
 import TopLoader from "./components/ui/Toploader";
+import "leaflet/dist/leaflet.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <ToastProvider position="top-right">

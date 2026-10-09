@@ -10,4 +10,14 @@ class SimulationSession extends Model
 {
     use HasUuids, SoftDeletes;
     protected $guarded = ['id'];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function simulations()
+    {
+        return $this->hasMany(Simulation::class, 'session_id');
+    }
 }
