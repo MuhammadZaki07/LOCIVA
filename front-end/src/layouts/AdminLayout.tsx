@@ -1,23 +1,23 @@
 import { useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
-import { useAuth } from "@/context/AuthContext";
 import {
   LayoutDashboard,
   Users,
   Compass,
   LogOut,
-  ShieldCheck,
   Menu,
   X,
   ExternalLink,
   User as UserIcon,
 } from "lucide-react";
 import Logo from "@/components/sections/Logo";
+import Sidebar from "@/components/layouts/Sidebar";
+import { useAuth } from "@/context/AuthContext";
 
 export default function AdminLayout() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const navigate = useNavigate();
+  const {logout , user} = useAuth();
 
   const handleLogout = async () => {
     await logout();
@@ -32,19 +32,9 @@ export default function AdminLayout() {
 
   return (
     <div className="flex min-h-svh bg-canvas text-ink">
-      <aside className="hidden w-64 flex-col justify-between border-r border-[#ececf6] bg-white/70 p-6 backdrop-blur-md lg:flex">
-        <div>
-          <Link
-            to="/admin"
-            className="flex items-center gap-2 font-display text-[21px] font-medium tracking-tight text-ink no-underline"
-          >
-            <Logo/>
-            <span>lociva admin</span>
-          </Link>
-          <div className="mt-1.5 flex items-center gap-1.5 text-[11px] font-medium text-muted">
-            <ShieldCheck size={12} className="text-primary" />
-            <span>civic analytics moderation</span>
-          </div>
+      <div className="hidden w-64 shrink-0 flex-col justify-between border-r border-[#ececf6] bg-white/70 p-6 backdrop-blur-md lg:flex">
+        <Sidebar />
+      </div>
 
           {/* Navigation Links */}
           <nav className="mt-8 space-y-1.5">
@@ -85,7 +75,6 @@ export default function AdminLayout() {
               </Link>
             </div>
           </nav>
-        </div>
 
         {/* Profile Card & Logout */}
         <div className="clay rounded-[16px] p-3.5">
@@ -120,7 +109,6 @@ export default function AdminLayout() {
             </button>
           </div>
         </div>
-      </aside>
 
       {/* Main Content Area */}
       <div className="flex flex-1 flex-col min-w-0">
@@ -130,56 +118,28 @@ export default function AdminLayout() {
             to="/admin"
             className="flex items-center gap-2 font-display text-[18px] font-medium text-ink no-underline"
           >
-            <span className="h-2 w-2 rounded-full bg-primary" />
+            <Logo />
             <span>lociva admin</span>
           </Link>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen((v) => !v)}
-              className="clay clay-press flex h-8 w-8 items-center justify-center rounded-[8px] text-ink"
-              aria-label="Toggle menu"
-            >
-              {mobileMenuOpen ? <X size={16} /> : <Menu size={16} />}
-            </button>
-          </div>
+
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen((open) => !open)}
+            className="clay clay-press flex h-8 w-8 items-center justify-center rounded-[8px] text-ink"
+            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileMenuOpen}
+          >
+            {mobileMenuOpen ? <X size={16} /> : <Menu size={16} />}
+          </button>
         </header>
 
-        {/* Mobile Dropdown Navigation */}
         {mobileMenuOpen && (
           <div className="clay-soft border-b border-[#ececf6] p-4 lg:hidden">
-            <nav className="flex flex-col gap-2">
-              {navLinks.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="rounded-[10px] px-3 py-2 text-[13.5px] font-medium text-ink no-underline hover:bg-white"
-                >
-                  {item.label}
-                </Link>
-              ))}
-              <Link
-                to="/"
-                onClick={() => setMobileMenuOpen(false)}
-                className="rounded-[10px] px-3 py-2 text-[13.5px] font-medium text-primary no-underline hover:bg-white"
-              >
-                view live map
-              </Link>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="mt-2 flex items-center gap-1.5 rounded-[10px] px-3 py-2 text-[13px] font-medium text-warning hover:bg-white text-left"
-              >
-                <LogOut size={13} />
-                <span>logout</span>
-              </button>
-            </nav>
+            <Sidebar onNavigate={() => setMobileMenuOpen(false)} />
           </div>
         )}
 
-        {/* Dynamic Nested Page Content */}
-        <main className="flex-1 p-5 sm:p-8 lg:p-10 min-w-0 overflow-y-auto">
+        <main className="min-w-0 flex-1 overflow-y-auto p-5 sm:p-8 lg:p-10">
           <Outlet />
         </main>
       </div>

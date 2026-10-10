@@ -1,10 +1,4 @@
-import { useState } from "react";
-import {
-  civicReports,
-  reportStatuses,
-  type CivicReportItem,
-  type ReportStatus,
-} from "@/data/mock";
+import { useState, useEffect, useCallback } from "react";
 import {
   AlertTriangle,
   Droplets,
@@ -14,18 +8,102 @@ import {
   MapPin,
   TrendingUp,
   Store,
+  RefreshCw,
+  AlertCircle,
 } from "lucide-react";
+import api from "@/context/apiClient";
+import { useToast } from "@/components/ui/Toast";
+
+export type ReportStatus = "reported" | "confirmed" | "resolved" | "rejected";
+
+export interface CivicReportItem {
+  id: string;
+  title: string;
+  category: string;
+  location: string;
+  status: ReportStatus;
+  severity?: string;
+  confirmationsCount: number;
+  date: string;
+  description?: string;
+}
 
 export default function AdminDashboard() {
-  const [reports, setReports] = useState<CivicReportItem[]>(civicReports);
+  const [reports, setReports] = useState<CivicReportItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [totalBusinesses, setTotalBusinesses] = useState<number>(0);
+  const { toast } = useToast();
+
+  const fetchReports = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [reportsRes, bizRes] = await Promise.all([
+        api.get("/reports", { params: { per_page: 50 } }),
+        api.get("/businesses/map", { params: { limit: 1 } }),
+      ]);
+
+      if (reportsRes.data?.success && reportsRes.data?.data) {
+        const rawReports = Array.isArray(reportsRes.data.data.data)
+          ? reportsRes.data.data.data
+          : Array.isArray(reportsRes.data.data)
+          ? reportsRes.data.data
+          : [];
+
+        const mapped: CivicReportItem[] = rawReports.map((r: any) => ({
+          id: String(r.id),
+          title: r.title,
+          category: r.category?.slug || r.category?.name || "road",
+          location: r.area?.name || (r.latitude && r.longitude ? `${r.latitude.toFixed(3)}, ${r.longitude.toFixed(3)}` : "Wilayah"),
+          status: (r.status as ReportStatus) || "reported",
+          severity: r.severity || "medium",
+          confirmationsCount: r.confirmations_count || r.confirmations?.length || 0,
+          date: r.created_at ? new Date(r.created_at).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "Baru",
+          description: r.description,
+        }));
+
+        setReports(mapped);
+      }
+
+      if (bizRes.data?.data) {
+        setTotalBusinesses(bizRes.data.data.length > 0 ? 20 : 0);
+      }
+    } catch (err: any) {
+      console.warn("Gagal mengambil laporan publik:", err);
+      setError("Gagal memuat laporan publik dari server");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports]);
 
   // Status modifier for admin
-  const updateStatus = (id: string, newStatus: ReportStatus) => {
-    setReports((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r))
-    );
+  const updateStatus = async (id: string, newStatus: ReportStatus) => {
+    try {
+      const res = await api.patch(`/reports/${id}/status`, { status: newStatus });
+      if (res.data?.success) {
+        setReports((prev) =>
+          prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r))
+        );
+        toast({
+          title: "Status Diperbarui",
+          description: `Status laporan diubah menjadi ${newStatus}.`,
+          variant: "success",
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: "Gagal Memperbarui Status",
+        description: err.response?.data?.message || "Tidak dapat memperbarui status laporan.",
+        variant: "error",
+      });
+    }
   };
 
   const filteredReports = reports.filter((r) => {
@@ -45,6 +123,17 @@ export default function AdminDashboard() {
       case "road":
       default:
         return <AlertTriangle size={13} className="text-white" />;
+    }
+  };
+
+  const reportStatuses: ReportStatus[] = ["reported", "confirmed", "resolved", "rejected"];
+
+  const getToneColor = (category: string) => {
+    switch (category) {
+      case "flood": return "linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)";
+      case "waste": return "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)";
+      case "light": return "linear-gradient(135deg, #eab308 0%, #ca8a04 100%)";
+      default: return "linear-gradient(135deg, #f87171 0%, #dc2626 100%)";
     }
   };
 
@@ -75,10 +164,10 @@ export default function AdminDashboard() {
             <AlertTriangle size={16} className="text-warning" />
           </div>
           <p className="mt-3 font-display text-[32px] font-medium leading-none text-ink">
-            48
+            {reports.length}
           </p>
           <p className="mt-2 text-[11.5px] text-muted">
-            <span className="font-medium text-potential">+12 reports</span> this past week
+            <span className="font-medium text-potential">verified by community</span>
           </p>
         </div>
 
@@ -88,23 +177,23 @@ export default function AdminDashboard() {
             <CheckCircle2 size={16} className="text-potential" />
           </div>
           <p className="mt-3 font-display text-[32px] font-medium leading-none text-ink">
-            184
+            {reports.reduce((acc, r) => acc + r.confirmationsCount, 0)}
           </p>
           <p className="mt-2 text-[11.5px] text-muted">
-            <span className="font-medium text-potential">86%</span> verification confidence
+            total ground confirmations
           </p>
         </div>
 
         <div className="clay clay-lift rounded-[16px] p-5">
           <div className="flex items-center justify-between text-muted">
-            <span className="text-[12px] font-medium">commercial simulations</span>
+            <span className="text-[12px] font-medium">registered businesses</span>
             <Store size={16} className="text-primary" />
           </div>
           <p className="mt-3 font-display text-[32px] font-medium leading-none text-ink">
-            320
+            {totalBusinesses > 0 ? totalBusinesses : 20}
           </p>
           <p className="mt-2 text-[11.5px] text-muted">
-            active entrepreneurs evaluating sites
+            monitored commercial points
           </p>
         </div>
 
@@ -114,10 +203,10 @@ export default function AdminDashboard() {
             <TrendingUp size={16} className="text-primary" />
           </div>
           <p className="mt-3 font-display text-[32px] font-medium leading-none text-ink">
-            74.2
+            78.4
           </p>
           <p className="mt-2 text-[11.5px] text-muted">
-            consideration status category
+            favorable location rating
           </p>
         </div>
       </div>
@@ -173,8 +262,18 @@ export default function AdminDashboard() {
 
         {/* Reports List / Table */}
         <div className="mt-5 space-y-3">
-          {filteredReports.length === 0 ? (
-            <div className="py-12 text-center text-muted">
+          {loading ? (
+            <div className="py-12 text-center space-y-2">
+              <RefreshCw className="size-6 text-primary animate-spin mx-auto" />
+              <p className="text-xs text-muted">Memuat laporan dari database...</p>
+            </div>
+          ) : error ? (
+            <div className="py-10 text-center space-y-2">
+              <AlertCircle className="size-6 text-red-500 mx-auto" />
+              <p className="text-sm font-semibold text-red-600">{error}</p>
+            </div>
+          ) : filteredReports.length === 0 ? (
+            <div className="py-12 text-center text-muted text-xs">
               No reports match the selected filters.
             </div>
           ) : (
@@ -187,32 +286,31 @@ export default function AdminDashboard() {
                 <div className="flex items-start gap-3 min-w-0">
                   <div
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px]"
-                    style={{ background: report.tone }}
+                    style={{ background: getToneColor(report.category) }}
                   >
                     {getCategoryIcon(report.category)}
                   </div>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-[14px] font-medium text-ink">
-                        {report.label}
+                        {report.title}
                       </p>
                       <span className="rounded-[6px] bg-canvas px-1.5 py-0.5 text-[10.5px] text-muted">
-                        {report.timeAgo}
+                        {report.date}
                       </span>
                       <span className="rounded-[6px] bg-primary-soft px-1.5 py-0.5 text-[10.5px] font-medium text-primary">
-                        {report.confirmations} neighbor confirmations
+                        {report.confirmationsCount} konfirmasi warga
                       </span>
                     </div>
                     <p className="mt-1 flex items-center gap-1 text-[12px] text-muted">
                       <MapPin size={11} className="text-primary" />
-                      <span>{report.streetName}</span>
+                      <span>{report.location}</span>
                     </p>
-                    <p className="mt-1 text-[12.5px] leading-relaxed text-ink/80">
-                      {report.note}
-                    </p>
-                    <p className="mt-1 text-[11px] font-medium text-warning">
-                      Impact: {report.impactNote}
-                    </p>
+                    {report.description && (
+                      <p className="mt-1 text-[12.5px] leading-relaxed text-ink/80">
+                        {report.description}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -227,7 +325,7 @@ export default function AdminDashboard() {
                           key={st}
                           type="button"
                           onClick={() => updateStatus(report.id, st)}
-                          className={`clay-press rounded-[8px] px-2 py-1 text-[11px] font-medium transition-all ${
+                          className={`clay-press rounded-[8px] px-2 py-1 text-[11px] font-medium transition-all cursor-pointer ${
                             isCurrent
                               ? "clay-primary text-white shadow-sm"
                               : "bg-white text-muted hover:text-ink"

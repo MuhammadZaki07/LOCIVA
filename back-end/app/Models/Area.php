@@ -9,12 +9,13 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Area extends Model
 {
     use HasUuids, SoftDeletes;
+
     protected $guarded = ['id'];
 
-    public function locations()
-    {
-        return $this->hasMany(Location::class);
-    }
+    protected $casts = [
+        'latitude'  => 'decimal:7',
+        'longitude' => 'decimal:7',
+    ];
 
     public function reports()
     {
@@ -24,6 +25,16 @@ class Area extends Model
     public function roads()
     {
         return $this->hasMany(Road::class);
+}
+
+    public function locations()
+    {
+        return $this->hasMany(Location::class);
+    }
+
+    public function pois()
+    {
+        return $this->hasMany(Poi::class);
     }
 
     public function populationStatistics()

@@ -10,4 +10,20 @@ class SimulationScore extends Model
 {
     use HasUuids, SoftDeletes;
     protected $guarded = ['id'];
+
+    protected $casts = [
+        'population_score'         => 'float',
+        'pedestrian_score'         => 'float',
+        'accessibility_score'      => 'float',
+        'target_market_score'      => 'float',
+        'competition_score'        => 'float',
+        'area_compatibility_score' => 'float',
+        'infrastructure_score'     => 'float',
+        'total_score'              => 'float',
+    ];
+
+    public function simulation()
+    {
+        return $this->belongsTo(Simulation::class);
+    }
 }

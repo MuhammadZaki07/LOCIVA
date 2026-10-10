@@ -2,12 +2,12 @@ import { useState } from "react";
 import {
   AlertTriangle,
   Coffee,
-  Compass,
+  
   Droplets,
   GraduationCap,
   Lightbulb,
-  Minus,
-  Plus,
+  
+  
   Scissors,
   ShoppingBag,
   Store,
@@ -88,7 +88,7 @@ export function MapPreview({
   const displayScore = useCountUp(score);
   const tone = scoreTone(score);
   const [activeTooltip, setActiveTooltip] = useState<MarkerData | null>(null);
-  const [zoomLevel, setZoomLevel] = useState(1);
+  const [zoomLevel] = useState(1);
 
   const showPopulation = layers.includes("population");
   const showAccess = layers.includes("access");

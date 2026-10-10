@@ -10,6 +10,7 @@ use App\Http\Resources\VendorRouteResource;
 use App\Models\vendorRoute;
 use App\Repositories\VendorRouteRepository;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class VendorRouteController extends Controller
@@ -20,7 +21,7 @@ class VendorRouteController extends Controller
         $this->routeRepo = $routeRepo;
     }
     /**
-     * Display a listing of the resource.
+     * Get shared public vendor routes for display on the map.
      */
     public function index(Request $request)
     {
@@ -33,15 +34,24 @@ class VendorRouteController extends Controller
     }
 
     /**
-     * Show the form for creating a new resource.
+     * Display a listing of the user's vendor routes.
      */
-    public function create()
-    {
-        //
-    }
+    // public function index(Request $request)
+    // {
+    //     $query = VendorRoute::with(['business:id,name,latitude,longitude'])
+    //         ->where('user_id', Auth::id());
+
+    //     if ($request->filled('status')) {
+    //         $query->where('status', $request->status);
+    //     }
+
+    //     $routes = $query->latest()->paginate(20);
+
+    //     return ApiResponse::success($routes, 'User vendor routes retrieved successfully');
+    // }
 
     /**
-     * Store a newly created resource in storage.
+     * Store a newly created vendor route plan.
      */
     public function store(VendorRouteRequestStore $request)
     {
@@ -72,7 +82,7 @@ class VendorRouteController extends Controller
     }
 
     /**
-     * Display the specified resource.
+     * Display the specified vendor route.
      */
     public function show(string $id)
     {
@@ -88,52 +98,83 @@ class VendorRouteController extends Controller
     }
 
     /**
-     * Show the form for editing the specified resource.
+     * Update the specified vendor route.
      */
-    public function edit(vendorRoute $vendorRoute)
+    public function update(Request $request, string $id)
     {
-        //
-    }
+        $route = VendorRoute::find($id);
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(VendorRouteRequestUpdate $request, string $id)
-    {
-        $data = $this->routeRepo->find($id);
-        if (!$data) return ApiResponse::error('Data not found', 404);
-
-        $validate = $request->validated();
-
-        DB::beginTransaction();
-        try {
-            if (isset($validate['route_geometry'])) {
-                $points = $validate['route_geometry'];
-
-                $coordinates = collect($points)
-                    ->map(function ($point) {
-                        return "{$point[1]} {$point[0]}";
-                    })
-                    ->implode(', ');
-
-                $validate['route_geometry'] = DB::raw(
-                    "ST_GeomFromText('LINESTRING($coordinates)', 4326)"
-                );
-            }
-
-            $vendorRoute = $this->routeRepo->update($id, $validate);
-
-            DB::commit();
-            $vendorRoute = $this->routeRepo->findWithGeometry($vendorRoute->id);
-            return ApiResponse::success('Update route successful', $vendorRoute);
-        } catch (\Throwable $th) {
-            DB::rollBack();
-            return ApiResponse::error('failed update route: ' . $th->getMessage());
+        if (!$route) {
+            return ApiResponse::notFound('Rute tidak ditemukan.');
         }
+
+        if ($route->user_id !== Auth::id()) {
+            return ApiResponse::forbidden('Anda tidak memiliki izin mengubah rute ini.');
+        }
+
+        $validated = $request->validate([
+            'name'                => 'sometimes|required|string|max:150',
+            'business_id'         => 'nullable|exists:businesses,id',
+            'waypoints'           => 'sometimes|required|array|min:2',
+            'waypoints.*.lat'     => 'required|numeric|between:-90,90',
+            'waypoints.*.lng'     => 'required|numeric|between:-180,180',
+            'waypoints.*.name'    => 'nullable|string|max:200',
+            'waypoints.*.stop_duration' => 'nullable|integer|min:0|max:1440',
+            'start_location_name' => 'nullable|string|max:200',
+            'end_location_name'   => 'nullable|string|max:200',
+            'distance'            => 'nullable|numeric|min:0|max:1000',
+            'estimated_duration'  => 'nullable|integer|min:0|max:10000',
+            'status'              => 'nullable|string|in:planned,active,completed',
+            'is_shared'           => 'boolean',
+            'notes'               => 'nullable|string|max:1000',
+            'route_coordinates'   => 'nullable|array',
+        ]);
+
+        $route->update($validated);
+
+        return ApiResponse::success($route, 'Rute berhasil diperbarui');
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Remove the specified vendor route.
+     */
+    // public function update(VendorRouteRequestUpdate $request, string $id)
+    // {
+    //     $data = $this->routeRepo->find($id);
+    //     if (!$data) return ApiResponse::error('Data not found', 404);
+
+    //     $validate = $request->validated();
+
+    //     DB::beginTransaction();
+    //     try {
+    //         if (isset($validate['route_geometry'])) {
+    //             $points = $validate['route_geometry'];
+
+    //             $coordinates = collect($points)
+    //                 ->map(function ($point) {
+    //                     return "{$point[1]} {$point[0]}";
+    //                 })
+    //                 ->implode(', ');
+
+    //             $validate['route_geometry'] = DB::raw(
+    //                 "ST_GeomFromText('LINESTRING($coordinates)', 4326)"
+    //             );
+    //         }
+
+    //         $vendorRoute = $this->routeRepo->update($id, $validate);
+
+    //         DB::commit();
+    //         $vendorRoute = $this->routeRepo->findWithGeometry($vendorRoute->id);
+    //         return ApiResponse::success('Update route successful', $vendorRoute);
+    //     } catch (\Throwable $th) {
+    //         DB::rollBack();
+    //         return ApiResponse::error('failed update route: ' . $th->getMessage());
+    //     }
+    // }
+
+    /**
+     * Recommend potential mobile vending spot locations around an area (Masalah 3 B).
+     * Transparently explains criteria: high pedestrian traffic POIs (campuses, transit hubs, schools, markets).
      */
     public function destroy(string $id)
     {

@@ -4,13 +4,16 @@ namespace App\Http\Controllers;
 
 use App\Helpers\ApiResponse;
 use App\Helpers\PaginationHelper;
+use App\Http\Requests\BusinessMapQueryRequest;
 use App\Http\Requests\BusinessRequest;
 use App\Http\Requests\BusinessUpdateRequest;
+use App\Http\Resources\BusinessMapResource;
 use App\Http\Resources\BusinessResource;
 use App\Models\Business;
 use App\Repositories\BusinessRepository;
 use App\Traits\UploadTrait;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -18,7 +21,35 @@ class BusinessController extends Controller
 {
     use UploadTrait;
     /**
-     * Display a listing of the resource.
+     * Get LOCIVA Internal businesses for the map layer.
+     * Publicly accessible, sanitized against private user data.
+     */
+    public function mapIndex(BusinessMapQueryRequest $request)
+    {
+        $lat      = $request->filled('lat') ? (float) $request->lat : null;
+        $lng      = $request->filled('lng') ? (float) $request->lng : null;
+        $radius   = $request->filled('radius') ? (float) $request->radius : null;
+        $category = $request->input('category');
+        $search   = $request->input('search');
+        $limit    = (int) $request->input('limit', 100);
+
+        $businesses = $this->businessRepository->getMapBusinesses(
+            $lat,
+            $lng,
+            $radius,
+            $category,
+            $search,
+            $limit
+        );
+
+        return ApiResponse::success(
+            BusinessMapResource::collection($businesses),
+            'LOCIVA internal businesses retrieved successfully'
+        );
+    }
+
+    /**
+     * Get businesses owned by the authenticated user.
      */
     private $businessRepository;
     public function __construct(BusinessRepository $businessRepository)
@@ -67,7 +98,7 @@ class BusinessController extends Controller
     }
 
     /**
-     * Display the specified resource.
+     * Get detail of a specific business.
      */
     public function show(string $id)
     {
@@ -83,15 +114,41 @@ class BusinessController extends Controller
     }
 
     /**
-     * Show the form for editing the specified resource.
+     * Update business owned by the authenticated user.
      */
-    public function edit(Business $business)
+    public function update(Request $request, string $id)
     {
-        //
+        $business = $this->businessRepository->getBusinessById($id);
+
+        if (!$business) {
+            return ApiResponse::error('Bisnis tidak ditemukan.', 404);
+        }
+
+        // Authorization check: only owner or admin can update
+        $user = Auth::user();
+        if ($business->user_id !== $user->id && !$user->hasRole('admin')) {
+            return ApiResponse::error('Anda tidak memiliki izin untuk mengubah data bisnis ini.', 403);
+        }
+
+        $validated = $request->validate([
+            'name'             => 'sometimes|required|string|max:150',
+            'description'      => 'nullable|string',
+            'business_type_id' => 'sometimes|required|exists:business_types,id',
+            'latitude'         => 'sometimes|required|numeric|between:-90,90',
+            'longitude'        => 'sometimes|required|numeric|between:-180,180',
+            'address'          => 'nullable|string|max:500',
+        ]);
+
+        $updated = $this->businessRepository->updateBusiness($business, $validated);
+
+        return ApiResponse::success(
+            new BusinessMapResource($updated),
+            'Data bisnis berhasil diperbarui'
+        );
     }
 
     /**
-     * Update the specified resource in storage.
+     * Delete business owned by the authenticated user.
      */
     public function update(BusinessUpdateRequest $request, string $id)
     {
@@ -127,7 +184,7 @@ class BusinessController extends Controller
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Persist candidate location analysis / simulation to database.
      */
     public function destroy(string $id)
     {

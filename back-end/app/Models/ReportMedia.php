@@ -10,4 +10,11 @@ class ReportMedia extends Model
 {
     use HasUuids, SoftDeletes;
     protected $guarded = ['id'];
+
+    const UPDATED_AT = null;
+
+    public function report()
+    {
+        return $this->belongsTo(Report::class);
+    }
 }

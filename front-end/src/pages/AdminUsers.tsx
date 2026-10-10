@@ -311,7 +311,6 @@ export default function AdminUsers() {
                         </div>
                       </div>
                     </td>
-
                     <td className="px-6 py-4">
                       <span
                         className={`inline-flex items-center gap-1 rounded-[6px] px-2 py-0.5 text-[11px] font-medium capitalize ${

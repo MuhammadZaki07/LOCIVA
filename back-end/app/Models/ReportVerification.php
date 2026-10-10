@@ -10,4 +10,16 @@ class ReportVerification extends Model
 {
     use HasUuids, SoftDeletes;
     protected $guarded = ['id'];
+    
+    const UPDATED_AT = null;
+
+    public function report()
+    {
+        return $this->belongsTo(Report::class);
+    }
+
+    public function moderator()
+    {
+        return $this->belongsTo(User::class, 'moderator_id');
+    }
 }

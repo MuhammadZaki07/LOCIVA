@@ -222,4 +222,41 @@ class AuthController extends Controller
             );
         }
     }
+
+    /**
+     * Admin: retrieve list of users with roles and activity counts.
+     */
+    public function usersList(Request $request)
+    {
+        $query = User::with('roles:id,name');
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        $users = $query->latest()->paginate(50);
+
+        return ApiResponse::success($users, 'Users directory retrieved successfully');
+    }
+
+    /**
+     * Admin: toggle between user and admin role.
+     */
+    public function toggleUserRole(string $id)
+    {
+        $user = User::findOrFail($id);
+
+        if ($user->hasRole('admin')) {
+            $user->removeRole('admin');
+            $user->assignRole('user');
+        } else {
+            $user->assignRole('admin');
+        }
+
+        return ApiResponse::success($user->fresh('roles'), 'User role updated successfully');
+    }
 }

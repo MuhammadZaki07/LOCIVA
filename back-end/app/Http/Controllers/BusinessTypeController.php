@@ -21,7 +21,7 @@ class BusinessTypeController extends Controller
         $this->businessTypeRepo = $businessTypeRepo;
     }
     /**
-     * Display a listing of the resource.
+     * Display a listing of active business types / catalog items.
      */
     public function index(Request $request)
     {
@@ -34,15 +34,22 @@ class BusinessTypeController extends Controller
     }
 
     /**
-     * Show the form for creating a new resource.
+     * Return list of distinct categories with item counts.
      */
-    public function create()
+    public function categories()
     {
-        //
+        $categories = BusinessType::where('is_active', true)
+            ->whereNotNull('category')
+            ->selectRaw('category, count(*) as count')
+            ->groupBy('category')
+            ->orderBy('category')
+            ->get();
+
+        return ApiResponse::success($categories, 'Catalog categories retrieved successfully');
     }
 
     /**
-     * Store a newly created resource in storage.
+     * Store a newly created business type in catalog.
      */
     public function store(BusinessTypeRequest $request)
     {
@@ -62,7 +69,7 @@ class BusinessTypeController extends Controller
     }
 
     /**
-     * Display the specified resource.
+     * Display the specified catalog item.
      */
     public function show(string $id)
     {
@@ -78,15 +85,37 @@ class BusinessTypeController extends Controller
     }
 
     /**
-     * Show the form for editing the specified resource.
+     * Update the specified catalog item.
      */
-    public function edit(BusinessType $businessType)
+    public function update(Request $request, string $id)
     {
-        //
+        $businessType = BusinessType::find($id);
+        if (!$businessType) {
+            return ApiResponse::notFound('Business catalog item not found.');
+        }
+
+        $validated = $request->validate([
+            'name'                  => 'sometimes|required|string|max:100',
+            'slug'                  => 'sometimes|required|string|max:120|unique:business_types,slug,' . $businessType->id,
+            'category'              => 'sometimes|required|string|max:100',
+            'scale'                 => 'nullable|string|max:50',
+            'icon'                  => 'nullable|string|max:50',
+            'description'           => 'nullable|string',
+            'default_radius_m'      => 'sometimes|required|integer|min:50|max:5000',
+            'min_radius_m'          => 'nullable|integer|min:50|max:2000',
+            'max_radius_m'          => 'nullable|integer|min:200|max:10000',
+            'target_demographics'   => 'nullable|array',
+            'competitor_categories' => 'nullable|array',
+            'is_active'             => 'boolean',
+        ]);
+
+        $businessType->update($validated);
+
+        return ApiResponse::success($businessType, 'Business catalog item updated successfully');
     }
 
     /**
-     * Update the specified resource in storage.
+     * Remove the specified catalog item with relation integrity check.
      */
     public function update(BusinessWeightUpdateRequest $request, string $id)
     {
