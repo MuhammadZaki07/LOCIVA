@@ -24,6 +24,11 @@ import {
   ModalFooter,
 } from "@/components/ui/Modal";
 
+interface ValidationErrors {
+  name?: string[];
+  role?: string[];
+}
+
 export default function AdminUsers() {
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
@@ -33,21 +38,20 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Modals state
   const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
 
-  // Edit User State
   const [editingUser, setEditingUser] = useState<ManagedUser | null>(null);
   const [editName, setEditName] = useState("");
   const [editRole, setEditRole] = useState<"admin" | "user">("user");
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
-  // Delete User State
   const [deletingUser, setDeletingUser] = useState<ManagedUser | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const [editValidationErrors, setEditValidationErrors] =
+    useState<ValidationErrors>({});
   const fetchUsers = async () => {
     try {
       setLoading(true);
@@ -76,21 +80,16 @@ export default function AdminUsers() {
   const handleSaveEdit = async () => {
     if (!editingUser) return;
 
-    if (!editName.trim()) {
-      setEditError("Nama pengguna tidak boleh kosong.");
-      return;
-    }
-
     try {
       setSavingEdit(true);
       setEditError(null);
+      setEditValidationErrors({});
 
       const updated = await updateUser(editingUser.id, {
         name: editName.trim(),
         role: editRole,
       });
 
-      // Update state locally
       setUsers((prev) =>
         prev.map((item) =>
           item.id === updated.id ? { ...item, ...updated } : item,
@@ -109,13 +108,30 @@ export default function AdminUsers() {
 
       setEditingUser(null);
     } catch (err: unknown) {
-      console.error("Error updating user:", err);
-      const errMsg =
-        err && typeof err === "object" && "response" in err
-          ? (err as { response?: { data?: { message?: string } } }).response
-              ?.data?.message
-          : null;
-      setEditError(errMsg || "Gagal memperbarui pengguna. Silakan coba lagi.");
+      const errObj = err as {
+        response?: {
+          status?: number;
+          data?: {
+            message?: string;
+            errors?: ValidationErrors;
+          };
+        };
+        message?: string;
+      };
+
+      const status = errObj.response?.status;
+      const responseData = errObj.response?.data;
+
+      if (status === 422 && responseData?.errors) {
+        setEditValidationErrors(responseData.errors);
+        return;
+      }
+
+      setEditError(
+        responseData?.message ||
+          errObj.message ||
+          "Gagal memperbarui pengguna. Silakan coba lagi.",
+      );
     } finally {
       setSavingEdit(false);
     }
@@ -354,9 +370,7 @@ export default function AdminUsers() {
             <>
               <ModalHeader>
                 <ModalTitle id="user-detail-title">User Detail</ModalTitle>
-                <ModalDescription>
-                  User account information.
-                </ModalDescription>
+                <ModalDescription>User account information.</ModalDescription>
               </ModalHeader>
               <ModalBody>
                 <div className="flex items-center gap-4">
@@ -480,31 +494,71 @@ export default function AdminUsers() {
                 <label className="mb-1.5 block text-[12px] font-medium text-ink">
                   Nama Pengguna
                 </label>
+
                 <input
                   type="text"
                   value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
+                  onChange={(e) => {
+                    setEditName(e.target.value);
+
+                    if (editValidationErrors.name) {
+                      setEditValidationErrors((prev) => ({
+                        ...prev,
+                        name: undefined,
+                      }));
+                    }
+                  }}
                   disabled={savingEdit}
                   placeholder="Masukkan nama pengguna"
-                  className="clay-inset w-full rounded-[12px] py-2 px-3.5 text-[13.5px] text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+                  className={`clay-inset w-full rounded-[12px] py-2 px-3.5 text-[13.5px] text-ink focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60 ${
+                    editValidationErrors.name
+                      ? "border border-warning focus:border-warning"
+                      : "focus:border-primary"
+                  }`}
                 />
+
+                {editValidationErrors.name && (
+                  <p className="mt-1.5 flex items-center gap-1 text-[12px] text-warning">
+                    <AlertCircle size={13} />
+                    {editValidationErrors.name[0]}
+                  </p>
+                )}
               </div>
 
               <div>
                 <label className="mb-1.5 block text-[12px] font-medium text-ink">
                   Role Sistem
                 </label>
+
                 <select
                   value={editRole}
-                  onChange={(e) =>
-                    setEditRole(e.target.value as "admin" | "user")
-                  }
+                  onChange={(e) => {
+                    setEditRole(e.target.value as "admin" | "user");
+
+                    if (editValidationErrors.role) {
+                      setEditValidationErrors((prev) => ({
+                        ...prev,
+                        role: undefined,
+                      }));
+                    }
+                  }}
                   disabled={savingEdit}
-                  className="clay-inset w-full rounded-[12px] py-2 px-3.5 text-[13.5px] text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60 bg-white"
+                  className={`clay-inset w-full rounded-[12px] bg-white py-2 px-3.5 text-[13.5px] text-ink focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60 ${
+                    editValidationErrors.role
+                      ? "border border-warning focus:border-warning"
+                      : "focus:border-primary"
+                  }`}
                 >
                   <option value="user">User (Entrepreneur)</option>
                   <option value="admin">Admin (Administrator)</option>
                 </select>
+
+                {editValidationErrors.role && (
+                  <p className="mt-1.5 flex items-center gap-1 text-[12px] text-warning">
+                    <AlertCircle size={13} />
+                    {editValidationErrors.role[0]}
+                  </p>
+                )}
               </div>
 
               <div>

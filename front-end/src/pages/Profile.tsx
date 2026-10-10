@@ -11,6 +11,9 @@ import {
   User as UserIcon,
   AlertCircle,
 } from "lucide-react";
+
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/Alert";
+
 import {
   getCurrentUser,
   updateUser,
@@ -22,8 +25,18 @@ import { ClayButton } from "@/components/ui/ClayButton";
 
 type EditableField = "avatar" | "name" | "email" | null;
 
+type ValidationErrors = {
+  name?: string[];
+  email?: string[];
+  profile_image?: string[];
+};
+
 export default function Profile() {
   const { toast } = useToast();
+
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>(
+    {},
+  );
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -70,6 +83,8 @@ export default function Profile() {
 
   const handleStartEdit = (field: EditableField) => {
     setErrorMsg(null);
+    setValidationErrors({});
+
     if (field === "name") {
       setNameValue(user?.name || "");
     } else if (field === "email") {
@@ -82,11 +97,14 @@ export default function Profile() {
         fileInputRef.current?.click();
       }, 50);
     }
+
     setEditingField(field);
   };
 
   const handleCancel = () => {
     setErrorMsg(null);
+    setValidationErrors({});
+
     if (editingField === "name") {
       setNameValue(user?.name || "");
     } else if (editingField === "email") {
@@ -95,6 +113,7 @@ export default function Profile() {
       setAvatarFile(null);
       setAvatarPreview(getStorageUrl(user?.image));
     }
+
     setEditingField(null);
   };
 
@@ -133,6 +152,7 @@ export default function Profile() {
     if (!user || !field) return;
 
     setErrorMsg(null);
+    setValidationErrors({});
 
     const payload: {
       name?: string;
@@ -141,32 +161,21 @@ export default function Profile() {
     } = {};
 
     if (field === "name") {
-      if (!nameValue.trim()) {
-        setErrorMsg("Nama pengguna tidak boleh kosong.");
-        return;
-      }
       payload.name = nameValue.trim();
     } else if (field === "email") {
-      if (!emailValue.trim()) {
-        setErrorMsg("Email tidak boleh kosong.");
-        return;
-      }
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(emailValue.trim())) {
-        setErrorMsg("Format email tidak valid.");
-        return;
-      }
       payload.email = emailValue.trim();
     } else if (field === "avatar") {
       if (!avatarFile) {
-        setErrorMsg("Pilih file gambar terlebih dahulu.");
+        setErrorMsg("Please select an image file first.");
         return;
       }
+
       payload.profile_image = avatarFile;
     }
 
     try {
       setLoading(true);
+
       const updatedUser = await updateUser(user.id, payload);
 
       setUser(updatedUser);
@@ -174,26 +183,48 @@ export default function Profile() {
       setEmailValue(updatedUser.email || "");
       setAvatarPreview(getStorageUrl(updatedUser.image));
 
-      toast({
-        title: "Profil Diperbarui",
-        description: "Perubahan profil Anda telah berhasil disimpan.",
-        variant: "success",
-      });
-
+      setValidationErrors({});
+      setErrorMsg(null);
       setEditingField(null);
       setAvatarFile(null);
-    } catch (err: unknown) {
-      console.error("Gagal memperbarui profil:", err);
-      const errMsg =
-        err && typeof err === "object" && "response" in err
-          ? (err as { response?: { data?: { message?: string } } }).response
-              ?.data?.message
-          : null;
 
-      setErrorMsg(errMsg || "Gagal memperbarui profil. Silakan coba lagi.");
       toast({
-        title: "Gagal Menyimpan",
-        description: errMsg || "Gagal memperbarui profil. Silakan coba lagi.",
+        title: "Profile Updated",
+        description: "Your profile changes have been saved successfully.",
+        variant: "success",
+      });
+    } catch (err: unknown) {
+      console.error("Failed to update profile:", err);
+
+      const errObj = err as {
+        response?: {
+          status?: number;
+          data?: {
+            message?: string;
+            errors?: ValidationErrors;
+          };
+        };
+        message?: string;
+      };
+
+      const status = errObj.response?.status;
+      const responseData = errObj.response?.data;
+
+      if (status === 422 && responseData?.errors) {
+        setValidationErrors(responseData.errors);
+        return;
+      }
+
+      const message =
+        responseData?.message ||
+        errObj.message ||
+        "Failed to update your profile. Please try again.";
+
+      setErrorMsg(message);
+
+      toast({
+        title: "Update Failed",
+        description: message,
         variant: "error",
       });
     } finally {
@@ -214,6 +245,13 @@ export default function Profile() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
+      {errorMsg && (
+        <Alert variant="error" icon={<AlertCircle size={17} />}>
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{errorMsg}</AlertDescription>
+        </Alert>
+      )}
+
       {/* Header Banner */}
       <div className="clay rounded-[22px] p-6 sm:p-8">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -247,13 +285,6 @@ export default function Profile() {
       </div>
 
       <div className="clay rounded-[22px] p-6 sm:p-8 space-y-8">
-        {errorMsg && (
-          <div className="flex items-center gap-2 rounded-[12px] bg-[#feecec] p-3.5 text-[13px] text-[#c53030]">
-            <AlertCircle size={16} className="shrink-0" />
-            <span>{errorMsg}</span>
-          </div>
-        )}
-
         <div className="flex flex-col sm:flex-row sm:items-center gap-6 border-b border-[#ececf6] pb-8">
           <div className="relative group self-center sm:self-auto">
             {/* Avatar Circle */}
@@ -363,11 +394,28 @@ export default function Profile() {
               <input
                 type="text"
                 value={nameValue}
-                onChange={(e) => setNameValue(e.target.value)}
+                onChange={(e) => {
+                  setNameValue(e.target.value);
+                  setValidationErrors((prev) => ({
+                    ...prev,
+                    name: undefined,
+                  }));
+                }}
                 disabled={loading}
-                placeholder="Masukkan nama pengguna"
-                className="clay-inset w-full rounded-[12px] py-2.5 px-4 text-[14px] text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+                placeholder="Enter your full name"
+                className={`clay-inset w-full rounded-[12px] px-4 py-2.5 text-[14px] text-ink focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60 ${
+                  validationErrors.name
+                    ? "border border-warning"
+                    : "focus:border-primary"
+                }`}
               />
+
+              {validationErrors.name?.[0] && (
+                <p className="flex items-center gap-1 text-[12px] text-warning">
+                  <AlertCircle size={13} />
+                  {validationErrors.name[0]}
+                </p>
+              )}
 
               <div className="flex items-center gap-2.5">
                 <ClayButton
@@ -431,11 +479,28 @@ export default function Profile() {
               <input
                 type="email"
                 value={emailValue}
-                onChange={(e) => setEmailValue(e.target.value)}
+                onChange={(e) => {
+                  setEmailValue(e.target.value);
+                  setValidationErrors((prev) => ({
+                    ...prev,
+                    email: undefined,
+                  }));
+                }}
                 disabled={loading}
-                placeholder="Masukkan alamat email"
-                className="clay-inset w-full rounded-[12px] py-2.5 px-4 text-[14px] text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+                placeholder="Enter your email address"
+                className={`clay-inset w-full rounded-[12px] px-4 py-2.5 text-[14px] text-ink focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60 ${
+                  validationErrors.email
+                    ? "border border-warning"
+                    : "focus:border-primary"
+                }`}
               />
+
+              {validationErrors.email?.[0] && (
+                <p className="flex items-center gap-1 text-[12px] text-warning">
+                  <AlertCircle size={13} />
+                  {validationErrors.email[0]}
+                </p>
+              )}
 
               <div className="flex items-center gap-2.5">
                 <ClayButton
