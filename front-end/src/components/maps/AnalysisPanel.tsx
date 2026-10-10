@@ -172,7 +172,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             </div>
 
             {/* Nearby POIs */}
-            <div className="space-y-3">
+            <div className="space-y-3 h-svh">
               <h3 className="font-bold text-ink text-lg">POI Terdekat</h3>
               <div className="space-y-2">
                 {result.relevantPOI.length > 0 ? result.relevantPOI.map((poi, idx) => {

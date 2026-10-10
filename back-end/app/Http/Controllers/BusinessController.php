@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Contracts\SimulationServiceInterface;
 use App\Helpers\ApiResponse;
 use App\Helpers\PaginationHelper;
 use App\Http\Requests\BusinessMapQueryRequest;
 use App\Http\Requests\BusinessRequest;
 use App\Http\Requests\BusinessUpdateRequest;
+use App\Http\Requests\SaveCandidateLocationRequest;
 use App\Http\Resources\BusinessMapResource;
 use App\Http\Resources\BusinessResource;
 use App\Models\Business;
@@ -52,9 +54,25 @@ class BusinessController extends Controller
      * Get businesses owned by the authenticated user.
      */
     private $businessRepository;
-    public function __construct(BusinessRepository $businessRepository)
+    private $simulationService;
+
+    public function __construct(BusinessRepository $businessRepository , SimulationServiceInterface $simulationService)
     {
         $this->businessRepository = $businessRepository;
+        $this->simulationService = $simulationService;
+    }
+
+     public function saveCandidateLocation(SaveCandidateLocationRequest $request)
+    {
+        $result = $this->simulationService->saveCandidateLocation(
+            Auth::id(),
+            $request->validated()
+        );
+
+        return ApiResponse::success(
+            $result,
+            'Candidate location simulation saved successfully'
+        );
     }
 
     public function index(Request $request)
@@ -116,36 +134,36 @@ class BusinessController extends Controller
     /**
      * Update business owned by the authenticated user.
      */
-    public function update(Request $request, string $id)
-    {
-        $business = $this->businessRepository->getBusinessById($id);
+    // public function update(Request $request, string $id)
+    // {
+    //     $business = $this->businessRepository->getBusinessById($id);
 
-        if (!$business) {
-            return ApiResponse::error('Bisnis tidak ditemukan.', 404);
-        }
+    //     if (!$business) {
+    //         return ApiResponse::error('Bisnis tidak ditemukan.', 404);
+    //     }
 
-        // Authorization check: only owner or admin can update
-        $user = Auth::user();
-        if ($business->user_id !== $user->id && !$user->hasRole('admin')) {
-            return ApiResponse::error('Anda tidak memiliki izin untuk mengubah data bisnis ini.', 403);
-        }
+    //     // Authorization check: only owner or admin can update
+    //     $user = Auth::user();
+    //     if ($business->user_id !== $user->id && !$user->hasRole('admin')) {
+    //         return ApiResponse::error('Anda tidak memiliki izin untuk mengubah data bisnis ini.', 403);
+    //     }
 
-        $validated = $request->validate([
-            'name'             => 'sometimes|required|string|max:150',
-            'description'      => 'nullable|string',
-            'business_type_id' => 'sometimes|required|exists:business_types,id',
-            'latitude'         => 'sometimes|required|numeric|between:-90,90',
-            'longitude'        => 'sometimes|required|numeric|between:-180,180',
-            'address'          => 'nullable|string|max:500',
-        ]);
+    //     $validated = $request->validate([
+    //         'name'             => 'sometimes|required|string|max:150',
+    //         'description'      => 'nullable|string',
+    //         'business_type_id' => 'sometimes|required|exists:business_types,id',
+    //         'latitude'         => 'sometimes|required|numeric|between:-90,90',
+    //         'longitude'        => 'sometimes|required|numeric|between:-180,180',
+    //         'address'          => 'nullable|string|max:500',
+    //     ]);
 
-        $updated = $this->businessRepository->updateBusiness($business, $validated);
+    //     $updated = $this->businessRepository->updateBusiness($business, $validated);
 
-        return ApiResponse::success(
-            new BusinessMapResource($updated),
-            'Data bisnis berhasil diperbarui'
-        );
-    }
+    //     return ApiResponse::success(
+    //         new BusinessMapResource($updated),
+    //         'Data bisnis berhasil diperbarui'
+    //     );
+    // }
 
     /**
      * Delete business owned by the authenticated user.

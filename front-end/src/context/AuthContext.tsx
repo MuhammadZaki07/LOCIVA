@@ -14,6 +14,7 @@ export interface User {
   name: string;
   email: string;
   role: "admin" | "user";
+  profile_image?: string
 }
 
 export interface LoginData {

@@ -87,32 +87,32 @@ class BusinessTypeController extends Controller
     /**
      * Update the specified catalog item.
      */
-    public function update(Request $request, string $id)
-    {
-        $businessType = BusinessType::find($id);
-        if (!$businessType) {
-            return ApiResponse::notFound('Business catalog item not found.');
-        }
+    // public function update(Request $request, string $id)
+    // {
+    //     $businessType = BusinessType::find($id);
+    //     if (!$businessType) {
+    //         return ApiResponse::notFound('Business catalog item not found.');
+    //     }
 
-        $validated = $request->validate([
-            'name'                  => 'sometimes|required|string|max:100',
-            'slug'                  => 'sometimes|required|string|max:120|unique:business_types,slug,' . $businessType->id,
-            'category'              => 'sometimes|required|string|max:100',
-            'scale'                 => 'nullable|string|max:50',
-            'icon'                  => 'nullable|string|max:50',
-            'description'           => 'nullable|string',
-            'default_radius_m'      => 'sometimes|required|integer|min:50|max:5000',
-            'min_radius_m'          => 'nullable|integer|min:50|max:2000',
-            'max_radius_m'          => 'nullable|integer|min:200|max:10000',
-            'target_demographics'   => 'nullable|array',
-            'competitor_categories' => 'nullable|array',
-            'is_active'             => 'boolean',
-        ]);
+    //     $validated = $request->validate([
+    //         'name'                  => 'sometimes|required|string|max:100',
+    //         'slug'                  => 'sometimes|required|string|max:120|unique:business_types,slug,' . $businessType->id,
+    //         'category'              => 'sometimes|required|string|max:100',
+    //         'scale'                 => 'nullable|string|max:50',
+    //         'icon'                  => 'nullable|string|max:50',
+    //         'description'           => 'nullable|string',
+    //         'default_radius_m'      => 'sometimes|required|integer|min:50|max:5000',
+    //         'min_radius_m'          => 'nullable|integer|min:50|max:2000',
+    //         'max_radius_m'          => 'nullable|integer|min:200|max:10000',
+    //         'target_demographics'   => 'nullable|array',
+    //         'competitor_categories' => 'nullable|array',
+    //         'is_active'             => 'boolean',
+    //     ]);
 
-        $businessType->update($validated);
+    //     $businessType->update($validated);
 
-        return ApiResponse::success($businessType, 'Business catalog item updated successfully');
-    }
+    //     return ApiResponse::success($businessType, 'Business catalog item updated successfully');
+    // }
 
     /**
      * Remove the specified catalog item with relation integrity check.

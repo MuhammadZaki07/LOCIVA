@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\BusinessController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ReportCategoryController;
@@ -46,10 +45,7 @@ Route::middleware('auth:sanctum')->prefix('auth')->group(function () {
 
     //ROLE USER
     Route::middleware(['role:user,admin'])->group(function () {
-        //BUSSINESS
         Route::apiResource('businesses', BusinessController::class);
-
-        //USER
         Route::apiResource('users', UserController::class)->except('store');
     });
 });
@@ -78,13 +74,13 @@ Route::get('/pois', [PoiController::class, 'index']);
 Route::get('/businesses/map', [BusinessController::class, 'mapIndex']);
 
 // Business Catalog (Katalog Usaha)
-Route::get('/business-types', [\App\Http\Controllers\BusinessTypeController::class, 'index']);
-Route::get('/business-types/categories', [\App\Http\Controllers\BusinessTypeController::class, 'categories']);
-Route::get('/business-types/{id}', [\App\Http\Controllers\BusinessTypeController::class, 'show']);
+Route::get('/business-types', [BusinessTypeController::class, 'index']);
+Route::get('/business-types/categories', [BusinessTypeController::class, 'categories']);
+Route::get('/business-types/{id}', [BusinessTypeController::class, 'show']);
 
 // Public Vendor Routes on Map
-Route::get('/vendor-routes/public', [\App\Http\Controllers\VendorRouteController::class, 'publicRoutes']);
-Route::get('/vendor-routes/recommendations', [\App\Http\Controllers\VendorRouteController::class, 'recommendations']);
+Route::get('/vendor-routes/public', [VendorRouteController::class, 'publicRoutes']);
+Route::get('/vendor-routes/recommendations', [VendorRouteController::class, 'recommendations']);
 
 // Location Analysis (core UMKM feature — public, no auth needed)
 Route::post('/analysis/location', [LocationAnalysisController::class, 'analyze']);
@@ -115,18 +111,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/simulations/sessions/{id}', [BusinessController::class, 'deleteSimulationSession']);
 
     // Mobile Vendor Routes CRUD (per-user)
-    Route::get('/vendor-routes', [\App\Http\Controllers\VendorRouteController::class, 'index']);
-    Route::post('/vendor-routes', [\App\Http\Controllers\VendorRouteController::class, 'store']);
-    Route::get('/vendor-routes/{id}', [\App\Http\Controllers\VendorRouteController::class, 'show']);
-    Route::put('/vendor-routes/{id}', [\App\Http\Controllers\VendorRouteController::class, 'update']);
-    Route::delete('/vendor-routes/{id}', [\App\Http\Controllers\VendorRouteController::class, 'destroy']);
+    Route::get('/vendor-routes', [VendorRouteController::class, 'index']);
+    Route::post('/vendor-routes', [VendorRouteController::class, 'store']);
+    Route::get('/vendor-routes/{id}', [VendorRouteController::class, 'show']);
+    Route::put('/vendor-routes/{id}', [VendorRouteController::class, 'update']);
+    Route::delete('/vendor-routes/{id}', [VendorRouteController::class, 'destroy']);
 
     // Admin-only
     Route::middleware('role:admin')->group(function () {
         Route::patch('/reports/{id}/status', [ReportController::class, 'updateStatus']);
-        Route::post('/business-types', [\App\Http\Controllers\BusinessTypeController::class, 'store']);
-        Route::put('/business-types/{id}', [\App\Http\Controllers\BusinessTypeController::class, 'update']);
-        Route::delete('/business-types/{id}', [\App\Http\Controllers\BusinessTypeController::class, 'destroy']);
+        Route::post('/business-types', [BusinessTypeController::class, 'store']);
+        Route::put('/business-types/{id}', [BusinessTypeController::class, 'update']);
+        Route::delete('/business-types/{id}', [BusinessTypeController::class, 'destroy']);
         Route::get('/admin/users', [AuthController::class, 'usersList']);
         Route::post('/admin/users/{id}/toggle-role', [AuthController::class, 'toggleUserRole']);
     });

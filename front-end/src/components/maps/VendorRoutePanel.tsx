@@ -438,7 +438,7 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
             </div>
 
             {/* Waypoints List */}
-            <div className="space-y-2.5">
+            <div className="space-y-2.5 ">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-ink">
                   Titik Singgah ({activeWaypoints.length} titik)

@@ -70,10 +70,11 @@ export const BusinessCatalogPanel: React.FC<BusinessCatalogPanelProps> = ({
       if (selectedCategory !== 'Semua') params.category = selectedCategory;
 
       const res = await api.get('/business-types', { params });
-      if (res.data?.success && Array.isArray(res.data?.data?.data)) {
-        setCatalogItems(res.data.data.data);
+      
+      if (res.data?.success && Array.isArray(res.data?.data?.Data)) {
+        setCatalogItems(res?.data?.data?.Data);
       } else if (res.data?.success && Array.isArray(res.data?.data)) {
-        setCatalogItems(res.data.data);
+        setCatalogItems(res?.data?.data);
       }
     } catch (err: any) {
       console.warn('Gagal memuat katalog usaha:', err);
@@ -82,6 +83,7 @@ export const BusinessCatalogPanel: React.FC<BusinessCatalogPanelProps> = ({
       setLoading(false);
     }
   }, [search, selectedCategory]);
+  
 
   useEffect(() => {
     fetchCategories();
