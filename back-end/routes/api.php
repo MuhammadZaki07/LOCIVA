@@ -8,7 +8,6 @@ use App\Http\Controllers\ReportCategoryController;
 use App\Http\Controllers\AreaController;
 use App\Http\Controllers\PoiController;
 use App\Http\Controllers\LocationAnalysisController;
-use App\Http\Controllers\BusinessController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\BusinessTypeController;
 use App\Http\Controllers\BusinessTypeWeightController;
@@ -129,5 +128,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/business-types/{id}', [\App\Http\Controllers\BusinessTypeController::class, 'destroy']);
         Route::get('/admin/users', [AuthController::class, 'usersList']);
         Route::post('/admin/users/{id}/toggle-role', [AuthController::class, 'toggleUserRole']);
+        Route::apiResource('/area', AreaController::class)->except(['index']);
     });
 });

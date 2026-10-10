@@ -3,6 +3,8 @@
 namespace App\Repositories;
 
 use App\Models\Area;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 
 class AreaRepository extends BaseRepository
 {
@@ -19,5 +21,15 @@ class AreaRepository extends BaseRepository
             'roads',
             'populationStatistics'
         ])->findOrFail($id);
+    }
+
+    public function create(array $data): Area
+    {
+        $boundary = DB::raw('ST_GeomFromGeoJSON(' . DB::getPdo()->quote(json_encode($data['boundary'])) . ')');
+
+        return $this->model->create([
+            ...Arr::except($data, 'boundary'),
+            'boundary' => $boundary,
+        ]);
     }
 }
