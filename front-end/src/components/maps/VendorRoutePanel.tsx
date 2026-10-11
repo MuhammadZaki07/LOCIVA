@@ -214,9 +214,7 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
 
     setIsCalculating(true);
     try {
-      const calculationPoints = isRoundtrip
-        ? [...activeWaypoints, activeWaypoints[0]]
-        : activeWaypoints;
+      const calculationPoints = isRoundtrip ? [...activeWaypoints, activeWaypoints[0]] : activeWaypoints;
 
       const result = await calculateRoute(calculationPoints);
       onRouteCalculated(result);
@@ -361,7 +359,7 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
     <div
       className={cn(
         "fixed md:static inset-y-0 left-0 z-[500] w-full md:w-96 bg-surface border-r border-slate-200 flex flex-col transition-transform duration-300 shadow-xl md:shadow-none",
-        !isOpen && "-translate-x-full md:translate-x-0 md:hidden"
+        !isOpen && "-translate-x-full md:translate-x-0 md:hidden",
       )}
     >
       {/* Header */}
@@ -376,11 +374,7 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
               <p className="text-[11px] text-muted">Perencana jalur jualan gerobak & usaha mobile</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-muted"
-          >
+          <button type="button" onClick={onClose} className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-muted">
             <X size={16} />
           </button>
         </div>
@@ -392,7 +386,7 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
             onClick={() => setActiveTab("planner")}
             className={cn(
               "py-1.5 rounded-lg transition-all text-center cursor-pointer",
-              activeTab === "planner" ? "bg-white text-ink shadow-xs" : "text-muted hover:text-ink"
+              activeTab === "planner" ? "bg-white text-ink shadow-xs" : "text-muted hover:text-ink",
             )}
           >
             Perencana
@@ -402,7 +396,7 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
             onClick={() => setActiveTab("recommendations")}
             className={cn(
               "py-1.5 rounded-lg transition-all text-center cursor-pointer flex items-center justify-center gap-1",
-              activeTab === "recommendations" ? "bg-white text-ink shadow-xs" : "text-muted hover:text-ink"
+              activeTab === "recommendations" ? "bg-white text-ink shadow-xs" : "text-muted hover:text-ink",
             )}
           >
             <Sparkles size={11} className="text-amber-500" />
@@ -413,7 +407,7 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
             onClick={() => setActiveTab("saved")}
             className={cn(
               "py-1.5 rounded-lg transition-all text-center cursor-pointer",
-              activeTab === "saved" ? "bg-white text-ink shadow-xs" : "text-muted hover:text-ink"
+              activeTab === "saved" ? "bg-white text-ink shadow-xs" : "text-muted hover:text-ink",
             )}
           >
             Rute Saya
@@ -438,11 +432,9 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
             </div>
 
             {/* Waypoints List */}
-            <div className="space-y-2.5 ">
+            <div className="max-h-[56vh] overflow-y-auto overflow-x-hidden overscroll-contain space-y-2 pr-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-ink">
-                  Titik Singgah ({activeWaypoints.length} titik)
-                </span>
+                <span className="text-xs font-bold text-ink">Titik Singgah ({activeWaypoints.length} titik)</span>
                 <button
                   type="button"
                   onClick={handleAddStop}
@@ -459,16 +451,13 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
                   const isLast = idx === activeWaypoints.length - 1;
 
                   return (
-                    <div
-                      key={idx}
-                      className="p-3 bg-white rounded-xl border border-slate-200/90 shadow-xs space-y-2"
-                    >
+                    <div key={idx} className="p-3 bg-white rounded-xl border border-slate-200/90 shadow-xs space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <span
                             className={cn(
                               "size-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0",
-                              isFirst ? "bg-emerald-600" : isLast ? "bg-indigo-600" : "bg-slate-700"
+                              isFirst ? "bg-emerald-600" : isLast ? "bg-indigo-600" : "bg-slate-700",
                             )}
                           >
                             {idx + 1}
@@ -514,7 +503,9 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
                             type="number"
                             value={wp.stop_duration || 0}
                             onChange={(e) =>
-                              handleUpdateStop(idx, { stop_duration: Number(e.target.value) })
+                              handleUpdateStop(idx, {
+                                stop_duration: Number(e.target.value),
+                              })
                             }
                             className="w-12 px-1 py-0.5 text-right bg-slate-100 rounded text-ink"
                             min="0"
@@ -563,8 +554,12 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
                   <CheckCircle2 size={14} className="text-emerald-600" />
                 </div>
                 <div className="flex items-center justify-between text-xs text-emerald-900 pt-1">
-                  <span>Total Jarak: <b>{currentCalculation.distanceKm} km</b></span>
-                  <span>Est. Waktu Jalan: <b>{currentCalculation.durationMinutes} menit</b></span>
+                  <span>
+                    Total Jarak: <b>{currentCalculation.distanceKm} km</b>
+                  </span>
+                  <span>
+                    Est. Waktu Jalan: <b>{currentCalculation.durationMinutes} menit</b>
+                  </span>
                 </div>
                 {currentCalculation.summary && (
                   <p className="text-[10px] text-emerald-700 pt-0.5">{currentCalculation.summary}</p>
@@ -624,7 +619,8 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
                 Rekomendasi Titik Mangkal Berpotensi
               </h4>
               <p className="text-[11px] text-amber-800 leading-relaxed">
-                Dihitung dari kepadatan fasilitas umum pejalan kaki tinggi (kampus, sekolah, pasar, sentral transit) di sekitar rute Anda.
+                Dihitung dari kepadatan fasilitas umum pejalan kaki tinggi (kampus, sekolah, pasar, sentral transit) di
+                sekitar rute Anda.
               </p>
             </div>
 
@@ -639,10 +635,7 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
               </div>
             ) : (
               recommendations.map((rec) => (
-                <div
-                  key={rec.id}
-                  className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-xs space-y-2"
-                >
+                <div key={rec.id} className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-xs space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <span className="text-[10px] uppercase font-bold text-primary bg-primary-soft px-1.5 py-0.5 rounded">
@@ -658,9 +651,7 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
                   <p className="text-[11px] text-muted leading-relaxed">{rec.reason}</p>
 
                   <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-                    <span className="text-[10.5px] text-muted">
-                      ~{rec.distance_meters}m dari titik acuan
-                    </span>
+                    <span className="text-[10.5px] text-muted">~{rec.distance_meters}m dari titik acuan</span>
                     <button
                       type="button"
                       onClick={() => handleAddRecommendationToRoute(rec)}
