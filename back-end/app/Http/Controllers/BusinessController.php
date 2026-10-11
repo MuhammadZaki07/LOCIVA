@@ -56,13 +56,13 @@ class BusinessController extends Controller
     private $businessRepository;
     private $simulationService;
 
-    public function __construct(BusinessRepository $businessRepository , SimulationServiceInterface $simulationService)
+    public function __construct(BusinessRepository $businessRepository, SimulationServiceInterface $simulationService)
     {
         $this->businessRepository = $businessRepository;
         $this->simulationService = $simulationService;
     }
 
-     public function saveCandidateLocation(SaveCandidateLocationRequest $request)
+    public function saveCandidateLocation(SaveCandidateLocationRequest $request)
     {
         $result = $this->simulationService->saveCandidateLocation(
             Auth::id(),
@@ -79,7 +79,7 @@ class BusinessController extends Controller
     {
         try {
             $fetch = $this->businessRepository->paginate($request->query('per_page', 10));
-            return ApiResponse::success(["mete" => PaginationHelper::meta($fetch), "Data" => BusinessResource::collection($fetch)]);
+            return ApiResponse::success(["meta" => PaginationHelper::meta($fetch), "Data" => BusinessResource::collection($fetch)]);
         } catch (\Throwable $th) {
             return ApiResponse::error($th->getMessage());
         }
@@ -177,7 +177,7 @@ class BusinessController extends Controller
 
         DB::beginTransaction();
         try {
-            if (isset($validate['profile_image'])) {
+            if (isset($validate['image'])) {
                 $oldImage = $data->image;
 
                 $validate['image'] = $this->upload(
@@ -218,6 +218,16 @@ class BusinessController extends Controller
         } catch (\Throwable $th) {
             DB::rollBack();
             return ApiResponse::error('Data not deleted: ' . $th->getMessage(), 500);
+        }
+    }
+
+    public function indexUser(Request $request)
+    {
+        try {
+            $fetch = $this->businessRepository->paginateUserBusinesses($request->user()->id, $request->query('per_page', 10));
+            return ApiResponse::success(["meta" => PaginationHelper::meta($fetch), "Data" => BusinessResource::collection($fetch)]);
+        } catch (\Throwable $th) {
+            return ApiResponse::error($th->getMessage());
         }
     }
 }
