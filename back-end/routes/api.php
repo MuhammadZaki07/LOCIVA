@@ -6,6 +6,7 @@ use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ReportCategoryController;
 use App\Http\Controllers\AreaController;
+use App\Http\Controllers\BusinessController;
 use App\Http\Controllers\PoiController;
 use App\Http\Controllers\LocationAnalysisController;
 use Illuminate\Support\Facades\Route;
