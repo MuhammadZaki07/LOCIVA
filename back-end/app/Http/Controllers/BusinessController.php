@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Contracts\BusinessRepositoryInterface;
 use App\Contracts\SimulationServiceInterface;
 use App\Helpers\ApiResponse;
+use App\Helpers\PaginationHelper;
 use App\Http\Requests\BusinessMapQueryRequest;
 use App\Http\Requests\SaveCandidateLocationRequest;
 use App\Http\Resources\BusinessMapResource;
+use App\Http\Resources\BusinessResource;
 use App\Http\Resources\SimulationSessionResource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -78,7 +80,6 @@ class BusinessController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name'             => 'required|string|max:150',
             'description'      => 'nullable|string',
             'business_type_id' => 'required|exists:business_types,id',
             'latitude'         => 'required|numeric|between:-90,90',
@@ -180,8 +181,6 @@ class BusinessController extends Controller
         $result = $this->simulationService->saveCandidateLocation(
             Auth::id(),
             $request->validated()
-        );
-
         return ApiResponse::success(
             $result,
             'Candidate location simulation saved successfully'
@@ -212,5 +211,15 @@ class BusinessController extends Controller
             null,
             'Sesi simulasi berhasil dihapus'
         );
+    }
+
+    public function indexUser(Request $request)
+    {
+        try {
+            $fetch = $this->businessRepository->paginateUserBusinesses($request->user()->id, $request->query('per_page', 10));
+            return ApiResponse::success(["meta" => PaginationHelper::meta($fetch), "Data" => BusinessResource::collection($fetch)]);
+        } catch (\Throwable $th) {
+            return ApiResponse::error($th->getMessage());
+        }
     }
 }

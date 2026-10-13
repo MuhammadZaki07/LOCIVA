@@ -65,11 +65,11 @@ const api = axios.create({
     baseURL: resolveBaseUrl(),
     timeout: 20000,
     headers: {
-        "Content-Type": "application/json",
+        // "Content-Type": "application/json",
         Accept: "application/json",
     },
 });
-
+    
 api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem("token");

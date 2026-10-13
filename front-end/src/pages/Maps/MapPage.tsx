@@ -12,7 +12,7 @@ import api from "@/context/apiClient";
 import { BusinessCatalogPanel } from "@/components/maps/BusinessCatalogPanel";
 import { CandidateMarker } from "@/components/maps/CandidateMarker";
 import { AnalysisPanel } from "@/components/maps/AnalysisPanel";
-import { SavedCandidatesPanel, type SavedCandidateItem } from "@/components/maps/SavedCandidatesPanel";
+import { SavedCandidatesPanel } from "@/components/maps/SavedCandidatesPanel";
 import { CompareCandidatesPanel } from "@/components/maps/CompareCandidatesPanel";
 import { MapLegend } from "@/components/maps/MapLegend";
 import { CandidateTabs } from "@/components/maps/CandidateTabs";
@@ -33,20 +33,25 @@ import { useLocationAnalysis } from "@/hooks/useLocationAnalysis";
 import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import L from "leaflet";
-import { useMapEvents } from "react-leaflet";
-import {
-  Map as MapIcon,
-  Satellite,
-  Navigation,
-  Footprints,
-  PenLine,
-  CheckCircle2,
-  Target,
-  AlertCircle,
-  Scale,
-  X,
-  BookOpen,
-} from "lucide-react";
+import { useMap, useMapEvents } from "react-leaflet";
+import { AlertCircle, BookOpen, CheckCircle2, Footprints, MapIcon, PenLine, Satellite, Scale, Target, X } from "lucide-react";
+
+const MapViewController: React.FC<{
+  lat: number | null;
+  lng: number | null;
+}> = ({ lat, lng }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (lat === null || lng === null) return;
+
+    map.setView([lat, lng], 18, {
+      animate: false,
+    });
+  }, [map, lat, lng]);
+
+  return null;
+};
 
 // ─── Map Ready Gate: delays children until Leaflet fires whenReady ─────────────
 // This prevents "Cannot destructure property 'zoom' of 't0'" crashes that occur
@@ -128,6 +133,7 @@ export function MapPage() {
   const [center, setCenter] = useState<[number, number]>([-7.9797, 112.6304]); // Default to Malang coordinates
   const mapRef = useRef<L.Map>(null);
   const { toast } = useToast();
+  const mapRef = useRef<L.Map>(null);
 
   // ── Navigation / Panel tool state ──────────────────────────────────────────
   const [activeTool, setActiveTool] = useState<MapToolId | null>(null);
@@ -151,7 +157,9 @@ export function MapPage() {
 
   // ── User GPS Location ─────────────────────────────────────────────────────
   const [userLocation, setUserLocation] = useState<{
-    lat: number; lng: number; accuracy?: number;
+    lat: number;
+    lng: number;
+    accuracy?: number;
   } | null>(null);
 
   // ── UMKM Candidate Analysis ───────────────────────────────────────────────
@@ -186,18 +194,22 @@ export function MapPage() {
   }
 
   const [candidates, setCandidates] = useState<Record<CandidateId, CandidateData | null>>({
-    A: null, B: null, C: null,
+    A: null,
+    B: null,
+    C: null,
   });
   const [activeCandidateId, setActiveCandidateId] = useState<CandidateId>("A");
   const [analysisResults, setAnalysisResults] = useState<Record<CandidateId, AnalysisResult | null>>({
-    A: null, B: null, C: null,
+    A: null,
+    B: null,
+    C: null,
   });
 
   const { analyze, isAnalyzing, error: analysisError } = useLocationAnalysis();
 
   const activeCandidate = candidates[activeCandidateId];
-  const debouncedLat    = useDebounce(activeCandidate?.lat, 600);
-  const debouncedLng    = useDebounce(activeCandidate?.lng, 600);
+  const debouncedLat = useDebounce(activeCandidate?.lat, 600);
+  const debouncedLng = useDebounce(activeCandidate?.lng, 600);
   const debouncedRadius = useDebounce(activeCandidate?.radius, 600);
 
   // ── Mobile Vendor Routes ──────────────────────────────────────────────────
@@ -420,16 +432,14 @@ export function MapPage() {
         });
       }
     },
-    [toast]
+    [toast],
   );
 
   // ── Run analysis when candidate debounced position changes ────────────────
   useEffect(() => {
     if (selectedBusiness && debouncedLat && debouncedLng && debouncedRadius) {
       const runAnalysis = async () => {
-        const res = await analyze(
-          activeCandidateId, debouncedLat, debouncedLng, debouncedRadius, selectedBusiness
-        );
+        const res = await analyze(activeCandidateId, debouncedLat, debouncedLng, debouncedRadius, selectedBusiness);
         if (res) {
           setAnalysisResults((prev) => ({ ...prev, [activeCandidateId]: res }));
           fetchLocivaData(debouncedLat, debouncedLng, debouncedRadius * 1.5);
@@ -437,10 +447,7 @@ export function MapPage() {
       };
       runAnalysis();
     }
-  }, [
-    debouncedLat, debouncedLng, debouncedRadius, selectedBusiness,
-    activeCandidateId, analyze, fetchLocivaData,
-  ]);
+  }, [debouncedLat, debouncedLng, debouncedRadius, selectedBusiness, activeCandidateId, analyze, fetchLocivaData]);
 
   // ── Event Handlers ─────────────────────────────────────────────────────────
   const handleSearchSelect = (lat: number, lng: number, name: string) => {
@@ -469,7 +476,8 @@ export function MapPage() {
       if (clickMode === "candidate" && selectedBusiness) {
         const newCandidate: CandidateData = {
           id: activeCandidateId,
-          lat, lng,
+          lat,
+          lng,
           radius: candidates[activeCandidateId]?.radius || selectedBusiness.defaultRadius,
         };
         setCandidates((prev) => ({ ...prev, [activeCandidateId]: newCandidate }));
@@ -488,7 +496,7 @@ export function MapPage() {
         toast({ title: "Waypoint Added", description: `${lat.toFixed(4)}, ${lng.toFixed(4)}` });
       }
     },
-    [clickMode, selectedBusiness, activeCandidateId, candidates, activeTool, toast]
+    [clickMode, selectedBusiness, activeCandidateId, candidates, activeTool, toast],
   );
 
   const handleMarkerDragEnd = useCallback(
@@ -512,7 +520,7 @@ export function MapPage() {
         return { ...prev, [activeCandidateId]: { ...existing, radius } };
       });
     },
-    [activeCandidateId]
+    [activeCandidateId],
   );
 
   const handleAddCandidate = () => {

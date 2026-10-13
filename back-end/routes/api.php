@@ -11,6 +11,7 @@ use App\Http\Controllers\LocationAnalysisController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\BusinessTypeController;
 use App\Http\Controllers\BusinessTypeWeightController;
+use App\Http\Controllers\BusinessController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VendorRouteController;
 
@@ -19,6 +20,7 @@ use App\Http\Controllers\VendorRouteController;
 | Auth Routes
 |--------------------------------------------------------------------------
 */
+
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
@@ -31,23 +33,6 @@ Route::prefix('auth')->group(function () {
 Route::middleware('auth:sanctum')->prefix('auth')->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/logout', [AuthController::class, 'logout']);
-
-    //ROLE ADMIN
-    Route::middleware(['role:admin'])->group(function () {
-        //BUSSINESS TYPE
-        Route::apiResource('business-types', BusinessTypeController::class);
-
-        //BUSINESS TYPE WEIGHT
-        Route::apiResource('business-type-weights', BusinessTypeWeightController::class);
-
-        Route::apiResource('vendor-routes', VendorRouteController::class);
-    });
-
-    //ROLE USER
-    Route::middleware(['role:user,admin'])->group(function () {
-        Route::apiResource('businesses', BusinessController::class);
-        Route::apiResource('users', UserController::class)->except('store');
-    });
 });
 
 /*
@@ -74,6 +59,7 @@ Route::get('/pois', [PoiController::class, 'index']);
 Route::get('/businesses/map', [BusinessController::class, 'mapIndex']);
 
 // Business Catalog (Katalog Usaha)
+Route::get('/business/types', [BusinessTypeController::class, 'index']);
 Route::get('/business-types', [BusinessTypeController::class, 'index']);
 Route::get('/business-types/categories', [BusinessTypeController::class, 'categories']);
 Route::get('/business-types/{id}', [BusinessTypeController::class, 'show']);
@@ -100,6 +86,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Business management (per-user CRUD)
     Route::get('/businesses', [BusinessController::class, 'index']);
+    Route::get('/businesses/user', [BusinessController::class, 'indexUser']);
     Route::post('/businesses', [BusinessController::class, 'store']);
     Route::get('/businesses/{id}', [BusinessController::class, 'show']);
     Route::put('/businesses/{id}', [BusinessController::class, 'update']);
@@ -119,6 +106,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Admin-only
     Route::middleware('role:admin')->group(function () {
+        Route::apiResource('business-type-weights', BusinessTypeWeightController::class);
+        Route::apiResource('users', UserController::class)->except('store');
         Route::patch('/reports/{id}/status', [ReportController::class, 'updateStatus']);
         Route::post('/business-types', [BusinessTypeController::class, 'store']);
         Route::put('/business-types/{id}', [BusinessTypeController::class, 'update']);
