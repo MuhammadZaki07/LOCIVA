@@ -124,6 +124,7 @@ export const BusinessCatalogPanel: React.FC<BusinessCatalogPanelProps> = ({
     <div
       className={cn(
         "fixed md:static inset-y-0 left-0 z-[500] w-full md:w-84 bg-surface border-r border-slate-200 flex flex-col transition-transform duration-300 shadow-xl md:shadow-none",
+        "h-dvh md:h-full md:max-h-dvh overflow-hidden",
         !isOpen && "-translate-x-full md:translate-x-0 md:hidden"
       )}
     >
