@@ -57,13 +57,47 @@ class LocationAnalysisService
         $typeKey      = (string) $input['business_type'];
         $candidateId  = $input['candidate_id'] ?? 'A';
         $external     = $input['external_places'] ?? [];
+        $isWater      = !empty($input['is_water']);
 
         $businessType = BusinessType::query()
             ->where('id', $typeKey)
             ->orWhere('slug', $typeKey)
             ->first();
 
-        $slug    = $businessType?->slug ?? $typeKey;
+        $slug = $businessType?->slug ?? $typeKey;
+
+        // Sea / offshore detection guard (Section 4 of Implementation Brief)
+        if ($isWater) {
+            return [
+                'candidate_id'         => $candidateId,
+                'lat'                  => $lat,
+                'lng'                  => $lng,
+                'radius'               => $radius,
+                'business_type'        => $slug,
+                'business_type_name'   => $businessType?->name,
+                'is_valid_location'    => false,
+                'is_water_or_offshore' => true,
+                'unsupported_reason'   => 'Lokasi berada di perairan/laut lepas atau area non-layanan. Skor kelayakan tidak dapat dihitung.',
+                'opportunity_score'    => null,
+                'competition_score'    => null,
+                'accessibility_score'  => null,
+                'data_confidence'      => 0,
+                'competitor_count'     => 0,
+                'nearest_competitor'   => null,
+                'relevant_poi'         => [],
+                'factors'              => [],
+                'data_warnings'        => [
+                    'Koordinat terdeteksi di laut lepas atau perairan. Skor potensi dinonaktifkan untuk mencegah data palsu.',
+                ],
+                'sources'              => [],
+                'internal_poi_total'   => 0,
+                'external_poi_total'   => 0,
+                'poi_total'            => 0,
+                'report_count'         => 0,
+                'limitations'          => 'Area perairan/laut lepas tidak didukung untuk kelayakan tempat usaha UMKM.',
+            ];
+        }
+
         $weights = $this->resolveWeights($businessType, $slug);
         $competitorCats = $this->resolveCompetitorCategories($businessType);
 
@@ -243,6 +277,8 @@ class LocationAnalysisService
             'radius'              => $radius,
             'business_type'       => $slug,
             'business_type_name'  => $businessType?->name,
+            'is_valid_location'   => true,
+            'is_water_or_offshore'=> false,
             'opportunity_score'   => $opportunityScore,
             'competition_score'   => $competitionScore,
             'accessibility_score' => $accessibilityScore,

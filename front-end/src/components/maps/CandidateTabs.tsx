@@ -1,5 +1,6 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
+import { Plus } from 'lucide-react';
 
 export type CandidateId = 'A' | 'B' | 'C';
 
@@ -28,21 +29,24 @@ export const CandidateTabs: React.FC<CandidateTabsProps> = ({ candidates, active
       {candidates.filter(c => c.exists).map(c => (
         <button
           key={c.id}
+          type="button"
           onClick={() => onChange(c.id)}
           className={cn(
-            "px-4 py-2 rounded-lg font-bold transition-all text-sm border-2",
+            "px-4 py-2 rounded-lg font-bold transition-all text-sm border-2 cursor-pointer",
             activeId === c.id ? colors[c.id] + " border-transparent" : inactiveColors[c.id] + " bg-transparent"
           )}
         >
-          Kandidat {c.id}
+          Candidate {c.id}
         </button>
       ))}
       {onAdd && candidates.filter(c => c.exists).length < 3 && (
         <button
+          type="button"
           onClick={onAdd}
-          className="px-4 py-2 rounded-lg font-medium text-sm border-2 border-dashed border-slate-300 text-muted hover:border-primary hover:text-primary transition-colors"
+          className="px-3.5 py-2 rounded-lg font-medium text-sm border-2 border-dashed border-slate-300 text-muted hover:border-primary hover:text-primary transition-colors flex items-center gap-1.5 cursor-pointer"
         >
-          + Tambah
+          <Plus size={14} />
+          <span>Add</span>
         </button>
       )}
     </div>

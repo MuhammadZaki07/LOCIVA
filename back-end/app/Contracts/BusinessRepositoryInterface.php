@@ -16,7 +16,11 @@ interface BusinessRepositoryInterface
         ?float $radiusMeters = null,
         ?string $category = null,
         ?string $search = null,
-        int $limit = 100
+        int $limit = 100,
+        ?float $minLat = null,
+        ?float $minLng = null,
+        ?float $maxLat = null,
+        ?float $maxLng = null
     ): Collection;
 
     /**

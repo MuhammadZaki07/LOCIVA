@@ -3,24 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Helpers\ApiResponse;
-use App\Helpers\PaginationHelper;
-use App\Http\Requests\VendorRouteRequestStore;
-use App\Http\Requests\VendorRouteRequestUpdate;
-use App\Http\Resources\VendorRouteResource;
-use App\Models\vendorRoute;
-use App\Repositories\VendorRouteRepository;
+use App\Models\Poi;
+use App\Models\VendorRoute;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 class VendorRouteController extends Controller
 {
-    private $routeRepo;
-    public function __construct(VendorRouteRepository $routeRepo)
-    {
-        $this->routeRepo = $routeRepo;
-    }
-
+    /**
+     * Get shared public vendor routes for display on the map.
+     */
     public function publicRoutes(Request $request)
     {
         $query = VendorRoute::with(['business:id,name,latitude,longitude'])
@@ -35,18 +27,6 @@ class VendorRouteController extends Controller
 
         return ApiResponse::success($routes, 'Public vendor routes retrieved successfully');
     }
-    /**
-     * Get shared public vendor routes for display on the map.
-     */
-    // public function index(Request $request)
-    // {
-    //     try {
-    //         $fetch = $this->routeRepo->paginateWithGeometry($request->query('per_page', 10));
-    //         return ApiResponse::success(["mete" => PaginationHelper::meta($fetch), "Data" => VendorRouteResource::collection($fetch)]);
-    //     } catch (\Throwable $th) {
-    //         return ApiResponse::error($th->getMessage());
-    //     }
-    // }
 
     /**
      * Display a listing of the user's vendor routes.
@@ -68,32 +48,33 @@ class VendorRouteController extends Controller
     /**
      * Store a newly created vendor route plan.
      */
-    public function store(VendorRouteRequestStore $request)
+    public function store(Request $request)
     {
-        $validate = $request->validated();
+        $validated = $request->validate([
+            'name'                => 'required|string|max:150',
+            'business_id'         => 'nullable|exists:businesses,id',
+            'waypoints'           => 'required|array|min:2',
+            'waypoints.*.lat'     => 'required|numeric|between:-90,90',
+            'waypoints.*.lng'     => 'required|numeric|between:-180,180',
+            'waypoints.*.name'    => 'nullable|string|max:200',
+            'waypoints.*.stop_duration' => 'nullable|integer|min:0|max:1440',
+            'start_location_name' => 'nullable|string|max:200',
+            'end_location_name'   => 'nullable|string|max:200',
+            'distance'            => 'nullable|numeric|min:0|max:1000',
+            'estimated_duration'  => 'nullable|integer|min:0|max:10000',
+            'status'              => 'nullable|string|in:planned,active,completed',
+            'is_shared'           => 'boolean',
+            'notes'               => 'nullable|string|max:1000',
+            'route_coordinates'   => 'nullable|array',
+            'route_coordinates.*' => 'array',
+        ]);
 
-        DB::beginTransaction();
-        try {
-            $points = $validate['route_geometry'];
+        $validated['user_id'] = Auth::id();
+        $validated['status'] = $validated['status'] ?? 'planned';
 
-            $coordinates = collect($points)
-                ->map(function ($point) {
-                    return "{$point[1]} {$point[0]}";
-                })
-                ->implode(', ');
+        $route = VendorRoute::create($validated);
 
-            $validate['route_geometry'] = DB::raw(
-                "ST_GeomFromText('LINESTRING($coordinates)', 4326)"
-            );
-
-            $vendorRoute = $this->routeRepo->create($validate);
-            DB::commit();
-            $vendorRoute = $this->routeRepo->findWithGeometry($vendorRoute->id);
-            return ApiResponse::success('Create route successful', $vendorRoute);
-        } catch (\Throwable $th) {
-            DB::rollBack();
-            return ApiResponse::error('failed create route' . $th->getMessage());
-        }
+        return ApiResponse::success($route, 'Rute usaha keliling berhasil disimpan', 201);
     }
 
     /**
@@ -101,16 +82,18 @@ class VendorRouteController extends Controller
      */
     public function show(string $id)
     {
-        try {
-            $data = $this->routeRepo->findWithGeometry($id);
+        $route = VendorRoute::with(['business:id,name,latitude,longitude'])->find($id);
 
-            if (!$data)
-                return ApiResponse::error('Data not found', 404);
-
-            return ApiResponse::success(VendorRouteResource::make($data), 'Data retrieved successfully');
-        } catch (\Throwable $th) {
-            return ApiResponse::error('Failed get data: ' . $th->getMessage(), 500);
+        if (!$route) {
+            return ApiResponse::notFound('Rute tidak ditemukan.');
         }
+
+        // Authorization check: only owner or public shared routes
+        if ($route->user_id !== Auth::id() && !$route->is_shared) {
+            return ApiResponse::forbidden('Anda tidak memiliki akses ke rute ini.');
+        }
+
+        return ApiResponse::success($route, 'Detail rute berhasil diambil');
     }
 
     /**
@@ -129,21 +112,21 @@ class VendorRouteController extends Controller
         }
 
         $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:150',
-            'business_id' => 'nullable|exists:businesses,id',
-            'waypoints' => 'sometimes|required|array|min:2',
-            'waypoints.*.lat' => 'required|numeric|between:-90,90',
-            'waypoints.*.lng' => 'required|numeric|between:-180,180',
-            'waypoints.*.name' => 'nullable|string|max:200',
+            'name'                => 'sometimes|required|string|max:150',
+            'business_id'         => 'nullable|exists:businesses,id',
+            'waypoints'           => 'sometimes|required|array|min:2',
+            'waypoints.*.lat'     => 'required|numeric|between:-90,90',
+            'waypoints.*.lng'     => 'required|numeric|between:-180,180',
+            'waypoints.*.name'    => 'nullable|string|max:200',
             'waypoints.*.stop_duration' => 'nullable|integer|min:0|max:1440',
             'start_location_name' => 'nullable|string|max:200',
-            'end_location_name' => 'nullable|string|max:200',
-            'distance' => 'nullable|numeric|min:0|max:1000',
-            'estimated_duration' => 'nullable|integer|min:0|max:10000',
-            'status' => 'nullable|string|in:planned,active,completed',
-            'is_shared' => 'boolean',
-            'notes' => 'nullable|string|max:1000',
-            'route_coordinates' => 'nullable|array',
+            'end_location_name'   => 'nullable|string|max:200',
+            'distance'            => 'nullable|numeric|min:0|max:1000',
+            'estimated_duration'  => 'nullable|integer|min:0|max:10000',
+            'status'              => 'nullable|string|in:planned,active,completed',
+            'is_shared'           => 'boolean',
+            'notes'               => 'nullable|string|max:1000',
+            'route_coordinates'   => 'nullable|array',
         ]);
 
         $route->update($validated);
@@ -154,59 +137,79 @@ class VendorRouteController extends Controller
     /**
      * Remove the specified vendor route.
      */
-    // public function update(VendorRouteRequestUpdate $request, string $id)
-    // {
-    //     $data = $this->routeRepo->find($id);
-    //     if (!$data) return ApiResponse::error('Data not found', 404);
+    public function destroy(string $id)
+    {
+        $route = VendorRoute::find($id);
 
-    //     $validate = $request->validated();
+        if (!$route) {
+            return ApiResponse::notFound('Rute tidak ditemukan.');
+        }
 
-    //     DB::beginTransaction();
-    //     try {
-    //         if (isset($validate['route_geometry'])) {
-    //             $points = $validate['route_geometry'];
+        if ($route->user_id !== Auth::id()) {
+            return ApiResponse::forbidden('Anda tidak memiliki izin menghapus rute ini.');
+        }
 
-    //             $coordinates = collect($points)
-    //                 ->map(function ($point) {
-    //                     return "{$point[1]} {$point[0]}";
-    //                 })
-    //                 ->implode(', ');
+        $route->delete();
 
-    //             $validate['route_geometry'] = DB::raw(
-    //                 "ST_GeomFromText('LINESTRING($coordinates)', 4326)"
-    //             );
-    //         }
-
-    //         $vendorRoute = $this->routeRepo->update($id, $validate);
-
-    //         DB::commit();
-    //         $vendorRoute = $this->routeRepo->findWithGeometry($vendorRoute->id);
-    //         return ApiResponse::success('Update route successful', $vendorRoute);
-    //     } catch (\Throwable $th) {
-    //         DB::rollBack();
-    //         return ApiResponse::error('failed update route: ' . $th->getMessage());
-    //     }
-    // }
+        return ApiResponse::success(null, 'Rute berhasil dihapus');
+    }
 
     /**
      * Recommend potential mobile vending spot locations around an area (Masalah 3 B).
      * Transparently explains criteria: high pedestrian traffic POIs (campuses, transit hubs, schools, markets).
      */
-    public function destroy(string $id)
+    public function recommendations(Request $request)
     {
-        $data = $this->routeRepo->find($id);
-        if (!$data)
-            return ApiResponse::error('Data not found', 404);
+        $request->validate([
+            'lat'    => 'required|numeric|between:-90,90',
+            'lng'    => 'required|numeric|between:-180,180',
+            'radius' => 'nullable|numeric|min:100|max:10000',
+        ]);
 
-        DB::beginTransaction();
-        try {
-            $delete = $this->routeRepo->delete($id);
+        $lat = (float) $request->lat;
+        $lng = (float) $request->lng;
+        $radius = (float) ($request->radius ?? 3000);
 
-            DB::commit();
-            return ApiResponse::success($delete, 'Data deleted successfully');
-        } catch (\Throwable $th) {
-            DB::rollBack();
-            return ApiResponse::error('Data not deleted: ' . $th->getMessage(), 500);
-        }
+        // Fetch high-footfall POIs within radius
+        $pois = Poi::selectRaw(
+            'id, name, category, address, latitude, longitude,
+            (6371000 * acos(LEAST(1.0, cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude))))) AS distance',
+            [$lat, $lng, $lat]
+        )
+        ->whereIn('category', ['university', 'transit_station', 'school', 'market', 'commercial'])
+        ->having('distance', '<=', $radius)
+        ->orderBy('distance')
+        ->limit(10)
+        ->get();
+
+        $recommendations = $pois->map(function ($poi) {
+            $footfallScore = match ($poi->category) {
+                'university'      => 92,
+                'transit_station' => 95,
+                'market'          => 88,
+                'school'          => 82,
+                default           => 75,
+            };
+
+            return [
+                'id'              => $poi->id,
+                'name'            => $poi->name,
+                'category'        => $poi->category,
+                'lat'             => (float) $poi->latitude,
+                'lng'             => (float) $poi->longitude,
+                'address'         => $poi->address,
+                'distance_meters' => (int) round($poi->distance),
+                'footfall_score'  => $footfallScore,
+                'reason'          => "Kawasan {$poi->category} memiliki arus pejalan kaki tinggi pada jam aktif, ideal sebagai titik singgah usaha keliling.",
+                'source'          => 'LOCIVA Benchmark POI Infrastructure',
+            ];
+        });
+
+        return ApiResponse::success([
+            'center'          => ['lat' => $lat, 'lng' => $lng],
+            'radius_m'        => $radius,
+            'recommendations' => $recommendations,
+            'methodology'     => 'Rekomendasi didasarkan pada kedekatan fasilitas publik berkepadatan pejalan kaki tinggi (kampus, sentral transit, pasar).',
+        ], 'Rekomendasi titik lokasi usaha keliling berhasil dihitung');
     }
 }

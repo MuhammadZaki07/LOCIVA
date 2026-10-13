@@ -14,17 +14,23 @@ class BusinessRepository implements BusinessRepositoryInterface
         ?float $radiusMeters = null,
         ?string $category = null,
         ?string $search = null,
-        int $limit = 100
+        int $limit = 100,
+        ?float $minLat = null,
+        ?float $minLng = null,
+        ?float $maxLat = null,
+        ?float $maxLng = null
     ): Collection {
         $query = Business::query()
             ->with(['businessType:id,name,slug'])
-            ->select('id', 'business_type_id', 'name', 'description', 'latitude', 'longitude', 'address', 'created_at');
+            ->select('id', 'business_type_id', 'name', 'description', 'latitude', 'longitude', 'address', 'is_demo', 'created_at');
 
-        // Spatial filtering if coordinates provided
-        if ($lat !== null && $lng !== null) {
-            $radius = $radiusMeters ?? 5000.0;
-
+        // Bounding box spatial filtering (viewport bounds)
+        if ($minLat !== null && $minLng !== null && $maxLat !== null && $maxLng !== null) {
+            $query->whereBetween('latitude', [min($minLat, $maxLat), max($minLat, $maxLat)])
+                  ->whereBetween('longitude', [min($minLng, $maxLng), max($minLng, $maxLng)]);
+        } elseif ($lat !== null && $lng !== null) {
             // MySQL Haversine distance in meters
+            $radius = $radiusMeters ?? 5000.0;
             $haversineSql = '(6371000 * acos(LEAST(1.0, cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude)))))';
 
             $query->selectRaw("{$haversineSql} AS distance", [$lat, $lng, $lat])

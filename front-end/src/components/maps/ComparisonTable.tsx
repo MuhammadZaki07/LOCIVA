@@ -25,7 +25,7 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({ results, activ
 
   if (validResults.length < 2) return null;
 
-  // Determine the best candidate based on a simple heuristic: 
+  // Determine the best candidate based on heuristic:
   // Opportunity - Competition + (Accessibility * 0.5)
   let bestId: CandidateId | null = null;
   let maxScore = -Infinity;
@@ -40,40 +40,44 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({ results, activ
 
   return (
     <div className="fixed inset-x-0 bottom-0 md:bottom-6 md:left-1/2 md:-translate-x-1/2 z-[450] bg-surface p-4 rounded-t-xl md:rounded-xl shadow-[0_-4px_20px_rgba(0,0,0,0.1)] border border-slate-200 md:w-auto w-full overflow-x-auto">
-      <h3 className="font-bold text-ink mb-3 md:text-center text-left">Perbandingan Kandidat</h3>
+      <h3 className="font-bold text-ink mb-3 md:text-center text-left">Candidate Comparison</h3>
       <table className="w-full text-sm text-left">
         <thead>
           <tr>
-            <th className="pb-2 text-muted font-medium pr-4">Metrik</th>
+            <th className="pb-2 text-muted font-medium pr-4">Metric</th>
             {validResults.map(({ id }) => (
               <th key={id} className={cn("pb-2 px-4 text-center font-bold border-b-2", borderColors[id], colors[id].split(' ')[0])}>
-                Kandidat {id}
-                {bestId === id && <span className="ml-2 inline-flex bg-yellow-400 text-yellow-900 text-[10px] px-1.5 py-0.5 rounded-full uppercase tracking-wider align-middle">Rekomendasi</span>}
+                Candidate {id}
+                {bestId === id && (
+                  <span className="ml-2 inline-flex bg-yellow-400 text-yellow-900 text-[10px] px-1.5 py-0.5 rounded-full uppercase tracking-wider align-middle font-bold">
+                    Recommended
+                  </span>
+                )}
               </th>
             ))}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           <tr>
-            <td className="py-2 text-ink">Potensi Pasar</td>
+            <td className="py-2 text-ink">Market Opportunity</td>
             {validResults.map(({ id, result }) => (
               <td key={id} className="py-2 px-4 text-center font-bold text-potential">{result.opportunityScore}</td>
             ))}
           </tr>
           <tr>
-            <td className="py-2 text-ink">Persaingan</td>
+            <td className="py-2 text-ink">Competition</td>
             {validResults.map(({ id, result }) => (
               <td key={id} className="py-2 px-4 text-center font-bold text-warning">{result.competitionScore}</td>
             ))}
           </tr>
           <tr>
-            <td className="py-2 text-ink">Aksesibilitas</td>
+            <td className="py-2 text-ink">Accessibility</td>
             {validResults.map(({ id, result }) => (
               <td key={id} className="py-2 px-4 text-center font-bold text-ink">{result.accessibilityScore}</td>
             ))}
           </tr>
           <tr>
-            <td className="py-2 text-ink">Jml Pesaing</td>
+            <td className="py-2 text-ink">Competitors Count</td>
             {validResults.map(({ id, result }) => (
               <td key={id} className="py-2 px-4 text-center text-muted">{result.competitorCount}</td>
             ))}

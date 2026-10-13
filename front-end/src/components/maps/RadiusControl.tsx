@@ -16,9 +16,9 @@ export const RadiusControl: React.FC<RadiusControlProps> = ({
   disabled = false
 }) => {
   return (
-    <div className="flex flex-col space-y-2 p-3 bg-surface clay-soft rounded-lg">
+    <div className="flex flex-col space-y-2 p-3 bg-surface clay-soft rounded-xl">
       <div className="flex justify-between items-center text-sm">
-        <span className="text-ink font-medium">Radius Analisis</span>
+        <span className="text-ink font-medium">Analysis Radius</span>
         <span className="text-primary font-bold">{radius}m</span>
       </div>
       <input 

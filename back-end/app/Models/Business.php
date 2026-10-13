@@ -12,8 +12,9 @@ class Business extends Model
     protected $guarded = ['id'];
 
     protected $casts = [
-        'latitude' => 'float',
+        'latitude'  => 'float',
         'longitude' => 'float',
+        'is_demo'   => 'boolean',
     ];
 
     public function businessType()

@@ -360,7 +360,7 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
   return (
     <div
       className={cn(
-        "fixed md:static inset-y-0 left-0 z-[500] w-full md:w-96 bg-surface border-r border-slate-200 flex flex-col transition-transform duration-300 shadow-xl md:shadow-none",
+        "fixed md:static inset-y-0 left-0 z-[500] w-full md:w-full bg-surface border-r border-slate-200 flex flex-col transition-transform duration-300 shadow-xl md:shadow-none",
         !isOpen && "-translate-x-full md:translate-x-0 md:hidden"
       )}
     >
