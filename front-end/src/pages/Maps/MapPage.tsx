@@ -9,6 +9,7 @@ import {
 import { geocode, distanceMeters, type Place } from "@/lib/Osm";
 import { useToast } from "@/components/ui/Toast";
 import api from "@/context/apiClient";
+import { useSearchParams } from "react-router-dom";
 
 import { BusinessCatalogPanel } from "@/components/maps/BusinessCatalogPanel";
 import { CandidateMarker } from "@/components/maps/CandidateMarker";
@@ -33,7 +34,24 @@ import { useLocationAnalysis } from "@/hooks/useLocationAnalysis";
 import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import L from "leaflet";
-import { useMapEvents } from "react-leaflet";
+import { useMap, useMapEvents } from "react-leaflet";
+
+const MapViewController: React.FC<{
+  lat: number | null;
+  lng: number | null;
+}> = ({ lat, lng }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (lat === null || lng === null) return;
+
+    map.setView([lat, lng], 18, {
+      animate: false,
+    });
+  }, [map, lat, lng]);
+
+  return null;
+};
 
 // ─── Click Handler ────────────────────────────────────────────────────────────
 const MapClickHandler: React.FC<{
@@ -51,7 +69,9 @@ const MapClickHandler: React.FC<{
   useEffect(() => {
     const cursor = mode === "candidate" ? "crosshair" : mode === "waypoint" ? "cell" : "";
     map.getContainer().style.cursor = cursor;
-    return () => { map.getContainer().style.cursor = ""; };
+    return () => {
+      map.getContainer().style.cursor = "";
+    };
   }, [map, mode]);
 
   return null;
@@ -59,17 +79,38 @@ const MapClickHandler: React.FC<{
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export function MapPage() {
-  const [center, setCenter] = useState<[number, number]>([-7.9797, 112.6304]); // Malang default
-  const mapRef = useRef<L.Map>(null);
+  const [searchParams] = useSearchParams();
+
+  const latParam = searchParams.get("lat");
+  const lngParam = searchParams.get("lng");
+
+  const targetLat = latParam !== null ? Number(latParam) : null;
+  const targetLng = lngParam !== null ? Number(lngParam) : null;
+
+  const hasTargetLocation =
+    targetLat !== null &&
+    targetLng !== null &&
+    Number.isFinite(targetLat) &&
+    Number.isFinite(targetLng) &&
+    targetLat >= -90 &&
+    targetLat <= 90 &&
+    targetLng >= -180 &&
+    targetLng <= 180;
+
+  const [center, setCenter] = useState<[number, number]>(() =>
+    hasTargetLocation ? [targetLat!, targetLng!] : [-7.9797, 112.6304],
+  );
+
   const { toast } = useToast();
+  const mapRef = useRef<L.Map>(null);
 
   // ── Navigation / panel state ──────────────────────────────────────────────
   const [activeTool, setActiveTool] = useState<MapToolId | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   // Derived panel visibility from activeTool
-  const isCatalogOpen   = activeTool === "catalog";
-  const isLayersOpen    = activeTool === "layers";
+  const isCatalogOpen = activeTool === "catalog";
+  const isLayersOpen = activeTool === "layers";
   const isRoutePanelOpen = activeTool === "routes";
   const isAnalysisPanelOpen = activeTool === "analysis";
 
@@ -86,7 +127,9 @@ export function MapPage() {
 
   // ── User GPS Location ─────────────────────────────────────────────────────
   const [userLocation, setUserLocation] = useState<{
-    lat: number; lng: number; accuracy?: number;
+    lat: number;
+    lng: number;
+    accuracy?: number;
   } | null>(null);
 
   // ── UMKM Candidate Analysis ───────────────────────────────────────────────
@@ -117,18 +160,22 @@ export function MapPage() {
   }
 
   const [candidates, setCandidates] = useState<Record<CandidateId, CandidateData | null>>({
-    A: null, B: null, C: null,
+    A: null,
+    B: null,
+    C: null,
   });
   const [activeCandidateId, setActiveCandidateId] = useState<CandidateId>("A");
   const [analysisResults, setAnalysisResults] = useState<Record<CandidateId, AnalysisResult | null>>({
-    A: null, B: null, C: null,
+    A: null,
+    B: null,
+    C: null,
   });
 
   const { analyze, isAnalyzing, error: analysisError } = useLocationAnalysis();
 
   const activeCandidate = candidates[activeCandidateId];
-  const debouncedLat    = useDebounce(activeCandidate?.lat, 600);
-  const debouncedLng    = useDebounce(activeCandidate?.lng, 600);
+  const debouncedLat = useDebounce(activeCandidate?.lat, 600);
+  const debouncedLng = useDebounce(activeCandidate?.lng, 600);
   const debouncedRadius = useDebounce(activeCandidate?.radius, 600);
 
   // ── Mobile Vendor Routes ──────────────────────────────────────────────────
@@ -144,20 +191,49 @@ export function MapPage() {
 
   // ── Auto-geolocation on mount ─────────────────────────────────────────────
   useEffect(() => {
-    if (typeof window !== "undefined" && "geolocation" in navigator) {
+    let cancelled = false;
+
+    // Jika URL memiliki koordinat, pusatkan peta ke sana.
+    if (hasTargetLocation) {
+      setCenter([targetLat!, targetLng!]);
+    }
+
+    // GPS tetap dijalankan dalam semua kondisi.
+    if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
+          if (cancelled) return;
+
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
-          setUserLocation({ lat, lng, accuracy: pos.coords.accuracy });
-          setCenter([lat, lng]);
-          mapRef.current?.flyTo([lat, lng], 15);
+
+          // Simpan lokasi asli pengguna untuk marker GPS.
+          setUserLocation({
+            lat,
+            lng,
+            accuracy: pos.coords.accuracy,
+          });
+
+          // Pindahkan pusat peta ke GPS hanya jika URL tidak valid.
+          if (!hasTargetLocation) {
+            setCenter([lat, lng]);
+          }
         },
-        (err) => console.info("Geolocation info:", err.message),
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+        (err) => {
+          console.info("GPS tidak tersedia:", err.message);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 8000,
+          maximumAge: 60000,
+        },
       );
     }
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasTargetLocation, targetLat, targetLng]);
 
   // ── Fetch LOCIVA businesses ───────────────────────────────────────────────
   const fetchLocivaData = useCallback(async (lat?: number, lng?: number, radius?: number) => {
@@ -166,7 +242,9 @@ export function MapPage() {
     try {
       const params: Record<string, any> = { limit: 100 };
       if (lat !== undefined && lng !== undefined) {
-        params.lat = lat; params.lng = lng; params.radius = radius || 5000;
+        params.lat = lat;
+        params.lng = lng;
+        params.radius = radius || 5000;
       }
       const res = await api.get("/businesses/map", { params });
       if (res.data?.success && Array.isArray(res.data?.data)) {
@@ -226,21 +304,23 @@ export function MapPage() {
             : undefined,
         });
         setIsPersistedInDb(true);
-        toast({ title: "Kandidat Tersimpan", description: "Titik lokasi berhasil disimpan ke database.", variant: "success" });
+        toast({
+          title: "Kandidat Tersimpan",
+          description: "Titik lokasi berhasil disimpan ke database.",
+          variant: "success",
+        });
       } catch (err) {
         toast({ title: "Gagal Menyimpan", description: "Periksa koneksi atau coba login ulang.", variant: "error" });
       }
     },
-    [toast]
+    [toast],
   );
 
   // ── Run analysis when debounced position changes (no DB persist here) ─────
   useEffect(() => {
     if (selectedBusiness && debouncedLat && debouncedLng && debouncedRadius) {
       const runAnalysis = async () => {
-        const res = await analyze(
-          activeCandidateId, debouncedLat, debouncedLng, debouncedRadius, selectedBusiness
-        );
+        const res = await analyze(activeCandidateId, debouncedLat, debouncedLng, debouncedRadius, selectedBusiness);
         if (res) {
           setAnalysisResults((prev) => ({ ...prev, [activeCandidateId]: res }));
           fetchLocivaData(debouncedLat, debouncedLng, debouncedRadius * 1.5);
@@ -248,10 +328,7 @@ export function MapPage() {
       };
       runAnalysis();
     }
-  }, [
-    debouncedLat, debouncedLng, debouncedRadius, selectedBusiness,
-    activeCandidateId, analyze, fetchLocivaData,
-  ]);
+  }, [debouncedLat, debouncedLng, debouncedRadius, selectedBusiness, activeCandidateId, analyze, fetchLocivaData]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleSearchSelect = (lat: number, lng: number, name: string) => {
@@ -271,7 +348,7 @@ export function MapPage() {
           setUserLocation({ lat, lng, accuracy: pos.coords.accuracy });
           mapRef.current?.flyTo([lat, lng], 16);
         },
-        () => toast({ title: "GPS Tidak Tersedia", variant: "error" })
+        () => toast({ title: "GPS Tidak Tersedia", variant: "error" }),
       );
     }
   };
@@ -296,7 +373,8 @@ export function MapPage() {
       if (clickMode === "candidate" && selectedBusiness) {
         const newCandidate: CandidateData = {
           id: activeCandidateId,
-          lat, lng,
+          lat,
+          lng,
           radius: candidates[activeCandidateId]?.radius || selectedBusiness.defaultRadius,
         };
         setCandidates((prev) => ({ ...prev, [activeCandidateId]: newCandidate }));
@@ -307,7 +385,8 @@ export function MapPage() {
         // Add waypoint at clicked position
         setActiveWaypoints((prev) => {
           const newPoint: RouteWaypoint = {
-            lat, lng,
+            lat,
+            lng,
             name: prev.length === 0 ? "Titik Awal" : `Pemberhentian ${prev.length + 1}`,
             stop_duration: prev.length === 0 ? 0 : 30,
           };
@@ -317,22 +396,19 @@ export function MapPage() {
         toast({ title: "Titik ditambahkan", description: `${lat.toFixed(4)}, ${lng.toFixed(4)}` });
       }
     },
-    [clickMode, selectedBusiness, activeCandidateId, candidates, activeTool, toast]
+    [clickMode, selectedBusiness, activeCandidateId, candidates, activeTool, toast],
   );
 
-  const handleMarkerDragEnd = useCallback(
-    (id: CandidateId, lat: number, lng: number) => {
-      setCandidates((prev) => {
-        const existing = prev[id];
-        if (!existing) return prev;
-        return { ...prev, [id]: { ...existing, lat, lng } };
-      });
-      setActiveCandidateId(id);
-      setIsPersistedInDb(false);
-      // No auto-persist — user must click "Simpan Kandidat" explicitly
-    },
-    []
-  );
+  const handleMarkerDragEnd = useCallback((id: CandidateId, lat: number, lng: number) => {
+    setCandidates((prev) => {
+      const existing = prev[id];
+      if (!existing) return prev;
+      return { ...prev, [id]: { ...existing, lat, lng } };
+    });
+    setActiveCandidateId(id);
+    setIsPersistedInDb(false);
+    // No auto-persist — user must click "Simpan Kandidat" explicitly
+  }, []);
 
   const handleRadiusChange = useCallback(
     (radius: number) => {
@@ -342,7 +418,7 @@ export function MapPage() {
         return { ...prev, [activeCandidateId]: { ...existing, radius } };
       });
     },
-    [activeCandidateId]
+    [activeCandidateId],
   );
 
   const handleAddCandidate = () => {
@@ -409,19 +485,16 @@ export function MapPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex h-screen w-full overflow-hidden relative bg-canvas">
-
       {/* ── Search Modal ─────────────────────────────────────────────────── */}
-      <SearchModal
-        isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
-        onSelect={handleSearchSelect}
-      />
+      <SearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} onSelect={handleSearchSelect} />
 
       {/* ── Left Side: Business Catalog Panel (slides in) ────────────────── */}
-      <div className={cn(
-        "fixed md:static inset-y-0 left-0 z-[500] transition-all duration-300 flex-shrink-0",
-        isCatalogOpen ? "w-full md:w-80 translate-x-0" : "w-0 -translate-x-full md:translate-x-0"
-      )}>
+      <div
+        className={cn(
+          "fixed md:static inset-y-0 left-0 z-[500] transition-all duration-300 flex-shrink-0",
+          isCatalogOpen ? "w-full md:w-80 translate-x-0" : "w-0 -translate-x-full md:translate-x-0",
+        )}
+      >
         {isCatalogOpen && (
           <BusinessCatalogPanel
             isOpen={isCatalogOpen}
@@ -433,10 +506,12 @@ export function MapPage() {
       </div>
 
       {/* ── Left Side: Vendor Route Panel (slides in) ────────────────────── */}
-      <div className={cn(
-        "fixed md:static inset-y-0 left-0 z-[500] transition-all duration-300 flex-shrink-0",
-        isRoutePanelOpen ? "w-full md:w-96 translate-x-0" : "w-0 -translate-x-full md:translate-x-0"
-      )}>
+      <div
+        className={cn(
+          "fixed md:static inset-y-0 left-0 z-[500] transition-all duration-300 flex-shrink-0",
+          isRoutePanelOpen ? "w-full md:w-96 translate-x-0" : "w-0 -translate-x-full md:translate-x-0",
+        )}
+      >
         {isRoutePanelOpen && (
           <VendorRoutePanel
             isOpen={isRoutePanelOpen}
@@ -456,13 +531,8 @@ export function MapPage() {
 
       {/* ── Map Area ──────────────────────────────────────────────────────── */}
       <div className="flex-1 relative flex flex-col min-w-0">
-
         {/* ── Pill Navigation (left center) ────────────────────────────── */}
-        <MapPillNav
-          active={activeTool}
-          onSelect={handleToolSelect}
-          analysisEnabled={!!selectedBusiness}
-        />
+        <MapPillNav active={activeTool} onSelect={handleToolSelect} analysisEnabled={!!selectedBusiness} />
 
         {/* ── Top-right overlay controls ────────────────────────────────── */}
         <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2 pointer-events-none">
@@ -473,7 +543,7 @@ export function MapPage() {
               onClick={() => setBasemapMode("default")}
               className={cn(
                 "px-3 py-2 transition-all flex items-center gap-1.5 cursor-pointer",
-                basemapMode === "default" ? "bg-primary text-white" : "text-muted hover:text-ink"
+                basemapMode === "default" ? "bg-primary text-white" : "text-muted hover:text-ink",
               )}
               title="Peta Standar (OSM)"
             >
@@ -485,7 +555,7 @@ export function MapPage() {
               onClick={() => setBasemapMode("satellite")}
               className={cn(
                 "px-3 py-2 transition-all flex items-center gap-1.5 cursor-pointer",
-                basemapMode === "satellite" ? "bg-primary text-white" : "text-muted hover:text-ink"
+                basemapMode === "satellite" ? "bg-primary text-white" : "text-muted hover:text-ink",
               )}
               title="Citra Satelit (Esri)"
             >
@@ -511,7 +581,7 @@ export function MapPage() {
             title={showPublicRoutes ? "Sembunyikan rute publik" : "Tampilkan rute publik pengguna lain"}
             className={cn(
               "pointer-events-auto p-3 bg-white/90 backdrop-blur-sm border border-slate-200 rounded-xl shadow-sm transition-colors flex items-center justify-center cursor-pointer text-lg leading-none",
-              showPublicRoutes ? "text-emerald-600 border-emerald-200" : "text-muted hover:text-ink"
+              showPublicRoutes ? "text-emerald-600 border-emerald-200" : "text-muted hover:text-ink",
             )}
           >
             🚶
@@ -528,7 +598,13 @@ export function MapPage() {
             mapsError={analysisError}
             onRetryMaps={() => {
               if (activeCandidate && selectedBusiness)
-                analyze(activeCandidate.id, activeCandidate.lat, activeCandidate.lng, activeCandidate.radius, selectedBusiness);
+                analyze(
+                  activeCandidate.id,
+                  activeCandidate.lat,
+                  activeCandidate.lng,
+                  activeCandidate.radius,
+                  selectedBusiness,
+                );
             }}
             showLocivaData={showLocivaData}
             onToggleLocivaData={setShowLocivaData}
@@ -546,6 +622,7 @@ export function MapPage() {
         {/* ── Map Container ─────────────────────────────────────────────── */}
         <div className="flex-1 relative z-0">
           <Map ref={mapRef} center={center} zoom={14} className="w-full h-full">
+            <MapViewController lat={hasTargetLocation ? targetLat : null} lng={hasTargetLocation ? targetLng : null} />
             {/* Basemap tile */}
             {basemapMode === "satellite" ? (
               <MapTileLayer
@@ -655,10 +732,12 @@ export function MapPage() {
 
       {/* ── Right Side: Analysis Panel ────────────────────────────────────── */}
       {selectedBusiness && (
-        <div className={cn(
-          "fixed md:static inset-y-0 right-0 z-[450] flex flex-col transition-all duration-300",
-          isAnalysisPanelOpen ? "w-full md:w-96 translate-x-0" : "translate-x-full md:translate-x-0 md:w-0 md:hidden"
-        )}>
+        <div
+          className={cn(
+            "fixed md:static inset-y-0 right-0 z-[450] flex flex-col transition-all duration-300",
+            isAnalysisPanelOpen ? "w-full md:w-96 translate-x-0" : "translate-x-full md:translate-x-0 md:w-0 md:hidden",
+          )}
+        >
           <div className="h-full w-full bg-surface shadow-[-4px_0_20px_rgba(0,0,0,0.05)] border-l border-slate-200 flex flex-col">
             {/* Candidate tabs header */}
             <div className="p-4 border-b border-slate-200 shrink-0">

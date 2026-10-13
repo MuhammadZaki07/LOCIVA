@@ -5,9 +5,15 @@ namespace App\Repositories;
 use App\Contracts\BusinessRepositoryInterface;
 use App\Models\Business;
 use Illuminate\Database\Eloquent\Collection;
+use Override;
 
-class BusinessRepository implements BusinessRepositoryInterface
+class BusinessRepository extends BaseRepository implements BusinessRepositoryInterface
 {
+    public function __construct(Business $model)
+    {
+        return parent::__construct($model);
+    }
+
     public function getMapBusinesses(
         ?float $lat = null,
         ?float $lng = null,
@@ -38,8 +44,8 @@ class BusinessRepository implements BusinessRepositoryInterface
         if (!empty($category) && $category !== 'all' && $category !== 'Semua') {
             $query->whereHas('businessType', function ($q) use ($category) {
                 $q->where('slug', $category)
-                  ->orWhere('id', $category)
-                  ->orWhere('name', 'like', "%{$category}%");
+                    ->orWhere('id', $category)
+                    ->orWhere('name', 'like', "%{$category}%");
             });
         }
 
@@ -47,8 +53,8 @@ class BusinessRepository implements BusinessRepositoryInterface
         if (!empty($search)) {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('address', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
+                    ->orWhere('address', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%");
             });
         }
 
@@ -83,5 +89,15 @@ class BusinessRepository implements BusinessRepositoryInterface
     public function deleteBusiness(Business $business): bool
     {
         return (bool) $business->delete();
+    }
+
+    public function paginateUserBusinesses(
+        string $userId,
+        int $perPage = 10
+    ) {
+        return $this->model->with(['businessType:id,name,slug'])
+            ->where('user_id', $userId)
+            ->latest()
+            ->paginate($perPage);
     }
 }
