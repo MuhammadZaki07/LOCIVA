@@ -21,25 +21,39 @@ export interface UserApi {
   created_at?: string;
 }
 
+export interface UserFilters {
+  search?: string;
+  role?: "admin" | "user" | "";
+  from?: string;
+  to?: string;
+  per_page?: number;
+  page?: number;
+}
+
 export interface UserSingleResponse {
   success: boolean;
   message: string;
   data: UserApi;
 }
 
+
+
 export interface UserListResponse {
   success: boolean;
   message: string;
   data: {
-    mete?: {
+    mete: {
       total: number;
       per_page: number;
       current_page: number;
       last_page: number;
+      from: number | null;
+      to: number | null;
     };
     Data: UserApi[];
   };
 }
+
 
 export interface UpdateUserData {
   name?: string;
@@ -84,14 +98,30 @@ export const getCurrentUser = async (): Promise<ManagedUser> => {
 
 export const getProfile = getCurrentUser;
 
-export const getUsers = async (): Promise<ManagedUser[]> => {
-  const response = await api.get<UserListResponse>("/auth/users");
-  const users = response.data.data.Data;
-  return users.map(formatUser);
+
+
+export const getUsers = async (
+  filters: UserFilters = {},
+): Promise<{
+  users: ManagedUser[];
+  meta: UserListResponse["data"]["mete"];
+}> => {
+  const response = await api.get<UserListResponse>("/users", {
+    params: filters,
+  });
+
+  const payload = response.data.data;
+
+  return {
+    users: payload.Data.map(formatUser),
+    meta: payload.mete,
+  };
 };
 
+
+
 export const getUserById = async (id: string): Promise<ManagedUser> => {
-  const response = await api.get<UserSingleResponse>(`/auth/users/${id}`);
+  const response = await api.get<UserSingleResponse>(`/users/${id}`);
   return formatUser(response.data.data);
 };
 
@@ -108,7 +138,7 @@ export const updateUser = async (
     formData.append("profile_image", data.profile_image);
 
     const response = await api.post<UserSingleResponse>(
-      `/auth/users/${id}`,
+      `/users/${id}`,
       formData,
       {
         headers: {
@@ -124,7 +154,7 @@ export const updateUser = async (
     if (data.role) payload.role = data.role;
 
     const response = await api.put<UserSingleResponse>(
-      `/auth/users/${id}`,
+      `/users/${id}`,
       payload
     );
     return formatUser(response.data.data);
@@ -139,5 +169,5 @@ export const updateProfile = async (
 };
 
 export const deleteUser = async (id: string): Promise<void> => {
-  await api.delete(`/auth/users/${id}`);
+  await api.delete(`/users/${id}`);
 };
