@@ -150,20 +150,26 @@ export const BusinessCatalogPanel: React.FC<BusinessCatalogPanelProps> = ({
     onClose();
   };
 
-  return (
-    <div
-      className={cn(
-        "fixed md:static inset-y-0 left-0 z-[500] w-full md:w-84 bg-surface border-r border-slate-200 flex flex-col transition-transform duration-300 shadow-xl md:shadow-none",
-        "h-dvh md:h-full md:max-h-dvh overflow-hidden",
-        !isOpen && "-translate-x-full md:translate-x-0 md:hidden"
-      )}
-    >
-      {/* Header */}
-      <div className="p-4 border-b border-slate-200 bg-white/70 backdrop-blur-xs">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-primary-soft text-primary">
-              <Store size={18} />
+  if (!isOpen) return null;
+
+  const cardContent = (
+    <div className={cn(
+      "w-full bg-surface/98 overflow-hidden flex flex-col text-left",
+      isEmbedded
+        ? "h-full rounded-none border-none shadow-none"
+        : "relative clay rounded-3xl max-w-4xl max-h-[88vh] shadow-2xl border border-white/80 animate-in fade-in zoom-in-95 duration-200"
+    )}>
+      {/* Header Bar */}
+      <div className="p-4 sm:p-5 border-b border-slate-200/80 bg-white/70 backdrop-blur-xs flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-primary-soft text-primary shadow-xs">
+              <Store size={22} />
+            </div>
+            <div>
+              <h2 className="text-lg sm:text-xl font-display font-bold text-ink">Business Catalog</h2>
+              <p className="text-xs text-muted">
+                Select a business type to analyze spatial suitability, footfall, and competitor density
+              </p>
             </div>
           </div>
 

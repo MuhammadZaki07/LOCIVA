@@ -1,4 +1,10 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import {
   Map as MapContainer,
   MapTileLayer,
@@ -19,8 +25,14 @@ import { CandidateTabs } from "@/components/maps/CandidateTabs";
 import type { CandidateId } from "@/components/maps/CandidateTabs";
 import { UserLocationMarker } from "@/components/maps/UserLocationMarker";
 import { PoiMarker } from "@/components/maps/PoiMarker";
-import { InternalBusinessMarker, type LocivaBusiness } from "@/components/maps/InternalBusinessMarker";
-import { DataSourceControl, type FilterCategory } from "@/components/maps/DataSourceControl";
+import {
+  InternalBusinessMarker,
+  type LocivaBusiness,
+} from "@/components/maps/InternalBusinessMarker";
+import {
+  DataSourceControl,
+  type FilterCategory,
+} from "@/components/maps/DataSourceControl";
 import { VendorRoutePanel } from "@/components/maps/VendorRoutePanel";
 import { RouteLayer } from "@/components/maps/RouteLayer";
 import { MapPillNav, type MapToolId } from "@/components/maps/MapPillNav";
@@ -34,7 +46,18 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import L from "leaflet";
 import { useMap, useMapEvents } from "react-leaflet";
-import { AlertCircle, BookOpen, CheckCircle2, Footprints, MapIcon, PenLine, Satellite, Scale, Target, X } from "lucide-react";
+import {
+  AlertCircle,
+  BookOpen,
+  CheckCircle2,
+  Footprints,
+  MapIcon,
+  PenLine,
+  Satellite,
+  Scale,
+  Target,
+  X,
+} from "lucide-react";
 
 const MapViewController: React.FC<{
   lat: number | null;
@@ -56,10 +79,16 @@ const MapViewController: React.FC<{
 // ─── Map Ready Gate: delays children until Leaflet fires whenReady ─────────────
 // This prevents "Cannot destructure property 'zoom' of 't0'" crashes that occur
 // when MapZoomControl calls map.getZoom() synchronously before Leaflet initializes.
-const MapReadyGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const MapReadyGate: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const map = useMapEvents({});
   const [isReady, setIsReady] = useState(() => {
-    try { return (map as any)._loaded === true; } catch { return false; }
+    try {
+      return (map as any)._loaded === true;
+    } catch {
+      return false;
+    }
   });
 
   useEffect(() => {
@@ -69,7 +98,9 @@ const MapReadyGate: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     }
     const onReady = () => setIsReady(true);
     map.whenReady(onReady);
-    return () => { map.off("load", onReady); };
+    return () => {
+      map.off("load", onReady);
+    };
   }, [map]);
 
   return isReady ? <>{children}</> : null;
@@ -78,7 +109,13 @@ const MapReadyGate: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 // ─── Map Event Handlers (Click & Viewport Pan/Zoom) ───────────────────────────
 const MapEventHandler: React.FC<{
   onMapClick: (lat: number, lng: number) => void;
-  onViewportChange: (centerLat: number, centerLng: number, radiusMeters: number, zoom: number, bounds: L.LatLngBounds) => void;
+  onViewportChange: (
+    centerLat: number,
+    centerLng: number,
+    radiusMeters: number,
+    zoom: number,
+    bounds: L.LatLngBounds,
+  ) => void;
   mode: "candidate" | "waypoint" | "none";
 }> = ({ onMapClick, onViewportChange, mode }) => {
   const map = useMapEvents({
@@ -92,7 +129,12 @@ const MapEventHandler: React.FC<{
         const center = map.getCenter();
         const bounds = map.getBounds();
         const corner = bounds.getNorthEast();
-        const radius = distanceMeters(center.lat, center.lng, corner.lat, corner.lng);
+        const radius = distanceMeters(
+          center.lat,
+          center.lng,
+          corner.lat,
+          corner.lng,
+        );
         const zoom = map.getZoom();
         onViewportChange(center.lat, center.lng, radius, zoom, bounds);
       } catch (err) {
@@ -104,7 +146,12 @@ const MapEventHandler: React.FC<{
         const center = map.getCenter();
         const bounds = map.getBounds();
         const corner = bounds.getNorthEast();
-        const radius = distanceMeters(center.lat, center.lng, corner.lat, corner.lng);
+        const radius = distanceMeters(
+          center.lat,
+          center.lng,
+          corner.lat,
+          corner.lng,
+        );
         const zoom = map.getZoom();
         onViewportChange(center.lat, center.lng, radius, zoom, bounds);
       } catch (err) {
@@ -117,9 +164,14 @@ const MapEventHandler: React.FC<{
     try {
       const container = map.getContainer();
       if (!container) return;
-      const cursor = mode === "candidate" ? "crosshair" : mode === "waypoint" ? "cell" : "";
+      const cursor =
+        mode === "candidate" ? "crosshair" : mode === "waypoint" ? "cell" : "";
       container.style.cursor = cursor;
-      return () => { try { container.style.cursor = ""; } catch {} };
+      return () => {
+        try {
+          container.style.cursor = "";
+        } catch {}
+      };
     } catch (err) {
       console.warn("[MapEventHandler] cursor effect: map not ready", err);
     }
@@ -131,7 +183,6 @@ const MapEventHandler: React.FC<{
 // ─── Main MapPage Component ───────────────────────────────────────────────────
 export function MapPage() {
   const [center, setCenter] = useState<[number, number]>([-7.9797, 112.6304]); // Default to Malang coordinates
-  const mapRef = useRef<L.Map>(null);
   const { toast } = useToast();
   const mapRef = useRef<L.Map>(null);
 
@@ -153,7 +204,9 @@ export function MapPage() {
   };
 
   // ── Basemap mode (Default OSM vs Satellite) ────────────────────────────────
-  const [basemapMode, setBasemapMode] = useState<"default" | "satellite">("default");
+  const [basemapMode, setBasemapMode] = useState<"default" | "satellite">(
+    "default",
+  );
 
   // ── User GPS Location ─────────────────────────────────────────────────────
   const [userLocation, setUserLocation] = useState<{
@@ -163,7 +216,9 @@ export function MapPage() {
   } | null>(null);
 
   // ── UMKM Candidate Analysis ───────────────────────────────────────────────
-  const [selectedBusiness, setSelectedBusiness] = useState<BusinessType | null>(null);
+  const [selectedBusiness, setSelectedBusiness] = useState<BusinessType | null>(
+    null,
+  );
   const [isPersistedInDb, setIsPersistedInDb] = useState(false);
 
   // ── Layer toggles & Category filter ───────────────────────────────────────
@@ -175,10 +230,14 @@ export function MapPage() {
   // ── Viewport-based Places & Businesses State (Bagian 1 & 2) ────────────────
   const [viewportPlaces, setViewportPlaces] = useState<Place[]>([]);
   const [viewportPlacesLoading, setViewportPlacesLoading] = useState(false);
-  const [viewportPlacesError, setViewportPlacesError] = useState<string | null>(null);
+  const [viewportPlacesError, setViewportPlacesError] = useState<string | null>(
+    null,
+  );
   const [isPlacesStale, setIsPlacesStale] = useState(false);
 
-  const [locivaBusinesses, setLocivaBusinesses] = useState<LocivaBusiness[]>([]);
+  const [locivaBusinesses, setLocivaBusinesses] = useState<LocivaBusiness[]>(
+    [],
+  );
   const [locivaLoading, setLocivaLoading] = useState(false);
   const [locivaError, setLocivaError] = useState<string | null>(null);
 
@@ -193,13 +252,17 @@ export function MapPage() {
     radius: number;
   }
 
-  const [candidates, setCandidates] = useState<Record<CandidateId, CandidateData | null>>({
+  const [candidates, setCandidates] = useState<
+    Record<CandidateId, CandidateData | null>
+  >({
     A: null,
     B: null,
     C: null,
   });
   const [activeCandidateId, setActiveCandidateId] = useState<CandidateId>("A");
-  const [analysisResults, setAnalysisResults] = useState<Record<CandidateId, AnalysisResult | null>>({
+  const [analysisResults, setAnalysisResults] = useState<
+    Record<CandidateId, AnalysisResult | null>
+  >({
     A: null,
     B: null,
     C: null,
@@ -214,7 +277,8 @@ export function MapPage() {
 
   // ── Mobile Vendor Routes ──────────────────────────────────────────────────
   const [activeWaypoints, setActiveWaypoints] = useState<RouteWaypoint[]>([]);
-  const [routeCalculation, setRouteCalculation] = useState<RouteCalculationResult | null>(null);
+  const [routeCalculation, setRouteCalculation] =
+    useState<RouteCalculationResult | null>(null);
 
   // ── Click mode: either placing candidate or placing waypoint ──────────────
   const clickMode = useMemo((): "candidate" | "waypoint" | "none" => {
@@ -234,7 +298,8 @@ export function MapPage() {
       setIsLocationOptedIn(false);
       toast({
         title: "Live Location Stopped",
-        description: "Opt-in GPS sharing was disabled. Location marker removed from map.",
+        description:
+          "Opt-in GPS sharing was disabled. Location marker removed from map.",
       });
       return;
     }
@@ -242,7 +307,8 @@ export function MapPage() {
     if (typeof window === "undefined" || !("geolocation" in navigator)) {
       toast({
         title: "Geolocation Unavailable",
-        description: "Your device or browser does not support GPS location access.",
+        description:
+          "Your device or browser does not support GPS location access.",
         variant: "error",
       });
       return;
@@ -260,7 +326,8 @@ export function MapPage() {
         mapRef.current?.flyTo([lat, lng], 15);
         toast({
           title: "Live Location Enabled (Opt-in)",
-          description: "Your location is visible on the map. Click again anytime to disable sharing.",
+          description:
+            "Your location is visible on the map. Click again anytime to disable sharing.",
           variant: "success",
         });
       },
@@ -272,52 +339,63 @@ export function MapPage() {
           variant: "error",
         });
       },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 },
     );
   }, [isLocationOptedIn, toast]);
 
   // ── Fetch LOCIVA internal businesses with bounding box / radius ───────────
-  const fetchLocivaData = useCallback(async (
-    lat?: number,
-    lng?: number,
-    radius?: number,
-    bounds?: L.LatLngBounds
-  ) => {
-    setLocivaLoading(true);
-    setLocivaError(null);
-    try {
-      const params: Record<string, any> = { limit: 120 };
-      if (bounds) {
-        params.min_lat = bounds.getSouth();
-        params.min_lng = bounds.getWest();
-        params.max_lat = bounds.getNorth();
-        params.max_lng = bounds.getEast();
-      } else if (lat !== undefined && lng !== undefined) {
-        params.lat = lat;
-        params.lng = lng;
-        params.radius = radius || 5000;
-      }
+  const fetchLocivaData = useCallback(
+    async (
+      lat?: number,
+      lng?: number,
+      radius?: number,
+      bounds?: L.LatLngBounds,
+    ) => {
+      setLocivaLoading(true);
+      setLocivaError(null);
+      try {
+        const params: Record<string, any> = { limit: 120 };
+        if (bounds) {
+          params.min_lat = bounds.getSouth();
+          params.min_lng = bounds.getWest();
+          params.max_lat = bounds.getNorth();
+          params.max_lng = bounds.getEast();
+        } else if (lat !== undefined && lng !== undefined) {
+          params.lat = lat;
+          params.lng = lng;
+          params.radius = radius || 5000;
+        }
 
-      const res = await api.get("/businesses/map", { params });
-      if (res.data?.success && Array.isArray(res.data?.data)) {
-        setLocivaBusinesses(res.data.data);
-      } else {
-        setLocivaBusinesses([]);
+        const res = await api.get("/businesses/map", { params });
+        if (res.data?.success && Array.isArray(res.data?.data)) {
+          setLocivaBusinesses(res.data.data);
+        } else {
+          setLocivaBusinesses([]);
+        }
+      } catch (err: any) {
+        console.warn("Failed to load LOCIVA internal businesses:", err);
+        setLocivaError("Unable to load internal business data");
+      } finally {
+        setLocivaLoading(false);
       }
-    } catch (err: any) {
-      console.warn("Failed to load LOCIVA internal businesses:", err);
-      setLocivaError("Unable to load internal business data");
-    } finally {
-      setLocivaLoading(false);
-    }
-  }, []);
+    },
+    [],
+  );
 
   // ── Viewport-based Places Loader (Bagian 1, 2, & 7) ────────────────────────
   const viewportAbortRef = useRef<AbortController | null>(null);
-  const viewportDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const viewportDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   const loadViewportData = useCallback(
-    (centerLat: number, centerLng: number, radiusMeters: number, zoom: number, bounds: L.LatLngBounds) => {
+    (
+      centerLat: number,
+      centerLng: number,
+      radiusMeters: number,
+      zoom: number,
+      bounds: L.LatLngBounds,
+    ) => {
       // Clear pending timer
       if (viewportDebounceTimer.current) {
         clearTimeout(viewportDebounceTimer.current);
@@ -349,14 +427,16 @@ export function MapPage() {
             centerLat,
             centerLng,
             safeRadius,
-            viewportAbortRef.current.signal
+            viewportAbortRef.current.signal,
           );
           setViewportPlaces(places);
           setIsPlacesStale(places.some((p) => p.isStale));
         } catch (err: any) {
           if (err?.name === "AbortError") return;
           console.warn("Failed to load viewport places:", err);
-          setViewportPlacesError("Unable to reach OpenStreetMap Overpass servers");
+          setViewportPlacesError(
+            "Unable to reach OpenStreetMap Overpass servers",
+          );
           // If we already have places, preserve them and flag as stale (Bagian 7)
           if (viewportPlaces.length > 0) {
             setIsPlacesStale(true);
@@ -366,7 +446,7 @@ export function MapPage() {
         }
       }, 550);
     },
-    [fetchLocivaData, viewportPlaces.length]
+    [fetchLocivaData, viewportPlaces.length],
   );
 
   // Initial load around center
@@ -397,7 +477,11 @@ export function MapPage() {
 
   // ── Explicit candidate persistence (no auto-save on drag) ─────────────────
   const persistCandidateToDatabase = useCallback(
-    async (candidate: CandidateData, businessType: BusinessType, analysis?: AnalysisResult | null) => {
+    async (
+      candidate: CandidateData,
+      businessType: BusinessType,
+      analysis?: AnalysisResult | null,
+    ) => {
       const token = localStorage.getItem("token");
       if (!token) return;
       try {
@@ -439,7 +523,13 @@ export function MapPage() {
   useEffect(() => {
     if (selectedBusiness && debouncedLat && debouncedLng && debouncedRadius) {
       const runAnalysis = async () => {
-        const res = await analyze(activeCandidateId, debouncedLat, debouncedLng, debouncedRadius, selectedBusiness);
+        const res = await analyze(
+          activeCandidateId,
+          debouncedLat,
+          debouncedLng,
+          debouncedRadius,
+          selectedBusiness,
+        );
         if (res) {
           setAnalysisResults((prev) => ({ ...prev, [activeCandidateId]: res }));
           fetchLocivaData(debouncedLat, debouncedLng, debouncedRadius * 1.5);
@@ -447,7 +537,15 @@ export function MapPage() {
       };
       runAnalysis();
     }
-  }, [debouncedLat, debouncedLng, debouncedRadius, selectedBusiness, activeCandidateId, analyze, fetchLocivaData]);
+  }, [
+    debouncedLat,
+    debouncedLng,
+    debouncedRadius,
+    selectedBusiness,
+    activeCandidateId,
+    analyze,
+    fetchLocivaData,
+  ]);
 
   // ── Event Handlers ─────────────────────────────────────────────────────────
   const handleSearchSelect = (lat: number, lng: number, name: string) => {
@@ -455,7 +553,6 @@ export function MapPage() {
     mapRef.current?.flyTo([lat, lng], 15);
     toast({ title: "Location Found", description: name });
   };
-
 
   const handleBusinessSelect = (business: BusinessType) => {
     setSelectedBusiness(business);
@@ -478,25 +575,42 @@ export function MapPage() {
           id: activeCandidateId,
           lat,
           lng,
-          radius: candidates[activeCandidateId]?.radius || selectedBusiness.defaultRadius,
+          radius:
+            candidates[activeCandidateId]?.radius ||
+            selectedBusiness.defaultRadius,
         };
-        setCandidates((prev) => ({ ...prev, [activeCandidateId]: newCandidate }));
+        setCandidates((prev) => ({
+          ...prev,
+          [activeCandidateId]: newCandidate,
+        }));
         setIsPersistedInDb(false);
         if (activeTool !== "analysis") setActiveTool("analysis");
       } else if (clickMode === "waypoint") {
         setActiveWaypoints((prev) => {
           const newPoint: RouteWaypoint = {
-            lat, lng,
-            name: prev.length === 0 ? "Starting Point" : `Stop ${prev.length + 1}`,
+            lat,
+            lng,
+            name:
+              prev.length === 0 ? "Starting Point" : `Stop ${prev.length + 1}`,
             stop_duration: prev.length === 0 ? 0 : 30,
           };
           return [...prev, newPoint];
         });
         setRouteCalculation(null);
-        toast({ title: "Waypoint Added", description: `${lat.toFixed(4)}, ${lng.toFixed(4)}` });
+        toast({
+          title: "Waypoint Added",
+          description: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+        });
       }
     },
-    [clickMode, selectedBusiness, activeCandidateId, candidates, activeTool, toast],
+    [
+      clickMode,
+      selectedBusiness,
+      activeCandidateId,
+      candidates,
+      activeTool,
+      toast,
+    ],
   );
 
   const handleMarkerDragEnd = useCallback(
@@ -509,7 +623,7 @@ export function MapPage() {
       setActiveCandidateId(id);
       setIsPersistedInDb(false);
     },
-    []
+    [],
   );
 
   const handleRadiusChange = useCallback(
@@ -524,22 +638,34 @@ export function MapPage() {
   );
 
   const handleAddCandidate = () => {
-    const nextAvailable = (["A", "B", "C"] as CandidateId[]).find((id) => candidates[id] === null);
+    const nextAvailable = (["A", "B", "C"] as CandidateId[]).find(
+      (id) => candidates[id] === null,
+    );
     if (nextAvailable) {
       setActiveCandidateId(nextAvailable);
-      toast({ title: `Candidate ${nextAvailable}`, description: "Click map to set candidate location." });
+      toast({
+        title: `Candidate ${nextAvailable}`,
+        description: "Click map to set candidate location.",
+      });
     }
   };
 
   const handleSaveCandidate = () => {
     const cand = candidates[activeCandidateId];
     if (!cand || !selectedBusiness) return;
-    persistCandidateToDatabase(cand, selectedBusiness, analysisResults[activeCandidateId]);
+    persistCandidateToDatabase(
+      cand,
+      selectedBusiness,
+      analysisResults[activeCandidateId],
+    );
   };
 
   // ── Unified Places List (Viewport places + Candidate places) ──────────────
   const currentResult = analysisResults[activeCandidateId];
-  const candidatePlaces = useMemo(() => currentResult?.allPlaces || [], [currentResult]);
+  const candidatePlaces = useMemo(
+    () => currentResult?.allPlaces || [],
+    [currentResult],
+  );
 
   // Merge viewport places and candidate analysis places without duplicates
   const allExternalPlaces: Place[] = useMemo(() => {
@@ -558,7 +684,9 @@ export function MapPage() {
     if (!showMapsData) return [];
     if (layerCategory === "all") return allExternalPlaces;
     if (layerCategory === "school_campus") {
-      return allExternalPlaces.filter((p) => p.category === "school" || p.category === "campus");
+      return allExternalPlaces.filter(
+        (p) => p.category === "school" || p.category === "campus",
+      );
     }
     return allExternalPlaces.filter((p) => p.category === layerCategory);
   }, [allExternalPlaces, showMapsData, layerCategory]);
@@ -568,10 +696,27 @@ export function MapPage() {
     if (layerCategory === "all") return locivaBusinesses;
     return locivaBusinesses.filter((b) => {
       const slug = b.business_type?.slug || "";
-      if (layerCategory === "cafe") return slug.includes("kopi") || slug.includes("cafe");
-      if (layerCategory === "food") return slug.includes("makan") || slug.includes("bakso") || slug.includes("seblak") || slug.includes("food");
-      if (layerCategory === "retail") return slug.includes("kelontong") || slug.includes("market") || slug.includes("mart");
-      if (layerCategory === "service") return slug.includes("laundry") || slug.includes("barbershop") || slug.includes("service");
+      if (layerCategory === "cafe")
+        return slug.includes("kopi") || slug.includes("cafe");
+      if (layerCategory === "food")
+        return (
+          slug.includes("makan") ||
+          slug.includes("bakso") ||
+          slug.includes("seblak") ||
+          slug.includes("food")
+        );
+      if (layerCategory === "retail")
+        return (
+          slug.includes("kelontong") ||
+          slug.includes("market") ||
+          slug.includes("mart")
+        );
+      if (layerCategory === "service")
+        return (
+          slug.includes("laundry") ||
+          slug.includes("barbershop") ||
+          slug.includes("service")
+        );
       return true;
     });
   }, [locivaBusinesses, showLocivaData, layerCategory]);
@@ -582,7 +727,9 @@ export function MapPage() {
     const dupInt = new Set<string>();
     filteredExternalPlaces.forEach((ext) => {
       filteredLocivaBusinesses.forEach((loc) => {
-        if (distanceMeters(ext.lat, ext.lng, loc.latitude, loc.longitude) <= 65) {
+        if (
+          distanceMeters(ext.lat, ext.lng, loc.latitude, loc.longitude) <= 65
+        ) {
           dupExt.add(ext.id);
           dupInt.add(loc.id);
         }
@@ -596,11 +743,12 @@ export function MapPage() {
     exists: candidates[id] !== null || id === activeCandidateId,
   }));
 
-  const activeCount = Object.values(candidates).filter((c) => c !== null).length;
+  const activeCount = Object.values(candidates).filter(
+    (c) => c !== null,
+  ).length;
 
   return (
     <div className="flex h-screen w-full overflow-hidden relative bg-canvas">
-
       {/* ── Global Search Modal (Bagian 1) ─────────────────────────────────── */}
       <SearchModal
         isOpen={isSearchOpen}
@@ -610,7 +758,6 @@ export function MapPage() {
 
       {/* ── Main Interactive Map Canvas ────────────────────────────────────── */}
       <div className="flex-1 relative flex flex-col min-w-0">
-
         {/* ── Vertical Nav Pill (Anchored on Left, vertically centered) ──────── */}
         <MapPillNav
           active={activeTool}
@@ -657,13 +804,24 @@ export function MapPage() {
                 mapsError={viewportPlacesError || analysisError}
                 onRetryMaps={() => {
                   if (activeCandidate && selectedBusiness) {
-                    analyze(activeCandidate.id, activeCandidate.lat, activeCandidate.lng, activeCandidate.radius, selectedBusiness);
+                    analyze(
+                      activeCandidate.id,
+                      activeCandidate.lat,
+                      activeCandidate.lng,
+                      activeCandidate.radius,
+                      selectedBusiness,
+                    );
                   }
                   const map = mapRef.current;
                   if (map) {
                     const c = map.getCenter();
                     const b = map.getBounds();
-                    const r = distanceMeters(c.lat, c.lng, b.getNorthEast().lat, b.getNorthEast().lng);
+                    const r = distanceMeters(
+                      c.lat,
+                      c.lng,
+                      b.getNorthEast().lat,
+                      b.getNorthEast().lng,
+                    );
                     loadViewportData(c.lat, c.lng, r, map.getZoom(), b);
                   }
                 }}
@@ -672,7 +830,9 @@ export function MapPage() {
                 locivaCount={filteredLocivaBusinesses.length}
                 locivaLoading={locivaLoading}
                 locivaError={locivaError}
-                onRetryLociva={() => fetchLocivaData(center[0], center[1], 8000)}
+                onRetryLociva={() =>
+                  fetchLocivaData(center[0], center[1], 8000)
+                }
                 selectedCategory={layerCategory}
                 onSelectCategory={setLayerCategory}
                 isOpen={true}
@@ -705,8 +865,8 @@ export function MapPage() {
               />
             )}
 
-            {activeTool === "analysis" && (
-              selectedBusiness ? (
+            {activeTool === "analysis" &&
+              (selectedBusiness ? (
                 <div className="h-full flex flex-col overflow-hidden text-left">
                   {/* Candidate tabs header */}
                   <div className="p-3.5 border-b border-slate-200 shrink-0 bg-white">
@@ -735,7 +895,10 @@ export function MapPage() {
                       result={analysisResults[activeCandidateId]}
                       isAnalyzing={isAnalyzing}
                       error={analysisError}
-                      radius={candidates[activeCandidateId]?.radius || selectedBusiness.defaultRadius}
+                      radius={
+                        candidates[activeCandidateId]?.radius ||
+                        selectedBusiness.defaultRadius
+                      }
                       onRadiusChange={handleRadiusChange}
                       isOpen={true}
                       onClose={() => setActiveTool(null)}
@@ -754,11 +917,19 @@ export function MapPage() {
                         <Target size={18} />
                       </div>
                       <div>
-                        <h3 className="font-display font-bold text-base text-ink">Location Analysis</h3>
-                        <p className="text-xs text-muted">Spatial feasibility scoring</p>
+                        <h3 className="font-display font-bold text-base text-ink">
+                          Location Analysis
+                        </h3>
+                        <p className="text-xs text-muted">
+                          Spatial feasibility scoring
+                        </p>
                       </div>
                     </div>
-                    <button type="button" onClick={() => setActiveTool(null)} className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 cursor-pointer">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTool(null)}
+                      className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 cursor-pointer"
+                    >
                       <X size={18} />
                     </button>
                   </div>
@@ -767,9 +938,13 @@ export function MapPage() {
                       <BookOpen size={26} />
                     </div>
                     <div>
-                      <h4 className="font-bold text-sm text-ink mb-1">Choose a Business Type First</h4>
+                      <h4 className="font-bold text-sm text-ink mb-1">
+                        Choose a Business Type First
+                      </h4>
                       <p className="text-xs text-muted leading-relaxed max-w-xs">
-                        Open the <strong>Catalog</strong> (first item in the nav), pick the type of business you want to open, then click a spot on the map to place Candidate A.
+                        Open the <strong>Catalog</strong> (first item in the
+                        nav), pick the type of business you want to open, then
+                        click a spot on the map to place Candidate A.
                       </p>
                     </div>
                     <button
@@ -782,15 +957,16 @@ export function MapPage() {
                     </button>
                   </div>
                 </div>
-              )
-            )}
+              ))}
 
             {activeTool === "compare" && (
               <CompareCandidatesPanel
                 isOpen={true}
                 onClose={() => setActiveTool(null)}
                 results={analysisResults}
-                activeCandidates={(["A", "B", "C"] as CandidateId[]).filter((id) => candidates[id] !== null)}
+                activeCandidates={(["A", "B", "C"] as CandidateId[]).filter(
+                  (id) => candidates[id] !== null,
+                )}
                 onFlyToCandidate={(id) => {
                   const cand = candidates[id];
                   if (cand) {
@@ -819,7 +995,6 @@ export function MapPage() {
           </div>
         )}
 
-
         {/* ── Top-right Floating Map Controls (Icons, Not Emoji - Bagian 3) ── */}
         <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2 pointer-events-none">
           {/* Basemap Switcher */}
@@ -829,7 +1004,9 @@ export function MapPage() {
               onClick={() => setBasemapMode("default")}
               className={cn(
                 "px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer",
-                basemapMode === "default" ? "bg-primary text-white shadow-xs font-bold" : "text-muted hover:text-ink"
+                basemapMode === "default"
+                  ? "bg-primary text-white shadow-xs font-bold"
+                  : "text-muted hover:text-ink",
               )}
               title="Standard Street Map (OSM)"
             >
@@ -841,7 +1018,9 @@ export function MapPage() {
               onClick={() => setBasemapMode("satellite")}
               className={cn(
                 "px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer",
-                basemapMode === "satellite" ? "bg-primary text-white shadow-xs font-bold" : "text-muted hover:text-ink"
+                basemapMode === "satellite"
+                  ? "bg-primary text-white shadow-xs font-bold"
+                  : "text-muted hover:text-ink",
               )}
               title="Satellite Imagery (Esri)"
             >
@@ -854,35 +1033,52 @@ export function MapPage() {
           <button
             type="button"
             onClick={handleToggleOptInLocation}
-            title={isLocationOptedIn ? "Stop sharing live location (Click to disable)" : "Share live location (Opt-in GPS)"}
+            title={
+              isLocationOptedIn
+                ? "Stop sharing live location (Click to disable)"
+                : "Share live location (Opt-in GPS)"
+            }
             className={cn(
               "pointer-events-auto p-3 backdrop-blur-xs rounded-2xl shadow-md transition-all flex items-center justify-center cursor-pointer active:scale-95",
               isLocationOptedIn
                 ? "bg-blue-600 text-white border border-blue-500 shadow-blue-200"
-                : "bg-white/95 hover:bg-white text-primary border border-slate-200/80"
+                : "bg-white/95 hover:bg-white text-primary border border-slate-200/80",
             )}
           >
-            <Navigation size={18} className={cn(isLocating && "animate-spin")} />
+            <Navigation
+              size={18}
+              className={cn(isLocating && "animate-spin")}
+            />
           </button>
 
           {/* Shared Public Routes Toggle */}
           <button
             type="button"
             onClick={() => setShowPublicRoutes((v) => !v)}
-            title={showPublicRoutes ? "Hide community public routes" : "Show community public routes"}
+            title={
+              showPublicRoutes
+                ? "Hide community public routes"
+                : "Show community public routes"
+            }
             className={cn(
               "pointer-events-auto p-3 bg-white/95 backdrop-blur-xs border border-slate-200/80 rounded-2xl shadow-md transition-all flex items-center justify-center cursor-pointer active:scale-95",
-              showPublicRoutes ? "text-emerald-600 border-emerald-200 bg-emerald-50/50" : "text-muted hover:text-ink"
+              showPublicRoutes
+                ? "text-emerald-600 border-emerald-200 bg-emerald-50/50"
+                : "text-muted hover:text-ink",
             )}
           >
             <Footprints size={18} />
           </button>
         </div>
 
-
         {/* ── Leaflet Map Viewport ─────────────────────────────────────────── */}
         <div className="flex-1 relative z-0">
-          <MapContainer ref={mapRef} center={center} zoom={14} className="w-full h-full">
+          <MapContainer
+            ref={mapRef}
+            center={center}
+            zoom={14}
+            className="w-full h-full"
+          >
             {basemapMode === "satellite" ? (
               <MapTileLayer
                 key="satellite"
@@ -907,7 +1103,11 @@ export function MapPage() {
 
             {/* User GPS location marker */}
             {userLocation && (
-              <UserLocationMarker lat={userLocation.lat} lng={userLocation.lng} accuracy={userLocation.accuracy} />
+              <UserLocationMarker
+                lat={userLocation.lat}
+                lng={userLocation.lng}
+                accuracy={userLocation.accuracy}
+              />
             )}
 
             {/* Candidate analysis markers A, B, C */}
@@ -939,7 +1139,10 @@ export function MapPage() {
             />
 
             {/* Clustered POIs and LOCIVA Businesses Group (Rendered without needing candidate) */}
-            <MapMarkerClusterGroup spiderfyOnMaxZoom={true} showCoverageOnHover={false}>
+            <MapMarkerClusterGroup
+              spiderfyOnMaxZoom={true}
+              showCoverageOnHover={false}
+            >
               {showMapsData &&
                 filteredExternalPlaces.map((place) => (
                   <PoiMarker
@@ -947,7 +1150,12 @@ export function MapPage() {
                     place={place}
                     distanceFromCandidate={
                       activeCandidate
-                        ? distanceMeters(activeCandidate.lat, activeCandidate.lng, place.lat, place.lng)
+                        ? distanceMeters(
+                            activeCandidate.lat,
+                            activeCandidate.lng,
+                            place.lat,
+                            place.lng,
+                          )
                         : undefined
                     }
                     isDuplicateWithInternal={duplicateExternalIds.has(place.id)}
@@ -961,7 +1169,12 @@ export function MapPage() {
                     business={biz}
                     distanceFromCandidate={
                       activeCandidate
-                        ? distanceMeters(activeCandidate.lat, activeCandidate.lng, biz.latitude, biz.longitude)
+                        ? distanceMeters(
+                            activeCandidate.lat,
+                            activeCandidate.lng,
+                            biz.latitude,
+                            biz.longitude,
+                          )
                         : undefined
                     }
                     isDuplicateWithExternal={duplicateInternalIds.has(biz.id)}
@@ -1009,7 +1222,6 @@ export function MapPage() {
           )}
         </div>
       </div>
-
 
       {/* ── Dynamic Map Legend ─────────────────────────────────────────────── */}
       <MapLegend
