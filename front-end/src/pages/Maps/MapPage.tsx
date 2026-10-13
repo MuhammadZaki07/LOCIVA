@@ -206,34 +206,50 @@ export function MapPage() {
 
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
-
-          // Simpan lokasi asli pengguna untuk marker GPS.
-          setUserLocation({
-            lat,
-            lng,
-            accuracy: pos.coords.accuracy,
-          });
-
-          // Pindahkan pusat peta ke GPS hanya jika URL tidak valid.
-          if (!hasTargetLocation) {
-            setCenter([lat, lng]);
-          }
-        },
-        (err) => {
-          console.info("GPS tidak tersedia:", err.message);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 8000,
-          maximumAge: 60000,
+          console.log("accuracy:", pos.coords.accuracy, "m")
+          setUserLocation({ lat, lng, accuracy: pos.coords.accuracy });
+          setCenter([lat, lng]);
+          mapRef.current?.flyTo([lat, lng], 15);
         },
       );
     }
 
-    return () => {
-      cancelled = true;
+    // Ctrl + mouse wheel / trackpad pinch (desktop)
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) e.preventDefault();
     };
-  }, [hasTargetLocation, targetLat, targetLng]);
+
+    // Ctrl/Cmd + "+", "-", "=", "0" (desktop keyboard zoom)
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && ["+", "-", "=", "0"].includes(e.key)) {
+        e.preventDefault();
+      }
+    };
+
+    // Two-finger pinch (mobile) – Leaflet still receives the event and zooms the map
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 1) e.preventDefault();
+    };
+
+    // iOS Safari pinch gestures
+    const onGesture = (e: Event) => e.preventDefault();
+
+    document.addEventListener("wheel", onWheel, { passive: false });
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+    document.addEventListener("gesturestart", onGesture);
+    document.addEventListener("gesturechange", onGesture);
+    document.addEventListener("gestureend", onGesture);
+
+    return () => {
+      document.removeEventListener("wheel", onWheel);
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("gesturestart", onGesture);
+      document.removeEventListener("gesturechange", onGesture);
+      document.removeEventListener("gestureend", onGesture);
+    };
+  }, []);
 
   // ── Fetch LOCIVA businesses ───────────────────────────────────────────────
   const fetchLocivaData = useCallback(async (lat?: number, lng?: number, radius?: number) => {
