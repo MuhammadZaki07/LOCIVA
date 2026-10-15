@@ -10,7 +10,6 @@ use App\Http\Controllers\LocationAnalysisController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\BusinessTypeController;
 use App\Http\Controllers\BusinessTypeWeightController;
-use App\Http\Controllers\BusinessController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VendorRouteController;
 
