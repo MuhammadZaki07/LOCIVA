@@ -19,7 +19,6 @@ use App\Http\Controllers\VendorRouteController;
 | Auth Routes
 |--------------------------------------------------------------------------
 */
-
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
@@ -114,5 +113,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/admin/users', [AuthController::class, 'usersList']);
         Route::post('/admin/users/{id}/toggle-role', [AuthController::class, 'toggleUserRole']);
         Route::apiResource('/area', AreaController::class)->except(['index']);
+        Route::apiResource('/report-category', ReportCategoryController::class)->only(['create', 'update', 'destroy']);
     });
 });
