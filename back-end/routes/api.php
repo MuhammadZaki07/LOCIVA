@@ -61,6 +61,7 @@ Route::get('/business/types', [BusinessTypeController::class, 'index']);
 Route::get('/business-types', [BusinessTypeController::class, 'index']);
 Route::get('/business-types/categories', [BusinessTypeController::class, 'categories']);
 Route::get('/business-types/{id}', [BusinessTypeController::class, 'show']);
+Route::get('/business-types/{id}/weights', [BusinessTypeWeightController::class, 'getByBusinessType']);
 
 // Public Vendor Routes on Map
 Route::get('/vendor-routes/public', [VendorRouteController::class, 'publicRoutes']);
@@ -78,6 +79,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Reports (write)
     Route::post('/reports', [ReportController::class, 'store']);
     Route::post('/reports/{id}/confirm', [ReportController::class, 'confirm']);
+    Route::post('/reports/{id}/media', [ReportController::class, 'uploadMedia']);
 
     // POI (manual entry)
     Route::post('/pois', [PoiController::class, 'store']);
@@ -105,6 +107,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Admin-only
     Route::middleware('role:admin')->group(function () {
         Route::apiResource('business-type-weights', BusinessTypeWeightController::class);
+        Route::post('/business-types/{id}/weights', [BusinessTypeWeightController::class, 'syncByBusinessType']);
         Route::apiResource('users', UserController::class)->except('store');
         Route::patch('/reports/{id}/status', [ReportController::class, 'updateStatus']);
         Route::post('/business-types', [BusinessTypeController::class, 'store']);

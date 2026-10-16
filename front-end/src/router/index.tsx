@@ -86,6 +86,14 @@ const router = createBrowserRouter([
                 lazy: page(() => import("@/pages/dashboard/AdminDashboard")),
               },
               {
+                path: "/admin/reports",
+                lazy: page(() => import("@/pages/AdminReports")),
+              },
+              {
+                path: "/admin/business-types",
+                lazy: page(() => import("@/pages/AdminBusinessTypes")),
+              },
+              {
                 path: "/admin/users",
                 lazy: page(() => import("@/pages/AdminUsers")),
               },

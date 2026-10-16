@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
 import {
   AlertTriangle,
   Droplets,
@@ -10,6 +11,9 @@ import {
   Store,
   RefreshCw,
   AlertCircle,
+  Sliders,
+  ArrowRight,
+  ShieldCheck,
 } from "lucide-react";
 import api from "@/context/apiClient";
 import { useToast } from "@/components/ui/Toast";
@@ -57,7 +61,7 @@ export default function AdminDashboard() {
           id: String(r.id),
           title: r.title,
           category: r.category?.slug || r.category?.name || "road",
-          location: r.area?.name || (r.latitude && r.longitude ? `${r.latitude.toFixed(3)}, ${r.longitude.toFixed(3)}` : "Wilayah"),
+          location: r.area?.name || (r.latitude != null && r.longitude != null ? `${parseFloat(r.latitude).toFixed(3)}, ${parseFloat(r.longitude).toFixed(3)}` : "Wilayah"),
           status: (r.status as ReportStatus) || "reported",
           severity: r.severity || "medium",
           confirmationsCount: r.confirmations_count || r.confirmations?.length || 0,
@@ -209,6 +213,49 @@ export default function AdminDashboard() {
             favorable location rating
           </p>
         </div>
+      </div>
+
+      {/* Quick Navigation Hub for Dedicated Desks */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Link
+          to="/admin/reports"
+          className="clay clay-lift group flex items-center justify-between rounded-[18px] p-5 transition-all no-underline hover:border-primary/40"
+        >
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-600 transition-colors group-hover:bg-primary group-hover:text-white">
+              <ShieldCheck size={24} />
+            </div>
+            <div>
+              <h3 className="font-display text-[16px] font-bold text-ink group-hover:text-primary">
+                Portal Moderasi Civic Reports
+              </h3>
+              <p className="mt-0.5 text-[12px] text-muted">
+                Tinjau foto bukti laporan warga, verifikasi kondisi lapangan, & periksa riwayat audit.
+              </p>
+            </div>
+          </div>
+          <ArrowRight size={18} className="text-muted transition-transform group-hover:translate-x-1 group-hover:text-primary" />
+        </Link>
+
+        <Link
+          to="/admin/business-types"
+          className="clay clay-lift group flex items-center justify-between rounded-[18px] p-5 transition-all no-underline hover:border-primary/40"
+        >
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-soft text-primary transition-colors group-hover:bg-primary group-hover:text-white">
+              <Sliders size={24} />
+            </div>
+            <div>
+              <h3 className="font-display text-[16px] font-bold text-ink group-hover:text-primary">
+                Manajemen Katalog & Bobot Usaha
+              </h3>
+              <p className="mt-0.5 text-[12px] text-muted">
+                Kelola tipe UMKM, skala ruko/gerobak, radius default, dan pembobotan faktor GIS.
+              </p>
+            </div>
+          </div>
+          <ArrowRight size={18} className="text-muted transition-transform group-hover:translate-x-1 group-hover:text-primary" />
+        </Link>
       </div>
 
       {/* Main Civic Reports Moderation Table */}

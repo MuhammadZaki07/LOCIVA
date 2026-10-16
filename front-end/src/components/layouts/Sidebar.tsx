@@ -7,6 +7,8 @@ import {
   ShieldCheck,
   ExternalLink,
   UserIcon,
+  AlertTriangle,
+  Store,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import Logo from "@/components/sections/Logo";
@@ -16,12 +18,13 @@ interface SidebarProps {
   onNavigate?: () => void;
 }
 
-
-  const navLinks = [
-    { to: "/admin", label: "dashboard & reports", icon: LayoutDashboard },
-    { to: "/admin/users", label: "user management", icon: Users },
-    { to: "/admin/profile", label: "my profile", icon: UserIcon },
-  ];
+const navLinks = [
+  { to: "/admin", label: "dashboard overview", icon: LayoutDashboard },
+  { to: "/admin/reports", label: "moderasi laporan", icon: AlertTriangle },
+  { to: "/admin/business-types", label: "katalog & bobot usaha", icon: Store },
+  { to: "/admin/users", label: "user management", icon: Users },
+  { to: "/admin/profile", label: "my profile", icon: UserIcon },
+];
 
 
 export default function Sidebar({ onNavigate }: SidebarProps) {
@@ -98,7 +101,7 @@ export default function Sidebar({ onNavigate }: SidebarProps) {
       <div className="clay mt-8 rounded-[16px] p-3.5">
         <div className="flex items-center gap-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-full overflow-hidden bg-primary-soft text-[13px] font-bold text-primary">
-            <img src={getStorageUrl(user?.profile_image)} alt="Photo" />
+            <img src={getStorageUrl(user?.profile_image) || ""} alt="Photo" />
           </div>
 
           <div className="min-w-0 flex-1">

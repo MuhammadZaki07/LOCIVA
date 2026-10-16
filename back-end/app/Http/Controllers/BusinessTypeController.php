@@ -19,7 +19,7 @@ class BusinessTypeController extends Controller
         // Status filter
         if ($request->has('is_active')) {
             $query->where('is_active', filter_var($request->is_active, FILTER_VALIDATE_BOOLEAN));
-        } else {
+        } elseif ($request->input('all_status') !== 'true' && $request->input('status') !== 'all') {
             $query->where('is_active', true);
         }
 
@@ -48,6 +48,8 @@ class BusinessTypeController extends Controller
         if (in_array($sortBy, ['name', 'created_at', 'default_radius_m'])) {
             $query->orderBy($sortBy, $sortOrder === 'desc' ? 'desc' : 'asc');
         }
+
+        $query->with('weights');
 
         $perPage = (int) $request->input('per_page', 20);
         $catalog = $query->paginate($perPage);
@@ -96,7 +98,7 @@ class BusinessTypeController extends Controller
 
         $businessType = BusinessType::create($validated);
 
-        return ApiResponse::success($businessType, 'Business catalog item created successfully', 201);
+        return ApiResponse::success($businessType->load('weights'), 'Business catalog item created successfully', 201);
     }
 
     /**
@@ -104,7 +106,8 @@ class BusinessTypeController extends Controller
      */
     public function show(string $id)
     {
-        $businessType = BusinessType::where('id', $id)
+        $businessType = BusinessType::with('weights')
+            ->where('id', $id)
             ->orWhere('slug', $id)
             ->first();
 
@@ -142,7 +145,7 @@ class BusinessTypeController extends Controller
 
         $businessType->update($validated);
 
-        return ApiResponse::success($businessType, 'Business catalog item updated successfully');
+        return ApiResponse::success($businessType->load('weights'), 'Business catalog item updated successfully');
     }
 
     /**
@@ -163,6 +166,14 @@ class BusinessTypeController extends Controller
             );
         }
 
+        if ($businessType->simulations()->exists()) {
+            return ApiResponse::error(
+                'Tidak dapat menghapus jenis usaha ini karena masih memiliki data simulasi tersimpan.',
+                422
+            );
+        }
+
+        $businessType->weights()->delete();
         $businessType->delete();
 
         return ApiResponse::success(null, 'Business catalog item deleted successfully');

@@ -11,6 +11,15 @@ class Report extends Model
     use HasUuids, SoftDeletes;
     protected $guarded = ['id'];
 
+    protected $casts = [
+        'latitude'     => 'float',
+        'longitude'    => 'float',
+        'confirmed_at' => 'datetime',
+        'resolved_at'  => 'datetime',
+        'occurred_at'  => 'datetime',
+        'deleted_at'   => 'datetime',
+    ];
+
     public function user()
     {
         return $this->belongsTo(User::class);

@@ -636,7 +636,7 @@ export default function UserDashboard() {
                         <MapPin size={11} className="text-primary" />
                         <span>
                           {firstSim
-                            ? `${firstSim.latitude.toFixed(4)}, ${firstSim.longitude.toFixed(4)}`
+                            ? `${parseFloat(String(firstSim.latitude)).toFixed(4)}, ${parseFloat(String(firstSim.longitude)).toFixed(4)}`
                             : "Coordinates unavailable"}
                         </span>
                       </p>

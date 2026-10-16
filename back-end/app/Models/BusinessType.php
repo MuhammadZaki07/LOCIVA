@@ -9,6 +9,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class BusinessType extends Model
 {
     use HasUuids, SoftDeletes;
+
+    protected $guarded = ['id'];
+
     protected $casts = [
         'default_radius_m'      => 'integer',
         'min_radius_m'          => 'integer',
@@ -21,5 +24,15 @@ class BusinessType extends Model
     public function businesses()
     {
         return $this->hasMany(Business::class);
+    }
+
+    public function weights()
+    {
+        return $this->hasMany(BusinessTypeWeight::class);
+    }
+
+    public function simulations()
+    {
+        return $this->hasMany(Simulation::class);
     }
 }

@@ -5,32 +5,56 @@ namespace App\Http\Controllers;
 use App\Models\Report;
 use App\Models\ReportConfirmation;
 use App\Models\ReportVerification;
+use App\Models\ReportMedia;
 use App\Helpers\ApiResponse;
+use App\Traits\UploadTrait;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
 {
+    use UploadTrait;
+
     public function index(Request $request)
     {
         $request->validate([
             'lat'         => 'nullable|numeric|between:-90,90',
             'lng'         => 'nullable|numeric|between:-180,180',
             'radius'      => 'nullable|numeric|max:50000',
-            'category_id' => 'nullable|exists:report_categories,id',
+            'category_id' => 'nullable|string',
             'status'      => 'nullable|string',
+            'severity'    => 'nullable|string',
+            'search'      => 'nullable|string|max:200',
             'per_page'    => 'nullable|integer|max:100',
         ]);
 
-        $query = Report::with(['category:id,name,slug,icon', 'area:id,name'])
-            ->withCount('confirmations');
+        $query = Report::with([
+            'category:id,name,slug,icon',
+            'area:id,name',
+            'user:id,name,email',
+            'media:id,report_id,file_path,file_type,file_size,created_at',
+            'verifications.moderator:id,name,email',
+        ])->withCount('confirmations');
 
-        if ($request->filled('category_id')) {
+        if ($request->filled('category_id') && $request->category_id !== 'all' && $request->category_id !== 'Semua') {
             $query->where('category_id', $request->category_id);
         }
 
-        if ($request->filled('status')) {
+        if ($request->filled('status') && $request->status !== 'all') {
             $query->where('status', $request->status);
+        }
+
+        if ($request->filled('severity') && $request->severity !== 'all') {
+            $query->where('severity', $request->severity);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%");
+            });
         }
 
         if ($request->filled('lat') && $request->filled('lng')) {
@@ -48,7 +72,8 @@ class ReportController extends Controller
             $query->latest();
         }
 
-        $reports = $query->paginate((int) $request->input('per_page', 20));
+        $perPage = (int) $request->input('per_page', 20);
+        $reports = $query->paginate($perPage);
 
         return ApiResponse::success($reports, 'Reports retrieved successfully');
     }
@@ -58,15 +83,14 @@ class ReportController extends Controller
         $report = Report::with([
             'category:id,name,slug,icon',
             'area:id,name',
-            'media:id,report_id,file_path,file_type',
-            'verifications:id,report_id,action,note,created_at',
+            'user:id,name,email',
+            'media:id,report_id,file_path,file_type,file_size,created_at',
+            'verifications.moderator:id,name,email',
         ])->withCount('confirmations')->find($id);
 
         if (! $report) {
             return ApiResponse::notFound('Report not found.');
         }
-
-        $report->makeHidden(['user_id']);
 
         return ApiResponse::success($report, 'Report detail retrieved successfully');
     }
@@ -82,22 +106,104 @@ class ReportController extends Controller
             'longitude'   => 'required|numeric|between:-180,180',
             'severity'    => 'nullable|in:low,medium,high',
             'occurred_at' => 'nullable|date',
+            'image'       => 'nullable|file|image|mimes:jpeg,png,jpg,webp|max:5120',
+            'images'      => 'nullable|array|max:5',
+            'images.*'    => 'file|image|mimes:jpeg,png,jpg,webp|max:5120',
         ]);
 
         $validated['user_id']  = Auth::id();
         $validated['status']   = 'reported';
         $validated['severity'] = $validated['severity'] ?? 'medium';
 
-        $report = Report::create($validated);
+        DB::beginTransaction();
+        try {
+            $report = Report::create($validated);
 
-        return ApiResponse::success($report, 'Report created successfully', 201);
+            // Handle multiple uploaded files
+            $files = [];
+            if ($request->hasFile('images')) {
+                $files = $request->file('images');
+            } elseif ($request->hasFile('image')) {
+                $files = [$request->file('image')];
+            }
+
+            foreach ($files as $file) {
+                if (!$file) continue;
+                $path = $this->upload('reports', $file);
+                ReportMedia::create([
+                    'report_id' => $report->id,
+                    'file_path' => $path,
+                    'file_type' => $file->getClientMimeType(),
+                    'file_size' => $file->getSize(),
+                ]);
+            }
+
+            DB::commit();
+
+            return ApiResponse::success(
+                $report->load([
+                    'category:id,name,slug,icon',
+                    'area:id,name',
+                    'user:id,name,email',
+                    'media:id,report_id,file_path,file_type,file_size,created_at'
+                ]),
+                'Report created successfully',
+                201
+            );
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return ApiResponse::error('Failed to create report: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function uploadMedia(Request $request, string $id)
+    {
+        $report = Report::find($id);
+        if (! $report) {
+            return ApiResponse::notFound('Report not found.');
+        }
+
+        $user = Auth::user();
+        if ($report->user_id !== $user->id && !$user->hasRole('admin')) {
+            return ApiResponse::error('Unauthorized to upload media for this report.', 403);
+        }
+
+        $request->validate([
+            'image'    => 'required_without:images|file|image|mimes:jpeg,png,jpg,webp|max:5120',
+            'images'   => 'required_without:image|array|max:5',
+            'images.*' => 'file|image|mimes:jpeg,png,jpg,webp|max:5120',
+        ]);
+
+        $files = $request->hasFile('images') ? $request->file('images') : [$request->file('image')];
+        $created = [];
+
+        DB::beginTransaction();
+        try {
+            foreach ($files as $file) {
+                if (!$file) continue;
+                $path = $this->upload('reports', $file);
+                $created[] = ReportMedia::create([
+                    'report_id' => $report->id,
+                    'file_path' => $path,
+                    'file_type' => $file->getClientMimeType(),
+                    'file_size' => $file->getSize(),
+                ]);
+            }
+
+            DB::commit();
+
+            return ApiResponse::success($created, 'Media uploaded successfully', 201);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return ApiResponse::error('Failed to upload media: ' . $e->getMessage(), 500);
+        }
     }
 
     public function updateStatus(Request $request, string $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:reported,verification,confirmed,handled,resolved',
-            'note'   => 'nullable|string',
+            'status' => 'required|in:reported,verification,confirmed,handled,resolved,rejected',
+            'note'   => 'nullable|string|max:1000',
         ]);
 
         $report = Report::find($id);
@@ -105,24 +211,41 @@ class ReportController extends Controller
             return ApiResponse::notFound('Report not found.');
         }
 
-        $report->status = $validated['status'];
+        DB::beginTransaction();
+        try {
+            $report->status = $validated['status'];
 
-        if ($validated['status'] === 'confirmed') {
-            $report->confirmed_at = now();
-        } elseif ($validated['status'] === 'resolved') {
-            $report->resolved_at = now();
+            if ($validated['status'] === 'confirmed') {
+                $report->confirmed_at = now();
+            } elseif ($validated['status'] === 'resolved') {
+                $report->resolved_at = now();
+            }
+
+            $report->save();
+
+            ReportVerification::create([
+                'report_id'    => $report->id,
+                'moderator_id' => Auth::id(),
+                'action'       => $validated['status'],
+                'note'         => $validated['note'] ?? null,
+            ]);
+
+            DB::commit();
+
+            return ApiResponse::success(
+                $report->load([
+                    'category:id,name,slug,icon',
+                    'area:id,name',
+                    'user:id,name,email',
+                    'media:id,report_id,file_path,file_type,file_size,created_at',
+                    'verifications.moderator:id,name,email'
+                ])->loadCount('confirmations'),
+                'Report status updated successfully'
+            );
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return ApiResponse::error('Failed to update report status: ' . $e->getMessage(), 500);
         }
-
-        $report->save();
-
-        ReportVerification::create([
-            'report_id'    => $report->id,
-            'moderator_id' => Auth::id(),
-            'action'       => $validated['status'],
-            'note'         => $validated['note'] ?? null,
-        ]);
-
-        return ApiResponse::success($report, 'Report status updated successfully');
     }
 
     public function confirm(Request $request, string $id)

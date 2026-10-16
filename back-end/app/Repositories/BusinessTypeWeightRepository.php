@@ -8,6 +8,13 @@ class BusinessTypeWeightRepository extends BaseRepository{
 
     public function __construct(BusinessTypeWeight $model)
     {
-        return parent::__construct($model);
+        parent::__construct($model);
+    }
+
+    public function getByBusinessType(string $businessTypeId)
+    {
+        return $this->model->newQuery()
+            ->where('business_type_id', $businessTypeId)
+            ->get();
     }
 }

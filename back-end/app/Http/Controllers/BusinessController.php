@@ -81,11 +81,12 @@ class BusinessController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'description' => 'nullable|string',
+            'name'             => 'required|string|max:150',
+            'description'      => 'nullable|string',
             'business_type_id' => 'required|exists:business_types,id',
-            'latitude' => 'required|numeric|between:-90,90',
-            'longitude' => 'required|numeric|between:-180,180',
-            'address' => 'nullable|string|max:500',
+            'latitude'         => 'required|numeric|between:-90,90',
+            'longitude'        => 'required|numeric|between:-180,180',
+            'address'          => 'nullable|string|max:500',
         ]);
 
         $validated['user_id'] = Auth::id();

@@ -26,10 +26,72 @@ class BusinessTypeWeightController extends Controller
     public function index(Request $request)
     {
         try {
-            $fetch = $this->businessWeightRepo->paginate($request->query('per_page', 10));
-            return ApiResponse::success(["mete" => PaginationHelper::meta($fetch), "Data" => BusinessTypeWeightResource::collection($fetch)]);
+            if ($request->filled('business_type_id')) {
+                $weights = $this->businessWeightRepo->getByBusinessType($request->business_type_id);
+                return ApiResponse::success(BusinessTypeWeightResource::collection($weights), 'Weights retrieved successfully');
+            }
+
+            $fetch = $this->businessWeightRepo->paginate((int) $request->query('per_page', 10));
+            return ApiResponse::success([
+                "meta" => PaginationHelper::meta($fetch),
+                "data" => BusinessTypeWeightResource::collection($fetch)
+            ], 'Weights retrieved successfully');
         } catch (\Throwable $th) {
-            return ApiResponse::error($th->getMessage());
+            return ApiResponse::error($th->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Get weights for a specific business type.
+     */
+    public function getByBusinessType(string $id)
+    {
+        try {
+            $weights = $this->businessWeightRepo->getByBusinessType($id);
+            return ApiResponse::success(BusinessTypeWeightResource::collection($weights), 'Weights retrieved successfully');
+        } catch (\Throwable $th) {
+            return ApiResponse::error($th->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Batch synchronize all factor weights for a business type.
+     */
+    public function syncByBusinessType(Request $request, string $id)
+    {
+        $businessType = \App\Models\BusinessType::find($id);
+        if (!$businessType) {
+            return ApiResponse::notFound('Business type not found.');
+        }
+
+        $validated = $request->validate([
+            'weights' => 'required|array',
+            'weights.*.factor' => 'required|string|max:50',
+            'weights.*.weight' => 'required|numeric|min:0|max:100',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            BusinessTypeWeight::where('business_type_id', $id)->delete();
+
+            $created = [];
+            foreach ($validated['weights'] as $item) {
+                $created[] = BusinessTypeWeight::create([
+                    'business_type_id' => $id,
+                    'factor'           => strtolower(trim($item['factor'])),
+                    'weight'           => (float) $item['weight'],
+                ]);
+            }
+
+            DB::commit();
+
+            return ApiResponse::success(
+                BusinessTypeWeightResource::collection(collect($created)),
+                'Business type weights synchronized successfully'
+            );
+        } catch (\Throwable $th) {
+            DB::rollBack();
+            return ApiResponse::error('Failed to sync weights: ' . $th->getMessage(), 500);
         }
     }
 

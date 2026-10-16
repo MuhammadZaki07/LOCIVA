@@ -312,6 +312,22 @@ class LocationAnalysisService
 
     private function resolveWeights(?BusinessType $type, string $slug): array
     {
+        // 1. First priority: Check dedicated business_type_weights table
+        if ($type) {
+            $dbWeights = $type->relationLoaded('weights') ? $type->weights : $type->weights()->get();
+            if ($dbWeights->isNotEmpty()) {
+                $weights = [];
+                foreach ($dbWeights as $row) {
+                    $mapped = self::CATEGORY_MAP[$row->factor] ?? $row->factor;
+                    $weights[$mapped] = (int) $row->weight;
+                }
+                if ($weights !== []) {
+                    return $weights;
+                }
+            }
+        }
+
+        // 2. Second priority: target_demographics JSON array from catalog
         $fromCatalog = $type?->target_demographics;
         if (is_array($fromCatalog) && count($fromCatalog) > 0) {
             $weights = [];
@@ -327,6 +343,7 @@ class LocationAnalysisService
             }
         }
 
+        // 3. Fallback to hardcoded default weights
         return self::FALLBACK_WEIGHTS[$slug] ?? [];
     }
 

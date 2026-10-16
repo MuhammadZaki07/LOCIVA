@@ -1,28 +1,11 @@
 import { useState } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
-import {
-  LayoutDashboard,
-  Users,
-  Compass,
-  LogOut,
-  Menu,
-  X,
-  ExternalLink,
-  User as UserIcon,
-} from "lucide-react";
+import { Link, Outlet } from "react-router-dom";
+import { Menu, X } from "lucide-react";
 import Logo from "@/components/sections/Logo";
 import Sidebar from "@/components/layouts/Sidebar";
-import { useAuth } from "@/context/AuthContext";
 
 export default function AdminLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const navigate = useNavigate();
-  const { logout, user } = useAuth();
-
-  const handleLogout = async () => {
-    await logout();
-    navigate("/login");
-  };
   return (
     <div className="flex min-h-svh bg-canvas text-ink">
       <div className="hidden w-64 shrink-0 flex-col justify-between border-r border-[#ececf6] bg-white/70 p-6 backdrop-blur-md lg:flex">
