@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from "react";
 import { calculateAnalysis } from "@/lib/analysisEngine";
 import type { AnalysisResult } from "@/lib/analysisEngine";
 import type { BusinessType } from "@/lib/umkmCatalog";
-import { fetchPlacesAround, type Place } from "@/lib/Osm";
+import { fetchPlacesAround, validateCandidateGeospatial, type Place } from "@/lib/Osm";
 import api, { classifyApiError } from "@/context/apiClient";
 
 export function useLocationAnalysis() {
@@ -30,6 +30,52 @@ export function useLocationAnalysis() {
       setError(null);
 
       try {
+        // 1. Real geospatial validation (detects sea / open ocean / offshore - Section 4)
+        const geoCheck = await validateCandidateGeospatial(lat, lng, abortControllerRef.current.signal);
+
+        if (thisRequestId !== requestIdRef.current) {
+          return null;
+        }
+
+        if (geoCheck.isWaterOrOffshore) {
+          // Inform backend of invalid water coordinate
+          try {
+            await api.post("/analysis/location", {
+              lat,
+              lng,
+              radius,
+              business_type: businessType.slug || businessType.id,
+              candidate_id: candidateId,
+              is_water: true,
+              external_places: [],
+            });
+          } catch {}
+
+          return {
+            candidateId,
+            lat,
+            lng,
+            radius,
+            businessTypeId: businessType.id,
+            opportunityScore: null,
+            competitionScore: null,
+            accessibilityScore: null,
+            dataConfidence: 0,
+            competitorCount: 0,
+            nearestCompetitor: null,
+            relevantPOI: [],
+            allPlaces: [],
+            factors: [],
+            dataWarnings: [
+              geoCheck.reason || "Candidate location is in open sea or offshore water. Cannot calculate feasibility scores for non-land areas.",
+            ],
+            updatedAt: Date.now(),
+            isValidLocation: false,
+            isWaterOrOffshore: true,
+            unsupportedReason: geoCheck.reason || "Location is situated in the sea or unsupported offshore water.",
+          };
+        }
+
         let places = knownPlaces ?? [];
         if (!knownPlaces) {
           places = await fetchPlacesAround(lat, lng, radius, abortControllerRef.current.signal);
@@ -95,7 +141,7 @@ export function useLocationAnalysis() {
         } catch (apiErr) {
           const classified = classifyApiError(apiErr);
           clientResult.dataWarnings.push(
-            `Analisis server tidak tersedia (${classified.message}). Skor di bawah memakai Overpass saja.`,
+            `Server analysis unavailable (${classified.message}). Preliminary scores estimated from OpenStreetMap data.`,
           );
         }
 
@@ -109,7 +155,7 @@ export function useLocationAnalysis() {
           return null;
         }
         if (thisRequestId === requestIdRef.current) {
-          const message = err instanceof Error ? err.message : "Gagal melakukan analisis lokasi";
+          const message = err instanceof Error ? err.message : "Failed to perform location analysis";
           setError(message);
         }
         return null;

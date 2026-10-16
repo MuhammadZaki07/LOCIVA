@@ -950,11 +950,21 @@ function MapZoomControl({
     ...props
 }: React.ComponentProps<"div"> & { position?: string }) {
     const map = useMap()
-    const [zoomLevel, setZoomLevel] = useState(map.getZoom())
+    const [zoomLevel, setZoomLevel] = useState(() => {
+        try {
+            return typeof map?.getZoom === "function" ? map.getZoom() : 14
+        } catch {
+            return 14
+        }
+    })
 
     useMapEvents({
         zoomend: () => {
-            setZoomLevel(map.getZoom())
+            try {
+                if (typeof map?.getZoom === "function") {
+                    setZoomLevel(map.getZoom())
+                }
+            } catch {}
         },
     })
 

@@ -16,9 +16,9 @@ export interface AnalysisResult {
   lng: number;
   radius: number;
   businessTypeId: string;
-  opportunityScore: number;
-  competitionScore: number;
-  accessibilityScore: number;
+  opportunityScore: number | null;
+  competitionScore: number | null;
+  accessibilityScore: number | null;
   dataConfidence: number;
   competitorCount: number;
   nearestCompetitor: { name: string; distance: number } | null;
@@ -39,6 +39,9 @@ export interface AnalysisResult {
   internalBusinessCount?: number;
   sources?: { id: string; label: string; count: number; status: string }[];
   limitations?: string;
+  isValidLocation?: boolean;
+  isWaterOrOffshore?: boolean;
+  unsupportedReason?: string;
 }
 
 export function calculateAnalysis(

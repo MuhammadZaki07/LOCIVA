@@ -34,6 +34,37 @@ class BusinessMapTest extends TestCase
         $this->assertTrue($response->json('success'));
     }
 
+    public function test_seeded_demo_vendors_are_distinguished_with_demo_flag(): void
+    {
+        $user = User::first() ?? User::factory()->create();
+        $businessType = BusinessType::first() ?? BusinessType::create([
+            'name' => 'Kedai Kopi',
+            'slug' => 'kedai-kopi',
+            'category' => 'cafe',
+            'scale' => 'gerobak',
+        ]);
+
+        Business::create([
+            'user_id'          => $user->id,
+            'business_type_id' => $businessType->id,
+            'name'             => '[DEMO] Bakso Keliling Demo Test',
+            'latitude'         => -7.9780000,
+            'longitude'        => 112.6340000,
+            'address'          => 'Jl. Tugu No. 1, Klojen, Kota Malang',
+            'is_demo'          => true,
+        ]);
+
+        $response = $this->getJson('/api/businesses/map');
+        $response->assertStatus(200);
+
+        $demoItems = array_filter($response->json('data'), fn ($item) => !empty($item['is_demo']));
+        $this->assertNotEmpty($demoItems, 'Demo vendors should be present in map data');
+
+        $firstDemo = reset($demoItems);
+        $this->assertTrue($firstDemo['is_demo']);
+        $this->assertEquals('demo', $firstDemo['source']);
+    }
+
     public function test_can_filter_businesses_by_category(): void
     {
         $response = $this->getJson('/api/businesses/map?category=kedai-kopi');

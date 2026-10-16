@@ -68,9 +68,9 @@ export const RouteLayer: React.FC<RouteLayerProps> = ({
             iconAnchor={[13, 13]}
             popupAnchor={[0, -14]}
           >
-            <MapPopup>
-              <div className="p-1 space-y-1 text-left max-w-xs">
-                <div className="flex items-center gap-1.5 border-b border-slate-100 pb-1">
+            <MapPopup className="lociva-popup-wrapper">
+              <div className="p-3 space-y-1.5 text-left max-w-xs">
+                <div className="flex items-center gap-1.5 border-b border-slate-100 pb-1.5">
                   <span
                     className="size-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
                     style={{
@@ -80,11 +80,11 @@ export const RouteLayer: React.FC<RouteLayerProps> = ({
                     {idx + 1}
                   </span>
                   <span className="font-bold text-ink text-xs">
-                    {isFirst ? "Titik Awal Rute" : isLast ? "Titik Akhir / Tujuan" : "Titik Singgah"}
+                    {isFirst ? "Route Origin" : isLast ? "Route Destination" : "Waypoint Stop"}
                   </span>
                 </div>
 
-                <p className="font-semibold text-xs text-ink">{wp.name || `Pemberhentian ${idx + 1}`}</p>
+                <p className="font-semibold text-xs text-ink">{wp.name || `Stop ${idx + 1}`}</p>
                 <p className="text-[10px] text-muted flex items-center gap-1">
                   <MapPin size={10} />
                   {wp.lat.toFixed(5)}, {wp.lng.toFixed(5)}
@@ -93,7 +93,7 @@ export const RouteLayer: React.FC<RouteLayerProps> = ({
                 {wp.stop_duration ? (
                   <p className="text-[11px] font-medium text-primary flex items-center gap-1">
                     <Clock size={11} />
-                    Rencana Mangkal: {wp.stop_duration} menit
+                    Planned Stop: {wp.stop_duration} mins
                   </p>
                 ) : null}
               </div>
@@ -119,7 +119,7 @@ export const RouteLayer: React.FC<RouteLayerProps> = ({
                   dashArray: "6, 6",
                 }}
               />
-              {/* Midpoint marker or start point marker */}
+              {/* Start point marker */}
               {route.waypoints[0] && (
                 <MapMarker
                   position={[route.waypoints[0].lat, route.waypoints[0].lng]}
@@ -131,15 +131,15 @@ export const RouteLayer: React.FC<RouteLayerProps> = ({
                   }
                   iconAnchor={[20, 10]}
                 >
-                  <MapPopup>
-                    <div className="p-1 text-left space-y-1">
+                  <MapPopup className="lociva-popup-wrapper">
+                    <div className="p-3 text-left space-y-1.5">
                       <span className="text-[9px] uppercase font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
-                        Rute Publik Pengguna Lain
+                        Public Shared Route
                       </span>
                       <h4 className="font-bold text-xs text-ink">{route.name}</h4>
                       {route.notes && <p className="text-[11px] text-muted">{route.notes}</p>}
                       <p className="text-[10.5px] text-slate-500">
-                        {route.waypoints.length} titik singgah · {route.distance || "Estimasi"} km
+                        {route.waypoints.length} stops · {route.distance || "Estimated"} km
                       </p>
                     </div>
                   </MapPopup>

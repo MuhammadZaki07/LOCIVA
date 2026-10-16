@@ -27,14 +27,14 @@ export const UserLocationMarker: React.FC<UserLocationMarkerProps> = ({
         iconAnchor={[12, 12]}
         popupAnchor={[0, -12]}
       >
-        <MapPopup>
-          <div className="p-1 text-center">
-            <p className="font-bold text-ink text-sm">Lokasi Anda Saat Ini</p>
-            <p className="text-[11px] text-muted">
+        <MapPopup className="lociva-popup-wrapper">
+          <div className="p-3 text-center space-y-1">
+            <p className="font-bold text-ink text-sm">Your Current Location</p>
+            <p className="text-[11px] text-muted font-mono">
               {lat.toFixed(5)}, {lng.toFixed(5)}
             </p>
             <span className="mt-1 inline-block rounded bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
-              Akurasi: ~{Math.round(accuracy)}m
+              Accuracy: ~{Math.round(accuracy)}m
             </span>
           </div>
         </MapPopup>

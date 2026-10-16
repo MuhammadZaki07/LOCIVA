@@ -40,6 +40,17 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSel
     }
   }, [isOpen]);
 
+  // Support Escape key to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   const handleSearch = useCallback(async (q: string) => {
     const trimmed = q.trim();
     if (!trimmed) {
@@ -60,12 +71,11 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSel
         q: trimmed,
         format: "jsonv2",
         addressdetails: "1",
-        limit: "8",
-        countrycodes: "id", // Prioritize Indonesia
+        limit: "10",
       });
 
       const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
-        headers: { "Accept-Language": "id,en", "User-Agent": "LOCIVA/1.0 (location-intelligence)" },
+        headers: { "Accept-Language": "en,id", "User-Agent": "LOCIVA/1.0 (location-intelligence)" },
         signal: abortRef.current.signal,
       });
 
@@ -75,7 +85,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSel
       setSearched(true);
     } catch (err: any) {
       if (err?.name === "AbortError") return;
-      setError("Gagal menghubungi server pencarian. Periksa koneksi internet.");
+      setError("Unable to reach geocoding service. Please check your internet connection.");
     } finally {
       setLoading(false);
     }
@@ -86,7 +96,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSel
   const handleInput = (val: string) => {
     setQuery(val);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => handleSearch(val), 450);
+    debounceRef.current = setTimeout(() => handleSearch(val), 350);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -111,7 +121,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSel
       className="fixed inset-0 z-[600] flex items-start justify-center pt-[6vh] px-4"
       role="dialog"
       aria-modal="true"
-      aria-label="Cari Lokasi"
+      aria-label="Search Location"
     >
       {/* Backdrop */}
       <div
@@ -133,7 +143,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSel
             type="text"
             value={query}
             onChange={(e) => handleInput(e.target.value)}
-            placeholder="Cari tempat, jalan, kota (mis: Jl. Sudirman, Malang)..."
+            placeholder="Search places, addresses, cities worldwide..."
             className="flex-1 bg-transparent text-sm text-ink placeholder:text-muted focus:outline-none"
             autoComplete="off"
             spellCheck={false}
@@ -142,7 +152,8 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSel
             <button
               type="button"
               onClick={() => { setQuery(""); setResults([]); setSearched(false); }}
-              className="p-1 rounded-full hover:bg-slate-100 text-muted"
+              className="p-1 rounded-full hover:bg-slate-100 text-muted cursor-pointer"
+              title="Clear search"
             >
               <X size={16} />
             </button>
@@ -150,7 +161,8 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSel
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-muted"
+            className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-muted cursor-pointer"
+            title="Close"
           >
             <X size={15} />
           </button>
@@ -167,8 +179,8 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSel
 
           {!error && searched && results.length === 0 && (
             <div className="p-6 text-center text-muted text-sm">
-              Tidak ada hasil untuk <strong>"{query}"</strong>.<br />
-              <span className="text-xs">Coba tambahkan nama kota atau provinsi.</span>
+              No results found for <strong>"{query}"</strong>.<br />
+              <span className="text-xs">Try searching for a different city, district, or landmark.</span>
             </div>
           )}
 
@@ -180,7 +192,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSel
                     type="button"
                     onClick={() => handleSelect(r)}
                     className={cn(
-                      "w-full text-left flex items-start gap-3 px-4 py-3 hover:bg-primary-soft/60 transition-colors",
+                      "w-full text-left flex items-start gap-3 px-4 py-3 hover:bg-primary-soft/60 transition-colors cursor-pointer",
                       i < results.length - 1 && "border-b border-slate-50"
                     )}
                   >
@@ -198,8 +210,8 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSel
           {!searched && !loading && !error && (
             <div className="p-6 text-center text-muted text-xs space-y-1">
               <Search size={24} className="mx-auto text-slate-200 mb-2" />
-              <p>Ketik nama tempat, jalan, atau kota</p>
-              <p className="text-slate-400">Data dari Nominatim / OpenStreetMap</p>
+              <p className="font-medium text-slate-600">Type a place, street, or city name</p>
+              <p className="text-slate-400">Global geospatial index powered by Nominatim / OpenStreetMap</p>
             </div>
           )}
         </div>

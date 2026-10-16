@@ -16,8 +16,8 @@ class BusinessMapResource extends JsonResource
             'latitude'      => (float) $this->latitude,
             'longitude'     => (float) $this->longitude,
             'address'       => $this->address,
-            'distance'      => isset($this->distance) ? (int) round($this->distance) : null,
-            'source'        => 'lociva_internal',
+            'source'        => $this->is_demo ? 'demo' : 'lociva_internal',
+            'is_demo'       => (bool) ($this->is_demo ?? false),
             'business_type' => $this->businessType ? [
                 'id'   => $this->businessType->id,
                 'name' => $this->businessType->name,

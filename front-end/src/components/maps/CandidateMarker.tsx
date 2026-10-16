@@ -18,7 +18,6 @@ const colorMap: Record<CandidateId, string> = {
   C: '#c4922a',
 };
 
-// We will use standard leaflet icon styling using SVG
 export const CandidateMarker: React.FC<CandidateMarkerProps> = ({
   id, lat, lng, radius, onDragEnd, onClick
 }) => {
@@ -54,7 +53,8 @@ export const CandidateMarker: React.FC<CandidateMarkerProps> = ({
       color: 'white', 
       fontWeight: 'bold', 
       fontFamily: 'sans-serif', 
-      fontSize: '14px'
+      fontSize: '14px',
+      cursor: 'grab',
     }}>
       {id}
     </div>
@@ -71,9 +71,14 @@ export const CandidateMarker: React.FC<CandidateMarkerProps> = ({
         eventHandlers={eventHandlers}
         ref={markerRef}
       >
-        <MapPopup>
-          <div className="font-bold text-center">Kandidat {id}</div>
-          <div className="text-xs text-center text-muted">Geser untuk mengubah lokasi</div>
+        <MapPopup className="lociva-popup-wrapper">
+          <div className="p-3 text-center space-y-1">
+            <p className="font-bold text-ink text-sm">Candidate {id}</p>
+            <p className="text-xs text-muted">Drag marker to adjust location</p>
+            <p className="text-[10px] text-slate-400 font-mono">
+              {lat.toFixed(5)}, {lng.toFixed(5)}
+            </p>
+          </div>
         </MapPopup>
       </MapMarker>
       

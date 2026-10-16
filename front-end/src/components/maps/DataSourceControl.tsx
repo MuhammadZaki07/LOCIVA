@@ -1,6 +1,6 @@
 import React from "react";
 import { cn } from "@/lib/utils";
-import { Layers, Database, Globe, RefreshCw, AlertCircle, Check } from "lucide-react";
+import { Layers, Database, Globe, RefreshCw, AlertCircle, X } from "lucide-react";
 
 export type FilterCategory = "all" | "cafe" | "food" | "retail" | "school_campus" | "service";
 
@@ -23,6 +23,8 @@ interface DataSourceControlProps {
   onSelectCategory: (cat: FilterCategory) => void;
   isOpen: boolean;
   onToggleOpen: () => void;
+  isStale?: boolean;
+  isEmbedded?: boolean;
 }
 
 export const DataSourceControl: React.FC<DataSourceControlProps> = ({
@@ -44,15 +46,22 @@ export const DataSourceControl: React.FC<DataSourceControlProps> = ({
   onSelectCategory,
   isOpen,
   onToggleOpen,
+  isStale = false,
+  isEmbedded = false,
 }) => {
   return (
-    <div className="absolute top-20 left-4 z-[400] max-w-sm">
-      <div className="clay rounded-2xl shadow-lg border border-white/80 overflow-hidden transition-all duration-300">
+    <div className={cn(
+      isEmbedded
+        ? "h-full w-full flex flex-col bg-surface text-left overflow-y-auto"
+        : "absolute top-20 left-4 z-[400] max-w-lg text-left"
+    )}>
+      <div className={cn(
+        "overflow-hidden transition-all duration-300 flex flex-col",
+        isEmbedded ? "h-full bg-transparent" : "clay rounded-2xl shadow-lg border border-white/80"
+      )}>
         {/* Header Bar */}
-        <button
-          type="button"
-          onClick={onToggleOpen}
-          className="w-full px-4 py-3 bg-white/70 flex items-center justify-between text-left hover:bg-white/90 transition-colors"
+        <div
+          className="w-full px-4 py-3 bg-white/70 flex items-center justify-between text-left shrink-0 border-b border-slate-100"
         >
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-lg bg-primary-soft text-primary">
@@ -60,18 +69,24 @@ export const DataSourceControl: React.FC<DataSourceControlProps> = ({
             </div>
             <div>
               <p className="font-bold text-ink text-xs uppercase tracking-wider">
-                Sumber Data Spasial
+                Spatial Data Sources & POIs
               </p>
               <p className="text-[11px] text-muted">
-                {showMapsData ? `${mapsCount} Maps` : "Maps mati"} ·{" "}
-                {showLocivaData ? `${locivaCount} LOCIVA` : "LOCIVA mati"}
+                {showMapsData ? `${mapsCount} OSM Places` : "OSM Off"} ·{" "}
+                {showLocivaData ? `${locivaCount} LOCIVA` : "LOCIVA Off"}
+                {isStale && " (Cached)"}
               </p>
             </div>
           </div>
-          <span className="text-xs text-primary font-semibold">
-            {isOpen ? "Tutup" : "Kelola"}
-          </span>
-        </button>
+          <button
+            type="button"
+            onClick={onToggleOpen}
+            className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors cursor-pointer"
+            title="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
 
         {isOpen && (
           <div className="p-4 space-y-3 bg-white/50 backdrop-blur-xs border-t border-slate-100">
@@ -94,7 +109,7 @@ export const DataSourceControl: React.FC<DataSourceControlProps> = ({
                   />
                   <div className="flex items-center gap-1.5">
                     <Globe size={14} className="text-emerald-600" />
-                    <span className="font-bold text-xs text-ink">Maps Data (Eksternal)</span>
+                    <span className="font-bold text-xs text-ink">External Map POIs (OSM)</span>
                   </div>
                 </label>
 
@@ -106,21 +121,21 @@ export const DataSourceControl: React.FC<DataSourceControlProps> = ({
                       type="button"
                       onClick={onRetryMaps}
                       title={mapsError}
-                      className="text-red-500 hover:text-red-700 flex items-center gap-1 text-[11px]"
+                      className="text-red-500 hover:text-red-700 flex items-center gap-1 text-[11px] cursor-pointer"
                     >
                       <AlertCircle size={12} />
                       <span className="text-[10px]">Retry</span>
                     </button>
                   ) : (
                     <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
-                      {mapsCount} POI
+                      {mapsCount} Places
                     </span>
                   )}
                 </div>
               </div>
 
-              <p className="mt-1.5 text-[10.5px] text-muted pl-6">
-                Data tempat umum, cafe, restoran dari OpenStreetMap & Overpass API.
+              <p className="mt-1.5 text-[10.5px] text-muted pl-6 leading-relaxed">
+                OpenStreetMap points of interest loaded dynamically by viewport. Coverage depends on global community contributions.
               </p>
             </div>
 
@@ -143,7 +158,7 @@ export const DataSourceControl: React.FC<DataSourceControlProps> = ({
                   />
                   <div className="flex items-center gap-1.5">
                     <Database size={14} className="text-primary" />
-                    <span className="font-bold text-xs text-ink">LOCIVA Data (Internal)</span>
+                    <span className="font-bold text-xs text-ink">LOCIVA Verified Businesses</span>
                   </div>
                 </label>
 
@@ -155,34 +170,35 @@ export const DataSourceControl: React.FC<DataSourceControlProps> = ({
                       type="button"
                       onClick={onRetryLociva}
                       title={locivaError}
-                      className="text-red-500 hover:text-red-700 flex items-center gap-1 text-[11px]"
+                      className="text-red-500 hover:text-red-700 flex items-center gap-1 text-[11px] cursor-pointer"
                     >
                       <AlertCircle size={12} />
                       <span className="text-[10px]">Retry</span>
                     </button>
                   ) : (
                     <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-bold text-primary">
-                      {locivaCount} Usaha
+                      {locivaCount} Businesses
                     </span>
                   )}
                 </div>
               </div>
 
-              <p className="mt-1.5 text-[10.5px] text-muted pl-6">
-                Usaha terverifikasi yang didaftarkan langsung di database LOCIVA.
+              <p className="mt-1.5 text-[10.5px] text-muted pl-6 leading-relaxed">
+                Registered local businesses recorded directly in the LOCIVA database platform.
               </p>
             </div>
 
             {/* Category Filter Pills */}
             <div className="pt-2 border-t border-slate-100">
-              <p className="text-[11px] font-medium text-muted mb-2">Filter Kategori Lapisan:</p>
+              <p className="text-[11px] font-medium text-muted mb-2">Layer Category Filter:</p>
               <div className="flex flex-wrap gap-1.5">
                 {[
-                  { id: "all", label: "Semua" },
-                  { id: "cafe", label: "Cafe & Kopi" },
-                  { id: "food", label: "Restoran / Makan" },
-                  { id: "retail", label: "Minimarket / Toko" },
-                  { id: "school_campus", label: "Pendidikan" },
+                  { id: "all", label: "All" },
+                  { id: "cafe", label: "Cafes & Coffee" },
+                  { id: "food", label: "Dining & Food" },
+                  { id: "retail", label: "Retail & Stores" },
+                  { id: "school_campus", label: "Schools & Campuses" },
+                  { id: "service", label: "Services" },
                 ].map((cat) => {
                   const isActive = selectedCategory === cat.id;
                   return (
@@ -208,7 +224,7 @@ export const DataSourceControl: React.FC<DataSourceControlProps> = ({
             <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-2 text-[10.5px]">
               <div className="flex items-center gap-1.5">
                 <span className="size-2.5 rounded-full bg-emerald-500 inline-block shadow-xs" />
-                <span className="text-muted">Maps External POI</span>
+                <span className="text-muted">OSM POI</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="size-2.5 rounded-md bg-primary inline-block shadow-xs" />

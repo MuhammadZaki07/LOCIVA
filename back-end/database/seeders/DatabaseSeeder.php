@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             AreaSeeder::class,
             PoiSeeder::class,
             BusinessSeeder::class,
+            DemoVendorSeeder::class,
             VendorRouteSeeder::class,
         ]);
     }
