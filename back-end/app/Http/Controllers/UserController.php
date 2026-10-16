@@ -71,7 +71,16 @@ class UserController extends Controller
         DB::beginTransaction();
         try {
             if (isset($validate['role'])) {
-                $data->syncRoles([$validate['role']]);
+                $targetRole = $validate['role'];
+                if ($data->hasRole('admin') && $targetRole !== 'admin') {
+                    if (auth()->id() === $id) {
+                        return ApiResponse::error('Anda tidak dapat mendemosi role akun Anda sendiri.', 400);
+                    }
+                    if (\App\Models\User::role('admin')->count() <= 1) {
+                        return ApiResponse::error('Tidak dapat mengubah role akun admin terakhir untuk mencegah penguncian sistem.', 400);
+                    }
+                }
+                $data->syncRoles([$targetRole]);
                 unset($validate['role']);
             }
 
@@ -110,6 +119,10 @@ class UserController extends Controller
 
         $data = $this->userRepo->find($id);
         if (!$data) return ApiResponse::error('Data not found', 404);
+
+        if ($data->hasRole('admin') && \App\Models\User::role('admin')->count() <= 1) {
+            return ApiResponse::error('Tidak dapat menghapus akun admin terakhir untuk mencegah penguncian sistem.', 400);
+        }
 
         DB::beginTransaction();
         try {

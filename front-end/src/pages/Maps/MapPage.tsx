@@ -11,7 +11,7 @@ import {
   MapZoomControl,
   MapMarkerClusterGroup,
 } from "@/components/ui/shadcn-ui/map";
-import { distanceMeters, fetchPlacesAround, type Place } from "@/lib/Osm";
+import { distanceMeters, fetchPlacesInBounds, type Place } from "@/lib/Osm";
 import { useToast } from "@/components/ui/Toast";
 import api from "@/context/apiClient";
 
@@ -420,14 +420,19 @@ export function MapPage() {
         setViewportPlacesLoading(true);
         setViewportPlacesError(null);
 
-        // Restrict Overpass radius between 800m and 3500m for responsiveness
-        const safeRadius = Math.min(3500, Math.max(800, radiusMeters));
+      // Restrict query to a maximum bbox span to avoid overloading Overpass
+        // on very low zoom levels. At zoom >= 13 the viewport is already bounded.
+        const south = bounds.getSouth();
+        const west = bounds.getWest();
+        const north = bounds.getNorth();
+        const east = bounds.getEast();
 
         try {
-          const places = await fetchPlacesAround(
-            centerLat,
-            centerLng,
-            safeRadius,
+          const places = await fetchPlacesInBounds(
+            south,
+            west,
+            north,
+            east,
             viewportAbortRef.current.signal,
           );
           setViewportPlaces(places);
@@ -450,11 +455,19 @@ export function MapPage() {
     [fetchLocivaData, viewportPlaces.length],
   );
 
-  // Initial load around center
+  // Initial load: use a ~4km bounding box around the default center
   useEffect(() => {
     fetchLocivaData(center[0], center[1], 8000);
     const controller = new AbortController();
-    fetchPlacesAround(center[0], center[1], 2500, controller.signal)
+    // ~0.018° lat/lng ≈ ~2km half-span per side
+    const halfSpan = 0.018;
+    fetchPlacesInBounds(
+      center[0] - halfSpan,
+      center[1] - halfSpan,
+      center[0] + halfSpan,
+      center[1] + halfSpan,
+      controller.signal,
+    )
       .then((places) => setViewportPlaces(places))
       .catch(() => {});
     return () => controller.abort();
@@ -1084,11 +1097,30 @@ export function MapPage() {
               <MapTileLayer
                 key="satellite"
                 name="Satellite"
-                rasterUrl="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                rasterAttribution="Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
+                rasterUrl={
+                  (import.meta.env.VITE_SATELLITE_TILE_URL as string) ||
+                  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                }
+                rasterAttribution={
+                  (import.meta.env.VITE_SATELLITE_ATTRIBUTION as string) ||
+                  "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
+                }
+                maxZoom={19}
               />
             ) : (
-              <MapTileLayer key="default" name="Default" />
+              <MapTileLayer
+                key="default"
+                name="Default"
+                rasterUrl={
+                  (import.meta.env.VITE_STANDARD_TILE_URL as string) ||
+                  "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+                }
+                rasterAttribution={
+                  (import.meta.env.VITE_STANDARD_ATTRIBUTION as string) ||
+                  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                }
+                maxZoom={19}
+              />
             )}
 
             <MapReadyGate>

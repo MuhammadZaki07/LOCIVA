@@ -11,10 +11,8 @@ import {
   ExternalLink,
   X,
   Target,
-  Sparkles,
   HelpCircle,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 export interface SavedCandidateItem {
   id: string;
@@ -268,7 +266,9 @@ export const SavedCandidatesPanel: React.FC<SavedCandidatesPanelProps> = ({
                     <span className="truncate">
                       {candidate.location?.address ||
                         candidate.location?.name ||
-                        `${candidate.latitude.toFixed(5)}, ${candidate.longitude.toFixed(5)}`}
+                        (Number.isFinite(Number(candidate.latitude)) && Number.isFinite(Number(candidate.longitude))
+                          ? `${Number(candidate.latitude).toFixed(5)}, ${Number(candidate.longitude).toFixed(5)}`
+                          : "Koordinat tersimpan")}
                     </span>
                   </div>
 

@@ -2,7 +2,7 @@ import React from "react";
 import { cn } from "@/lib/utils";
 import { Layers, Database, Globe, RefreshCw, AlertCircle, X } from "lucide-react";
 
-export type FilterCategory = "all" | "cafe" | "food" | "retail" | "school_campus" | "service";
+export type FilterCategory = "all" | "cafe" | "food" | "retail" | "school_campus" | "service" | "tourism" | "office";
 
 interface DataSourceControlProps {
   showMapsData: boolean;

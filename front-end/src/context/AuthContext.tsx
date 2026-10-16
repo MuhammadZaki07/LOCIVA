@@ -49,12 +49,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (data: LoginData): Promise<User> => {
     const response = await api.post("/auth/login", data);
     const token = response.data?.data?.token;
+    const userFromLogin = response.data?.data?.user;
 
     if (!token) {
       throw new Error("Authentication token was not provided.");
     }
 
     localStorage.setItem("token", token);
+
+    if (userFromLogin && userFromLogin.role) {
+      const normalizedUser: User = {
+        ...userFromLogin,
+        role: userFromLogin.role === "admin" ? "admin" : "user",
+      };
+      setUser(normalizedUser);
+      return normalizedUser;
+    }
 
     return await getUser();
   };
@@ -81,9 +91,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("User data was not provided.");
       }
 
-      setUser(userData);
+      const normalizedUser: User = {
+        ...userData,
+        role: userData.role === "admin" ? "admin" : "user",
+      };
 
-      return userData;
+      setUser(normalizedUser);
+
+      return normalizedUser;
     } catch (error) {
       localStorage.removeItem("token");
       setUser(null);

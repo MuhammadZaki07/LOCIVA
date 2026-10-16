@@ -823,8 +823,9 @@ export default function UserDashboard() {
                             <span className="block">Location Coordinates</span>
 
                             <span className="mt-1 block truncate font-medium text-slate-600">
-                              {Number(biz.latitude).toFixed(5)},{" "}
-                              {Number(biz.longitude).toFixed(5)}
+                              {Number.isFinite(Number(biz.latitude)) && Number.isFinite(Number(biz.longitude))
+                                ? `${Number(biz.latitude).toFixed(5)}, ${Number(biz.longitude).toFixed(5)}`
+                                : "-"}
                             </span>
                           </div>
 
@@ -1058,7 +1059,7 @@ export default function UserDashboard() {
                     size={14}
                   />
 
-                  {formData.latitude && formData.longitude ? (
+                  {Number.isFinite(parseFloat(formData.latitude)) && Number.isFinite(parseFloat(formData.longitude)) ? (
                     <span className="font-medium text-ink">
                       {parseFloat(formData.latitude).toFixed(6)},{" "}
                       {parseFloat(formData.longitude).toFixed(6)}

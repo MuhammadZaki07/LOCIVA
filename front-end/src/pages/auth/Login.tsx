@@ -75,7 +75,11 @@ export default function Login() {
         variant: "success",
       });
 
-      navigate(loggedInUser.role === "admin" ? "/admin" : "/dashboard");
+      if (loggedInUser.role === "admin") {
+        navigate("/admin", { replace: true });
+      } else {
+        navigate("/dashboard", { replace: true });
+      }
     } catch (err: unknown) {
       setEmail("");
       setPassword("");

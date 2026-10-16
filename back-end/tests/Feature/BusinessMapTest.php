@@ -221,4 +221,66 @@ class BusinessMapTest extends TestCase
         $deleteRes->assertStatus(200)
             ->assertJsonPath('success', true);
     }
+
+    public function test_business_creation_fails_when_name_is_missing(): void
+    {
+        $user = User::first() ?? User::factory()->create();
+        Sanctum::actingAs($user);
+        $businessType = BusinessType::first();
+
+        // 1. Missing 'name' key completely
+        $resMissing = $this->postJson('/api/businesses', [
+            'description'      => 'Tanpa nama',
+            'business_type_id' => $businessType->id,
+            'latitude'         => -6.2100,
+            'longitude'        => 106.8500,
+            'address'          => 'Jl. Test No. 1',
+        ]);
+
+        $resMissing->assertStatus(422)
+            ->assertJsonValidationErrors(['name']);
+
+        // 2. Empty string 'name'
+        $resEmpty = $this->postJson('/api/businesses', [
+            'name'             => '',
+            'description'      => 'Nama string kosong',
+            'business_type_id' => $businessType->id,
+            'latitude'         => -6.2100,
+            'longitude'        => 106.8500,
+            'address'          => 'Jl. Test No. 2',
+        ]);
+
+        $resEmpty->assertStatus(422)
+            ->assertJsonValidationErrors(['name']);
+    }
+
+    public function test_business_creation_succeeds_with_valid_name(): void
+    {
+        $user = User::first() ?? User::factory()->create();
+        Sanctum::actingAs($user);
+        $businessType = BusinessType::first();
+
+        $response = $this->postJson('/api/businesses', [
+            'name'             => 'Usaha Baru Valid QA',
+            'description'      => 'Pengujian validasi nama bisnis',
+            'business_type_id' => $businessType->id,
+            'latitude'         => -6.2150,
+            'longitude'        => 106.8550,
+            'address'          => 'Jl. Validasi No. 42',
+        ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.name', 'Usaha Baru Valid QA');
+
+        $bizId = $response->json('data.id');
+        $this->assertDatabaseHas('businesses', [
+            'id'   => $bizId,
+            'name' => 'Usaha Baru Valid QA',
+        ]);
+
+        // Cleanup
+        $this->deleteJson("/api/businesses/{$bizId}")->assertStatus(200);
+    }
 }
+

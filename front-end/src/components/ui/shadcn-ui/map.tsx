@@ -222,12 +222,41 @@ function Map({
     )
 }
 
-const DEFAULT_VECTOR_STYLE_URL = "https://tiles.openfreemap.org/styles/positron"
+export const DEFAULT_RASTER_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+export const DEFAULT_RASTER_ATTRIBUTION =
+    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+
+// Standard OpenStreetMap MapLibre style definition matching openstreetmap.org cartography
+export const OSM_STANDARD_STYLE_DATA_URI =
+    "data:application/json;charset=utf-8," +
+    encodeURIComponent(
+        JSON.stringify({
+            version: 8,
+            name: "OpenStreetMap Standard",
+            sources: {
+                "osm-standard-tiles": {
+                    type: "raster",
+                    tiles: [DEFAULT_RASTER_URL],
+                    tileSize: 256,
+                    attribution: DEFAULT_RASTER_ATTRIBUTION,
+                    maxzoom: 19,
+                },
+            },
+            layers: [
+                {
+                    id: "osm-standard-tiles-layer",
+                    type: "raster",
+                    source: "osm-standard-tiles",
+                    minzoom: 0,
+                    maxzoom: 19,
+                },
+            ],
+        })
+    )
+
+const DEFAULT_VECTOR_STYLE_URL = OSM_STANDARD_STYLE_DATA_URI
 const DEFAULT_DARK_VECTOR_STYLE_URL =
     "https://tiles.openfreemap.org/styles/dark"
-const DEFAULT_RASTER_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-const DEFAULT_RASTER_ATTRIBUTION =
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 
 interface MapTileSourceProps {
     vectorStyleUrl?: string

@@ -5,6 +5,7 @@ import { formatDistance } from "@/lib/Osm";
 import {
   Coffee, Utensils, GraduationCap, School, ShoppingBag, MapPin,
   Bus, Landmark, Pill, Wrench, Dumbbell, Trees, Building2,
+  Clock, Globe, ExternalLink, Compass, Briefcase,
 } from "lucide-react";
 
 interface PoiMarkerProps {
@@ -38,6 +39,8 @@ export const PoiMarker: React.FC<PoiMarkerProps> = ({
       case "sport":        return <Dumbbell size={12} className="text-white" />;
       case "park":         return <Trees size={12} className="text-white" />;
       case "commercial":   return <Building2 size={12} className="text-white" />;
+      case "tourism":      return <Compass size={12} className="text-white" />;
+      case "office":       return <Briefcase size={12} className="text-white" />;
       default:             return <MapPin size={12} className="text-white" />;
     }
   };
@@ -70,7 +73,7 @@ export const PoiMarker: React.FC<PoiMarkerProps> = ({
       popupAnchor={[0, -14]}
     >
       <MapPopup className="lociva-popup-wrapper">
-        <div className="p-3 space-y-2 text-left">
+        <div className="p-3 space-y-2 text-left min-w-[200px] max-w-[280px]">
           {/* Header */}
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
             <span
@@ -93,6 +96,34 @@ export const PoiMarker: React.FC<PoiMarkerProps> = ({
             </p>
           )}
 
+          {/* Opening Hours */}
+          {place.openingHours && (
+            <p className="text-xs text-slate-600 flex items-start gap-1">
+              <Clock size={11} className="shrink-0 mt-0.5 text-slate-400" />
+              <span className="line-clamp-2">{place.openingHours}</span>
+            </p>
+          )}
+
+          {/* Website */}
+          {place.website && (
+            <p className="text-xs text-indigo-600 flex items-center gap-1">
+              <Globe size={11} className="shrink-0 text-indigo-500" />
+              <a
+                href={place.website.startsWith("http") ? place.website : `https://${place.website}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:underline truncate max-w-[220px]"
+              >
+                {place.website.replace(/^https?:\/\//, "")}
+              </a>
+            </p>
+          )}
+
+          {/* Coordinates */}
+          <div className="text-[10.5px] text-slate-400 font-mono">
+            {place.lat.toFixed(5)}, {place.lng.toFixed(5)}
+          </div>
+
           {/* Distance from candidate */}
           {distanceFromCandidate !== undefined && (
             <p className="text-xs font-semibold text-indigo-600">
@@ -111,7 +142,16 @@ export const PoiMarker: React.FC<PoiMarkerProps> = ({
           {/* Footer */}
           <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
             <span>Source: OpenStreetMap</span>
-            <span className="font-mono">{place.id}</span>
+            <a
+              href={`https://www.openstreetmap.org/${place.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5 hover:underline"
+              title="View on OpenStreetMap"
+            >
+              <span>{place.id}</span>
+              <ExternalLink size={10} />
+            </a>
           </div>
         </div>
       </MapPopup>

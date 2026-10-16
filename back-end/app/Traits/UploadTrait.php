@@ -15,7 +15,9 @@ trait UploadTrait
 
     public function remove(string $file): void
     {
-        if ($this->exist($file)) {
+        if (Storage::disk('public')->exists($file)) {
+            Storage::disk('public')->delete($file);
+        } elseif ($this->exist($file)) {
             Storage::delete($file);
         } else {
             Storage::delete('public/' . $file);
@@ -30,7 +32,7 @@ trait UploadTrait
 
     public function exist(string $file): bool
     {
-        return Storage::exists($file);
+        return Storage::disk('public')->exists($file) || Storage::exists($file);
     }
 
     /**

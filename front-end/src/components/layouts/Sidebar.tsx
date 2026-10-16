@@ -9,6 +9,9 @@ import {
   UserIcon,
   AlertTriangle,
   Store,
+  CheckCircle2,
+  RefreshCw,
+  Activity,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import Logo from "@/components/sections/Logo";
@@ -20,6 +23,9 @@ interface SidebarProps {
 
 const navLinks = [
   { to: "/admin", label: "dashboard overview", icon: LayoutDashboard },
+  { to: "/admin?tab=quality", label: "data quality center", icon: CheckCircle2 },
+  { to: "/admin?tab=sources", label: "data sources & sync", icon: RefreshCw },
+  { to: "/admin?tab=health", label: "system health & audit", icon: Activity },
   { to: "/admin/reports", label: "moderasi laporan", icon: AlertTriangle },
   { to: "/admin/business-types", label: "katalog & bobot usaha", icon: Store },
   { to: "/admin/users", label: "user management", icon: Users },

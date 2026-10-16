@@ -117,5 +117,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/admin/users/{id}/toggle-role', [AuthController::class, 'toggleUserRole']);
         Route::apiResource('/area', AreaController::class)->except(['index']);
         Route::apiResource('/report-category', ReportCategoryController::class)->only(['create', 'update', 'destroy']);
+
+        // Admin Operations, Health, Audit, Data Quality & Sync
+        Route::get('/admin/metrics', [\App\Http\Controllers\AdminManagementController::class, 'metrics']);
+        Route::get('/admin/system-health', [\App\Http\Controllers\AdminManagementController::class, 'systemHealth']);
+        Route::get('/admin/audit-logs', [\App\Http\Controllers\AdminManagementController::class, 'auditLogs']);
+        Route::get('/admin/data-quality', [\App\Http\Controllers\AdminManagementController::class, 'dataQuality']);
+        Route::get('/admin/data-sources', [\App\Http\Controllers\AdminManagementController::class, 'dataSources']);
+        Route::post('/admin/data-sources/{id}/sync', [\App\Http\Controllers\AdminManagementController::class, 'syncDataSource']);
+        Route::get('/admin/data-sync-logs', [\App\Http\Controllers\AdminManagementController::class, 'dataSyncLogs']);
     });
 });
+

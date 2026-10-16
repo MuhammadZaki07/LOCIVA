@@ -16,7 +16,9 @@ export type CategoryId =
   | "retail"
   | "service"
   | "transit"
-  | "market";
+  | "market"
+  | "tourism"
+  | "office";
 
 export interface CategoryMeta {
   id: CategoryId;
@@ -33,6 +35,8 @@ export const CATEGORIES: readonly CategoryMeta[] = [
   { id: "service", label: "Services & Healthcare", color: "#475569" },
   { id: "transit", label: "Transit & Stations", color: "#0ea5e9" },
   { id: "market", label: "Traditional Markets", color: "#b45309" },
+  { id: "tourism", label: "Tourism & Attractions", color: "#06b6d4" },
+  { id: "office", label: "Offices & Public Facilities", color: "#64748b" },
 ] as const;
 
 export const CATEGORY_BY_ID: Record<CategoryId, CategoryMeta> = Object.fromEntries(
@@ -70,6 +74,8 @@ interface OverpassElement {
   lat?: number;
   lon?: number;
   center?: { lat: number; lon: number };
+  bounds?: { minlat: number; minlon: number; maxlat: number; maxlon: number };
+  geometry?: Array<{ lat: number; lon: number }>;
   tags?: Record<string, string>;
 }
 
@@ -99,12 +105,14 @@ interface PhotonFeature {
   geometry: { coordinates: [number, number] };
 }
 
-// Resilient mirror list for Overpass API
-const OVERPASS_ENDPOINTS = [
+// Resilient mirror list for Overpass API (with custom VITE_OVERPASS_URL support)
+const OVERPASS_ENDPOINTS: readonly string[] = [
+  ...(import.meta.env.VITE_OVERPASS_URL ? [import.meta.env.VITE_OVERPASS_URL as string] : []),
   "https://overpass-api.de/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
-] as const;
+];
 
 const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
 const PHOTON_URL = "https://photon.komoot.io/api";
@@ -118,6 +126,8 @@ function classify(tags: Record<string, string>): CategoryId | null {
   const building = tags.building;
   const leisure = tags.leisure;
   const tourism = tags.tourism;
+  const office = tags.office;
+  const historic = tags.historic;
 
   // Cafes & Coffee
   if (
@@ -231,9 +241,38 @@ function classify(tags: Record<string, string>): CategoryId | null {
     leisure === "fitness_centre" ||
     tourism === "hotel" ||
     tourism === "guest_house" ||
-    tourism === "hostel"
+    tourism === "hostel" ||
+    tourism === "motel"
   ) {
     return "service";
+  }
+
+  // Tourism, Attractions & Culture
+  if (
+    tourism === "attraction" ||
+    tourism === "museum" ||
+    tourism === "viewpoint" ||
+    tourism === "gallery" ||
+    tourism === "theme_park" ||
+    tourism === "zoo" ||
+    tourism === "aquarium" ||
+    historic === "monument" ||
+    historic === "memorial" ||
+    historic === "castle"
+  ) {
+    return "tourism";
+  }
+
+  // Offices, Public Infrastructure & Community Facilities
+  if (
+    office ||
+    amenity === "place_of_worship" ||
+    amenity === "community_centre" ||
+    amenity === "townhall" ||
+    amenity === "library" ||
+    amenity === "courthouse"
+  ) {
+    return "office";
   }
 
   // Transit, Stations & Commuter Infrastructure
@@ -278,48 +317,140 @@ function resolveName(tags: Record<string, string>): string | null {
   );
 }
 
+/**
+ * Generate a human-readable fallback display name for unnamed POIs
+ * using their amenity/shop type and address fragment.
+ */
+function generateFallbackName(tags: Record<string, string>): string {
+  const typeLabel =
+    tags.amenity?.replace(/_/g, " ") ??
+    tags.shop?.replace(/_/g, " ") ??
+    tags.tourism?.replace(/_/g, " ") ??
+    tags.leisure?.replace(/_/g, " ") ??
+    tags.office?.replace(/_/g, " ") ??
+    tags.historic?.replace(/_/g, " ") ??
+    tags.public_transport?.replace(/_/g, " ") ??
+    tags.highway?.replace(/_/g, " ") ??
+    tags.railway?.replace(/_/g, " ") ??
+    "place";
+
+  const capitalised = typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1);
+
+  const locationHint =
+    tags["addr:street"] ??
+    tags["addr:suburb"] ??
+    tags["addr:village"] ??
+    tags["addr:city"] ??
+    "";
+
+  return locationHint ? `${capitalised} — ${locationHint}` : capitalised;
+}
+
 function aroundQuery(lat: number, lng: number, radius: number): string {
   const around = `(around:${Math.round(radius)},${lat.toFixed(5)},${lng.toFixed(5)})`;
   return `[out:json][timeout:25];
 (
-  nwr["amenity"~"^(restaurant|fast_food|food_court|cafe|bar|pub|ice_cream|canteen|bistro|school|kindergarten|childcare|university|college|marketplace|bus_station|ferry_terminal|fuel|laundry|bank|atm|pharmacy|clinic|hospital|post_office)$"]${around};
+  nwr["amenity"~"^(restaurant|fast_food|food_court|cafe|bar|pub|ice_cream|canteen|bistro|school|kindergarten|childcare|university|college|marketplace|bus_station|ferry_terminal|fuel|laundry|bank|atm|pharmacy|clinic|hospital|post_office|place_of_worship|community_centre|townhall|library)$"]${around};
   nwr["shop"~"^(convenience|supermarket|grocery|bakery|coffee|tea|kiosk|greengrocer|hairdresser|laundry|dry_cleaning|mall|department_store|general|meat|seafood|dairy|tailor|clothes|fashion|shoes|electronics|mobile_phone|hardware|stationery|books|beauty|cosmetics|chemist|optician|car_repair|motorcycle_repair)$"]${around};
   nwr["highway"="bus_stop"]${around};
   nwr["public_transport"~"^(station|stop_position|platform)$"]${around};
   nwr["railway"~"^(station|halt|subway_entrance)$"]${around};
   nwr["building"~"^(university|college|school)$"]${around};
-  nwr["tourism"~"^(hotel|guest_house|hostel)$"]${around};
-  nwr["leisure"~"^(fitness_centre|sports_centre)$"]${around};
+  nwr["tourism"~"^(hotel|guest_house|hostel|motel|attraction|museum|viewpoint|gallery|theme_park)$"]${around};
+  nwr["leisure"~"^(fitness_centre|sports_centre|park)$"]${around};
+  nwr["office"]${around};
 );
 out center tags 500;`;
 }
 
 // Bounding box query for viewport loading
 export function bboxQuery(south: number, west: number, north: number, east: number): string {
-  const bbox = `${south.toFixed(5)},${west.toFixed(5)},${north.toFixed(5)},${east.toFixed(5)}`;
+  // Normalize, order, and clamp bounding box
+  const minLat = Math.max(-90, Math.min(south, north));
+  const maxLat = Math.min(90, Math.max(south, north));
+  const minLon = Math.max(-180, Math.min(west, east));
+  const maxLon = Math.min(180, Math.max(west, east));
+
+  const bbox = `${minLat.toFixed(5)},${minLon.toFixed(5)},${maxLat.toFixed(5)},${maxLon.toFixed(5)}`;
   return `[out:json][timeout:25];
 (
-  nwr["amenity"~"^(restaurant|fast_food|food_court|cafe|bar|pub|ice_cream|canteen|bistro|school|kindergarten|childcare|university|college|marketplace|bus_station|ferry_terminal|fuel|laundry|bank|atm|pharmacy|clinic|hospital|post_office)$"](${bbox});
+  nwr["amenity"~"^(restaurant|fast_food|food_court|cafe|bar|pub|ice_cream|canteen|bistro|school|kindergarten|childcare|university|college|marketplace|bus_station|ferry_terminal|fuel|laundry|bank|atm|pharmacy|clinic|hospital|post_office|place_of_worship|community_centre|townhall|library)$"](${bbox});
   nwr["shop"~"^(convenience|supermarket|grocery|bakery|coffee|tea|kiosk|greengrocer|hairdresser|laundry|dry_cleaning|mall|department_store|general|meat|seafood|dairy|tailor|clothes|fashion|shoes|electronics|mobile_phone|hardware|stationery|books|beauty|cosmetics|chemist|optician|car_repair|motorcycle_repair)$"](${bbox});
   nwr["highway"="bus_stop"](${bbox});
   nwr["public_transport"~"^(station|stop_position|platform)$"](${bbox});
   nwr["railway"~"^(station|halt|subway_entrance)$"](${bbox});
   nwr["building"~"^(university|college|school)$"](${bbox});
-  nwr["tourism"~"^(hotel|guest_house|hostel)$"](${bbox});
-  nwr["leisure"~"^(fitness_centre|sports_centre)$"](${bbox});
+  nwr["tourism"~"^(hotel|guest_house|hostel|motel|attraction|museum|viewpoint|gallery|theme_park)$"](${bbox});
+  nwr["leisure"~"^(fitness_centre|sports_centre|park)$"](${bbox});
+  nwr["office"](${bbox});
 );
 out center tags 500;`;
 }
 
-// Spatial cache with 5-minute TTL
-const placeCache = new Map<string, { at: number; data: Place[] }>();
-const CACHE_MS = 5 * 60 * 1000;
+// Master spatial POI repository: stores all loaded POIs by their unique OSM ID
+const globalPoiStore = new Map<string, Place>();
+
+// Active cached bounding box regions with timestamp
+interface CachedRegion {
+  south: number;
+  west: number;
+  north: number;
+  east: number;
+  at: number;
+}
+const cachedRegions: CachedRegion[] = [];
+const CACHE_MS = 5 * 60 * 1000; // 5-minute spatial cache TTL
 
 // In-flight request deduplication map to avoid simultaneous duplicate queries
 const inFlightRequests = new Map<string, Promise<Place[]>>();
 
 function quantizeCoord(coord: number, step = 0.005): number {
   return Math.round(coord / step) * step;
+}
+
+/**
+ * Filter all known places from the global store that fall strictly inside the requested bbox.
+ */
+function getPlacesInBoundsFromStore(
+  south: number,
+  west: number,
+  north: number,
+  east: number,
+  markStale = false,
+): Place[] {
+  const result: Place[] = [];
+  for (const p of globalPoiStore.values()) {
+    if (p.lat >= south && p.lat <= north && p.lng >= west && p.lng <= east) {
+      result.push(markStale ? { ...p, isStale: true } : p);
+    }
+  }
+  return result;
+}
+
+/**
+ * Check if the requested bounding box is completely covered by an unexpired cached region.
+ */
+function isRegionCovered(
+  south: number,
+  west: number,
+  north: number,
+  east: number,
+): boolean {
+  const now = Date.now();
+  // Clean up expired regions
+  for (let i = cachedRegions.length - 1; i >= 0; i--) {
+    if (now - cachedRegions[i].at > CACHE_MS) {
+      cachedRegions.splice(i, 1);
+    }
+  }
+
+  return cachedRegions.some(
+    (r) =>
+      r.south <= south + 0.001 &&
+      r.north >= north - 0.001 &&
+      r.west <= west + 0.001 &&
+      r.east >= east - 0.001,
+  );
 }
 
 /**
@@ -337,12 +468,15 @@ async function postOverpass(body: URLSearchParams, signal?: AbortSignal): Promis
 
     attempt++;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8500);
+    // 18-second timeout per mirror (sufficient for Overpass query compilation)
+    const timeoutId = setTimeout(() => controller.abort(), 18000);
 
     const onParentAbort = () => controller.abort();
     if (signal) {
       signal.addEventListener("abort", onParentAbort, { once: true });
     }
+
+    const tStart = performance.now();
 
     try {
       // Optional brief backoff for second and third mirrors
@@ -359,6 +493,7 @@ async function postOverpass(body: URLSearchParams, signal?: AbortSignal): Promis
         signal: controller.signal,
       });
 
+      const durationMs = performance.now() - tStart;
       clearTimeout(timeoutId);
       if (signal) {
         signal.removeEventListener("abort", onParentAbort);
@@ -366,7 +501,7 @@ async function postOverpass(body: URLSearchParams, signal?: AbortSignal): Promis
 
       // Retry on transient rate limit or server busy
       if (res.status === 429 || res.status === 502 || res.status === 503 || res.status === 504) {
-        console.warn(`[LOCIVA Overpass] Mirror ${endpoint} returned ${res.status}. Failing over to next mirror...`);
+        console.warn(`[LOCIVA Overpass] Mirror ${endpoint} returned HTTP ${res.status} after ${durationMs.toFixed(0)}ms. Failing over...`);
         lastError = new Error(`Overpass status ${res.status}`);
         continue;
       }
@@ -381,8 +516,17 @@ async function postOverpass(body: URLSearchParams, signal?: AbortSignal): Promis
         return [];
       }
 
-      return parseElements(json.elements);
+      const rawCount = json.elements.length;
+      const parsed = parseElements(json.elements);
+      if (import.meta.env.DEV) {
+        console.info(
+          `[LOCIVA Overpass] ${endpoint} returned HTTP 200 in ${durationMs.toFixed(0)}ms (${rawCount} raw elements -> ${parsed.length} normalized POIs)`,
+        );
+      }
+
+      return parsed;
     } catch (err: unknown) {
+      const durationMs = performance.now() - tStart;
       clearTimeout(timeoutId);
       if (signal) {
         signal.removeEventListener("abort", onParentAbort);
@@ -393,7 +537,10 @@ async function postOverpass(body: URLSearchParams, signal?: AbortSignal): Promis
       }
 
       lastError = err;
-      console.warn(`[LOCIVA Overpass] Request to ${endpoint} failed:`, (err as Error)?.message || err);
+      console.warn(
+        `[LOCIVA Overpass] Mirror ${endpoint} failed after ${durationMs.toFixed(0)}ms:`,
+        (err as Error)?.message || err,
+      );
       // Continue to next mirror
     }
   }
@@ -411,53 +558,19 @@ export async function fetchPlacesAround(
   radius: number,
   signal?: AbortSignal,
 ): Promise<Place[]> {
-  // Quantize coordinates so minor map vibrations/pans reuse cache
-  const qLat = quantizeCoord(lat).toFixed(3);
-  const qLng = quantizeCoord(lng).toFixed(3);
-  const qRad = Math.round(radius / 250) * 250;
-  const cacheKey = `${qLat},${qLng},${qRad}`;
-
-  const cached = placeCache.get(cacheKey);
-  if (cached && Date.now() - cached.at < CACHE_MS) {
-    return cached.data;
-  }
-
-  // Deduplicate in-flight requests
-  const pending = inFlightRequests.get(cacheKey);
-  if (pending) {
-    return pending;
-  }
-
-  const queryPromise = (async () => {
-    try {
-      const body = new URLSearchParams({ data: aroundQuery(lat, lng, radius) });
-      const data = await postOverpass(body, signal);
-      placeCache.set(cacheKey, { at: Date.now(), data });
-      return data;
-    } catch (err: unknown) {
-      // If parent was aborted, rethrow
-      if (err instanceof DOMException && err.name === "AbortError") {
-        throw err;
-      }
-
-      // If network/mirror failure occurred but we have an older cache entry, preserve it with isStale flag
-      if (cached && cached.data.length > 0) {
-        console.info("[LOCIVA Overpass] API unavailable. Serving stale cached places.");
-        return cached.data.map((p) => ({ ...p, isStale: true }));
-      }
-
-      throw err;
-    } finally {
-      inFlightRequests.delete(cacheKey);
-    }
-  })();
-
-  inFlightRequests.set(cacheKey, queryPromise);
-  return queryPromise;
+  const halfSpan = radius / 111320;
+  return fetchPlacesInBounds(
+    lat - halfSpan,
+    lng - halfSpan,
+    lat + halfSpan,
+    lng + halfSpan,
+    signal,
+  );
 }
 
 /**
  * Fetch POIs within a geographic bounding box (viewport).
+ * Uses a true bbox Overpass query with region caching and strict viewport boundary filtering.
  */
 export async function fetchPlacesInBounds(
   south: number,
@@ -466,14 +579,77 @@ export async function fetchPlacesInBounds(
   east: number,
   signal?: AbortSignal,
 ): Promise<Place[]> {
-  const centerLat = (south + north) / 2;
-  const centerLng = (west + east) / 2;
-  const radius = Math.min(
-    3500,
-    Math.max(800, distanceMeters(centerLat, centerLng, north, east))
-  );
+  // Normalize, order, and clamp bounding box
+  const minLat = Math.max(-90, Math.min(south, north));
+  const maxLat = Math.min(90, Math.max(south, north));
+  const minLng = Math.max(-180, Math.min(west, east));
+  const maxLng = Math.min(180, Math.max(west, east));
 
-  return fetchPlacesAround(centerLat, centerLng, radius, signal);
+  // Check if this viewport region is already covered by cached results
+  if (isRegionCovered(minLat, minLng, maxLat, maxLng)) {
+    const cachedPlaces = getPlacesInBoundsFromStore(minLat, minLng, maxLat, maxLng);
+    if (import.meta.env.DEV) {
+      console.info(
+        `[LOCIVA Overpass] Spatial cache HIT for viewport [${minLat.toFixed(3)}, ${minLng.toFixed(3)} to ${maxLat.toFixed(3)}, ${maxLng.toFixed(3)}]. Serving ${cachedPlaces.length} POIs.`,
+      );
+    }
+    return cachedPlaces;
+  }
+
+  // Quantize bbox edges to ~0.005° steps (~500m) to deduplicate simultaneous requests
+  const qS = quantizeCoord(minLat);
+  const qW = quantizeCoord(minLng);
+  const qN = quantizeCoord(maxLat);
+  const qE = quantizeCoord(maxLng);
+  const cacheKey = `bbox:${qS.toFixed(3)},${qW.toFixed(3)},${qN.toFixed(3)},${qE.toFixed(3)}`;
+
+  const pending = inFlightRequests.get(cacheKey);
+  if (pending) return pending;
+
+  const queryPromise = (async () => {
+    try {
+      const body = new URLSearchParams({ data: bboxQuery(minLat, minLng, maxLat, maxLng) });
+      const places = await postOverpass(body, signal);
+
+      // Store in global POI store
+      for (const p of places) {
+        globalPoiStore.set(p.id, p);
+      }
+
+      // Record cached region
+      cachedRegions.push({
+        south: minLat,
+        west: minLng,
+        north: maxLat,
+        east: maxLng,
+        at: Date.now(),
+      });
+
+      // Return only the POIs falling inside the requested viewport
+      return getPlacesInBoundsFromStore(minLat, minLng, maxLat, maxLng);
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") throw err;
+
+      // Graceful fallback: return cached places strictly within THIS viewport
+      const localCached = getPlacesInBoundsFromStore(minLat, minLng, maxLat, maxLng, true);
+      if (localCached.length > 0) {
+        if (import.meta.env.DEV) {
+          console.info(
+            `[LOCIVA Overpass] Upstream unavailable. Serving ${localCached.length} stale cached POIs within visible viewport.`,
+          );
+        }
+        return localCached;
+      }
+
+      // Do NOT return unrelated places from distant viewports!
+      throw err;
+    } finally {
+      inFlightRequests.delete(cacheKey);
+    }
+  })();
+
+  inFlightRequests.set(cacheKey, queryPromise);
+  return queryPromise;
 }
 
 function parseElements(elements: OverpassElement[]): Place[] {
@@ -486,15 +662,31 @@ function parseElements(elements: OverpassElement[]): Place[] {
     if (!tags) continue;
 
     // Resilient name resolution (supports brand, operator, name:en, name:id)
-    const name = resolveName(tags);
-    if (!name) continue;
+    // If still no name, generate a descriptive fallback — do NOT silently drop unnamed POIs.
+    const name = resolveName(tags) ?? generateFallbackName(tags);
 
     const category = classify(tags);
     if (!category) continue;
 
-    const lat = el.lat ?? el.center?.lat;
-    const lng = el.lon ?? el.center?.lon;
-    if (lat === undefined || lng === undefined) continue;
+    // Handle nodes (lat, lon), ways with center, ways/relations with bounds, or geometry centroids
+    let lat: number | undefined = el.lat ?? el.center?.lat;
+    let lng: number | undefined = el.lon ?? el.center?.lon;
+
+    if (lat === undefined || lng === undefined) {
+      if (el.bounds) {
+        lat = (el.bounds.minlat + el.bounds.maxlat) / 2;
+        lng = (el.bounds.minlon + el.bounds.maxlon) / 2;
+      } else if (Array.isArray(el.geometry) && el.geometry.length > 0) {
+        const sum = el.geometry.reduce(
+          (acc, pt) => ({ lat: acc.lat + pt.lat, lon: acc.lon + pt.lon }),
+          { lat: 0, lon: 0 },
+        );
+        lat = sum.lat / el.geometry.length;
+        lng = sum.lon / el.geometry.length;
+      }
+    }
+
+    if (lat === undefined || lng === undefined || isNaN(lat) || isNaN(lng)) continue;
 
     const id = `${el.type}/${el.id}`;
     if (seen.has(id)) continue;

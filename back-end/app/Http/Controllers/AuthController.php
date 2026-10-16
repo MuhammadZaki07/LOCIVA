@@ -9,6 +9,7 @@ use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
@@ -80,6 +81,8 @@ class AuthController extends Controller
                 ->createToken('auth_token')
                 ->plainTextToken;
 
+            $user->role = $user->getRoleNames()->first() ?? 'user';
+
             return ApiResponse::success(
                 [
                     'user' => $user,
@@ -105,7 +108,7 @@ class AuthController extends Controller
         try {
             $user = $request->user();
 
-            $user->role = $user->getRoleNames()->first();
+            $user->role = $user->getRoleNames()->first() ?? 'user';
 
             return ApiResponse::success(
                 $user,
@@ -251,6 +254,15 @@ class AuthController extends Controller
         $user = User::findOrFail($id);
 
         if ($user->hasRole('admin')) {
+            if (Auth::id() === $user->id) {
+                return ApiResponse::error('Anda tidak dapat mendemosi role akun Anda sendiri.', 400);
+            }
+
+            $adminCount = User::role('admin')->count();
+            if ($adminCount <= 1) {
+                return ApiResponse::error('Tidak dapat mengubah role akun admin terakhir untuk mencegah penguncian sistem.', 400);
+            }
+
             $user->removeRole('admin');
             $user->assignRole('user');
         } else {

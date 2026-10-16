@@ -10,4 +10,14 @@ class DataSource extends Model
 {
     use HasUuids, SoftDeletes;
     protected $guarded = ['id'];
+
+    public function syncLogs()
+    {
+        return $this->hasMany(DataSyncLog::class);
+    }
+
+    public function latestSyncLog()
+    {
+        return $this->hasOne(DataSyncLog::class)->latestOfMany('started_at');
+    }
 }

@@ -319,7 +319,7 @@ class LocationAnalysisService
                 $weights = [];
                 foreach ($dbWeights as $row) {
                     $mapped = self::CATEGORY_MAP[$row->factor] ?? $row->factor;
-                    $weights[$mapped] = (int) $row->weight;
+                    $weights[$mapped] = (float) $row->weight;
                 }
                 if ($weights !== []) {
                     return $weights;
@@ -336,7 +336,7 @@ class LocationAnalysisService
                     continue;
                 }
                 $mapped = self::CATEGORY_MAP[$row['category']] ?? $row['category'];
-                $weights[$mapped] = (int) $row['weight'];
+                $weights[$mapped] = (float) $row['weight'];
             }
             if ($weights !== []) {
                 return $weights;

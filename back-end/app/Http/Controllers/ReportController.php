@@ -115,6 +115,7 @@ class ReportController extends Controller
         $validated['status']   = 'reported';
         $validated['severity'] = $validated['severity'] ?? 'medium';
 
+        $uploadedPaths = [];
         DB::beginTransaction();
         try {
             $report = Report::create($validated);
@@ -130,6 +131,7 @@ class ReportController extends Controller
             foreach ($files as $file) {
                 if (!$file) continue;
                 $path = $this->upload('reports', $file);
+                $uploadedPaths[] = $path;
                 ReportMedia::create([
                     'report_id' => $report->id,
                     'file_path' => $path,
@@ -152,6 +154,9 @@ class ReportController extends Controller
             );
         } catch (\Throwable $e) {
             DB::rollBack();
+            foreach ($uploadedPaths as $uploadedPath) {
+                $this->remove($uploadedPath);
+            }
             return ApiResponse::error('Failed to create report: ' . $e->getMessage(), 500);
         }
     }
@@ -176,12 +181,14 @@ class ReportController extends Controller
 
         $files = $request->hasFile('images') ? $request->file('images') : [$request->file('image')];
         $created = [];
+        $uploadedPaths = [];
 
         DB::beginTransaction();
         try {
             foreach ($files as $file) {
                 if (!$file) continue;
                 $path = $this->upload('reports', $file);
+                $uploadedPaths[] = $path;
                 $created[] = ReportMedia::create([
                     'report_id' => $report->id,
                     'file_path' => $path,
@@ -195,6 +202,9 @@ class ReportController extends Controller
             return ApiResponse::success($created, 'Media uploaded successfully', 201);
         } catch (\Throwable $e) {
             DB::rollBack();
+            foreach ($uploadedPaths as $uploadedPath) {
+                $this->remove($uploadedPath);
+            }
             return ApiResponse::error('Failed to upload media: ' . $e->getMessage(), 500);
         }
     }
