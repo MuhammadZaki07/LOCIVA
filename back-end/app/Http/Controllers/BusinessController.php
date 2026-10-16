@@ -19,7 +19,8 @@ class BusinessController extends Controller
     public function __construct(
         protected BusinessRepositoryInterface $businessRepository,
         protected SimulationServiceInterface $simulationService
-    ) {}
+    ) {
+    }
 
     /**
      * Get LOCIVA Internal businesses for the map layer.
@@ -28,16 +29,16 @@ class BusinessController extends Controller
     public function mapIndex(BusinessMapQueryRequest $request)
     {
         try {
-            $lat      = $request->filled('lat') ? (float) $request->lat : null;
-            $lng      = $request->filled('lng') ? (float) $request->lng : null;
-            $radius   = $request->filled('radius') ? (float) $request->radius : null;
-            $minLat   = $request->filled('min_lat') ? (float) $request->min_lat : null;
-            $minLng   = $request->filled('min_lng') ? (float) $request->min_lng : null;
-            $maxLat   = $request->filled('max_lat') ? (float) $request->max_lat : null;
-            $maxLng   = $request->filled('max_lng') ? (float) $request->max_lng : null;
+            $lat = $request->filled('lat') ? (float) $request->lat : null;
+            $lng = $request->filled('lng') ? (float) $request->lng : null;
+            $radius = $request->filled('radius') ? (float) $request->radius : null;
+            $minLat = $request->filled('min_lat') ? (float) $request->min_lat : null;
+            $minLng = $request->filled('min_lng') ? (float) $request->min_lng : null;
+            $maxLat = $request->filled('max_lat') ? (float) $request->max_lat : null;
+            $maxLng = $request->filled('max_lng') ? (float) $request->max_lng : null;
             $category = $request->input('category');
-            $search   = $request->input('search');
-            $limit    = (int) $request->input('limit', 100);
+            $search = $request->input('search');
+            $limit = (int) $request->input('limit', 100);
 
             $businesses = $this->businessRepository->getMapBusinesses(
                 $lat,
@@ -80,11 +81,11 @@ class BusinessController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'description'      => 'nullable|string',
+            'description' => 'nullable|string',
             'business_type_id' => 'required|exists:business_types,id',
-            'latitude'         => 'required|numeric|between:-90,90',
-            'longitude'        => 'required|numeric|between:-180,180',
-            'address'          => 'nullable|string|max:500',
+            'latitude' => 'required|numeric|between:-90,90',
+            'longitude' => 'required|numeric|between:-180,180',
+            'address' => 'nullable|string|max:500',
         ]);
 
         $validated['user_id'] = Auth::id();
@@ -133,12 +134,12 @@ class BusinessController extends Controller
         }
 
         $validated = $request->validate([
-            'name'             => 'sometimes|required|string|max:150',
-            'description'      => 'nullable|string',
+            'name' => 'sometimes|required|string|max:150',
+            'description' => 'nullable|string',
             'business_type_id' => 'sometimes|required|exists:business_types,id',
-            'latitude'         => 'sometimes|required|numeric|between:-90,90',
-            'longitude'        => 'sometimes|required|numeric|between:-180,180',
-            'address'          => 'nullable|string|max:500',
+            'latitude' => 'sometimes|required|numeric|between:-90,90',
+            'longitude' => 'sometimes|required|numeric|between:-180,180',
+            'address' => 'nullable|string|max:500',
         ]);
 
         $updated = $this->businessRepository->updateBusiness($business, $validated);
@@ -181,6 +182,8 @@ class BusinessController extends Controller
         $result = $this->simulationService->saveCandidateLocation(
             Auth::id(),
             $request->validated()
+        );
+
         return ApiResponse::success(
             $result,
             'Candidate location simulation saved successfully'

@@ -52,6 +52,7 @@ import {
   CheckCircle2,
   Footprints,
   MapIcon,
+  Navigation,
   PenLine,
   Satellite,
   Scale,
@@ -777,7 +778,7 @@ export function MapPage() {
               // Float fixed above everything — does NOT shift map layout
               "fixed z-[430]",
               // Desktop: anchored right of nav pill with gap, vertically safe margins
-              "left-20 top-6 bottom-6 w-[22rem]",
+              "left-20 top-6 bottom-6 w-[28rem]",
               // Tablet / mobile: full-width overlay from left
               "max-md:left-0 max-md:right-0 max-md:bottom-0 max-md:top-0 max-md:w-full max-md:rounded-none",
               // Claymorphism card styling — solid background, no transparency

@@ -162,9 +162,6 @@ export const BusinessCatalogPanel: React.FC<BusinessCatalogPanelProps> = ({
       {/* Header Bar */}
       <div className="p-4 sm:p-5 border-b border-slate-200/80 bg-white/70 backdrop-blur-xs flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-primary-soft text-primary shadow-xs">
-              <Store size={22} />
-            </div>
             <div>
               <h2 className="text-lg sm:text-xl font-display font-bold text-ink">Business Catalog</h2>
               <p className="text-xs text-muted">
