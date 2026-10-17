@@ -82,7 +82,7 @@ export function ForgetPassword() {
                 placeholder="name@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                error={!!alert?.type == "error"}
+                error={alert?.type === "error"}
               />
               {alert?.type == "error" && (
               <p className="text-red-500 text-xs flex items-center gap-2"><Info size={15}/>{alert?.message}</p>

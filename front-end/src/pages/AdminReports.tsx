@@ -4,16 +4,13 @@ import {
   Droplets,
   Trash2,
   Lightbulb,
-  CheckCircle2,
-  Clock,
   Search,
   Camera,
   ShieldCheck,
-  History,
-  Loader2,
   AlertCircle,
-  RefreshCw,
-  Upload,
+  ArrowLeft,
+  MapPin,
+  ExternalLink,
 } from "lucide-react";
 import {
   getReports,
@@ -27,83 +24,64 @@ import {
 import { useToast } from "@/components/ui/Toast";
 import { ClayButton } from "@/components/ui/ClayButton";
 import { useDebounce } from "@/hooks/useDebounce";
-import {
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalTitle,
-  ModalDescription,
-  ModalBody,
-  ModalFooter,
-} from "@/components/ui/Modal";
+import Spinner from "@/components/ui/Spinner";
+import { getStorageUrl } from "@/context/userService";
 
 const STATUS_CONFIG: Record<
   ReportStatus,
   { label: string; bg: string; text: string; dot: string }
 > = {
   reported: {
-    label: "Menunggu Verifikasi",
+    label: "menunggu verifikasi",
     bg: "bg-amber-50",
     text: "text-amber-700",
     dot: "bg-amber-500",
   },
   verification: {
-    label: "Sedang Ditinjau",
+    label: "sedang ditinjau",
     bg: "bg-blue-50",
     text: "text-blue-700",
     dot: "bg-blue-500",
   },
   confirmed: {
-    label: "Terverifikasi Warga/Admin",
+    label: "dikonfirmasi warga/admin",
     bg: "bg-indigo-50",
     text: "text-indigo-700",
     dot: "bg-indigo-500",
   },
   handled: {
-    label: "Dalam Penanganan",
+    label: "dalam penanganan",
     bg: "bg-purple-50",
     text: "text-purple-700",
     dot: "bg-purple-500",
   },
   resolved: {
-    label: "Selesai Ditangani",
+    label: "selesai ditangani",
     bg: "bg-emerald-50",
     text: "text-emerald-700",
     dot: "bg-emerald-500",
   },
   rejected: {
-    label: "Ditolak / Tidak Valid",
+    label: "ditolak / tidak valid",
     bg: "bg-rose-50",
     text: "text-rose-700",
     dot: "bg-rose-500",
   },
 };
 
-const SEVERITY_CONFIG: Record<ReportSeverity, { label: string; badge: string }> = {
-  low: { label: "Rendah", badge: "bg-gray-100 text-gray-700" },
-  medium: { label: "Sedang", badge: "bg-amber-100 text-amber-800" },
-  high: { label: "Tinggi / Darurat", badge: "bg-rose-100 text-rose-800 font-bold" },
+const SEVERITY_CONFIG: Record<
+  ReportSeverity,
+  { label: string; bg: string; text: string }
+> = {
+  low: { label: "rendah", bg: "bg-emerald-50", text: "text-emerald-700" },
+  medium: { label: "sedang", bg: "bg-amber-50", text: "text-amber-700" },
+  high: { label: "tinggi", bg: "bg-rose-50", text: "text-rose-700" },
 };
-
-/**
- * Safely formats a coordinate value (may be string, number, null, or undefined)
- * to a fixed decimal string. Returns fallback if value is not a valid finite number.
- */
-function formatCoord(
-  value: number | string | null | undefined,
-  decimals = 4,
-  fallback = "—"
-): string {
-  if (value === null || value === undefined || value === "") return fallback;
-  const n = typeof value === "number" ? value : parseFloat(String(value));
-  if (!isFinite(n)) return fallback;
-  return n.toFixed(decimals);
-}
-
 
 export default function AdminReports() {
   const { toast } = useToast();
 
+  const [mode, setMode] = useState<"list" | "detail">("list");
   const [reports, setReports] = useState<ReportItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -119,10 +97,8 @@ export default function AdminReports() {
 
   const debouncedSearch = useDebounce(search, 300);
 
-  // Detail & Moderation Modal
+  // Detail & Moderation Workbench
   const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
-  const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [loadingDetail, setLoadingDetail] = useState(false);
 
   // Moderation action form state
   const [modStatus, setModStatus] = useState<ReportStatus>("confirmed");
@@ -130,9 +106,8 @@ export default function AdminReports() {
   const [modSubmitting, setModSubmitting] = useState(false);
   const [modError, setModError] = useState<string | null>(null);
 
-  // Photo upload in moderation
+  // Photo upload
   const [uploadingMedia, setUploadingMedia] = useState(false);
-  const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
 
   const fetchReports = useCallback(async () => {
     try {
@@ -140,11 +115,11 @@ export default function AdminReports() {
       setError(null);
 
       const params: any = {
-        search: debouncedSearch.trim() || undefined,
-        status: statusFilter !== "all" ? statusFilter : undefined,
-        severity: severityFilter !== "all" ? severityFilter : undefined,
         page: currentPage,
         per_page: perPage,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+        severity: severityFilter !== "all" ? severityFilter : undefined,
+        search: debouncedSearch.trim() || undefined,
       };
 
       const res = await getReports(params);
@@ -152,638 +127,597 @@ export default function AdminReports() {
       setTotalItems(res.meta.total);
       setLastPage(res.meta.last_page);
     } catch (err: any) {
-      console.error("Gagal mengambil laporan civic:", err);
-      setError("Gagal memuat daftar laporan dari server.");
+      console.warn("Gagal memuat daftar laporan:", err);
+      setError("Gagal memuat antrean laporan dari server.");
     } finally {
       setLoading(false);
     }
   }, [debouncedSearch, statusFilter, severityFilter, currentPage]);
 
   useEffect(() => {
-    void fetchReports();
+    fetchReports();
   }, [fetchReports]);
 
-  // Open Detail / Moderate Modal
   const handleOpenDetail = async (item: ReportItem) => {
     setSelectedReport(item);
     setModStatus(item.status);
     setModNote("");
     setModError(null);
-    setDetailModalOpen(true);
+    setMode("detail");
 
+    // Fetch fresh detail
     try {
-      setLoadingDetail(true);
-      const full = await getReport(item.id);
-      setSelectedReport(full);
-      setModStatus(full.status);
+      const detail = await getReport(item.id);
+      setSelectedReport(detail);
+      setModStatus(detail.status);
     } catch (err) {
-      console.warn("Gagal memuat detail lengkap:", err);
-    } finally {
-      setLoadingDetail(false);
+      console.warn("Gagal memuat detail laporan lengkap:", err);
     }
   };
 
-  // Submit Status Change (Moderation Action)
-  const handleModerateSubmit = async (e: React.FormEvent) => {
+  const handleUpdateStatus = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedReport) return;
 
+    setModSubmitting(true);
+    setModError(null);
     try {
-      setModSubmitting(true);
-      setModError(null);
-
-      const updated = await updateReportStatus(selectedReport.id, modStatus, modNote.trim() || undefined);
+      const updated = await updateReportStatus(
+        selectedReport.id,
+        modStatus,
+        modNote.trim() || undefined
+      );
 
       toast({
-        title: "Status Berhasil Diperbarui",
+        title: "Status laporan diperbarui",
         description: `Laporan diubah menjadi "${STATUS_CONFIG[modStatus]?.label || modStatus}".`,
         variant: "success",
       });
 
       setSelectedReport(updated);
-      setModNote("");
-
-      // Update in local list
-      setReports((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      await fetchReports();
     } catch (err: any) {
-      setModError(err.response?.data?.message || "Gagal mengubah status laporan.");
+      setModError(
+        err.response?.data?.message || "Gagal memperbarui status laporan."
+      );
     } finally {
       setModSubmitting(false);
     }
   };
 
-  // Upload Photo for Report
-  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!selectedReport || !e.target.files || e.target.files.length === 0) return;
+  const handleUploadPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedReport) return;
 
-    const files = Array.from(e.target.files);
+    setUploadingMedia(true);
     try {
-      setUploadingMedia(true);
-      const newMedia = await uploadReportMedia(selectedReport.id, files);
+      await uploadReportMedia(selectedReport.id, [file]);
       toast({
-        title: "Foto Berhasil Diunggah",
-        description: `${newMedia.length} foto bukti berhasil ditambahkan.`,
+        title: "Foto bukti diunggah",
+        description: "Lampiran berhasil ditambahkan ke riwayat laporan.",
         variant: "success",
       });
-
-      // Refresh full report detail
-      const full = await getReport(selectedReport.id);
-      setSelectedReport(full);
-      setReports((prev) => prev.map((r) => (r.id === full.id ? full : r)));
+      const fresh = await getReport(selectedReport.id);
+      setSelectedReport(fresh);
     } catch (err: any) {
       toast({
-        title: "Gagal Mengunggah Foto",
-        description: err.response?.data?.message || "Terjadi kesalahan saat upload.",
+        title: "Gagal mengunggah foto",
+        description: err.response?.data?.message || "Ukuran file terlalu besar atau format tidak didukung.",
         variant: "error",
       });
     } finally {
       setUploadingMedia(false);
-      e.target.value = "";
     }
   };
 
   const getCategoryIcon = (slug?: string) => {
     switch (slug) {
       case "flood":
-      case "banjir":
-        return <Droplets size={14} className="text-blue-500" />;
+        return <Droplets size={14} className="text-white" />;
       case "waste":
-      case "sampah":
-        return <Trash2 size={14} className="text-amber-500" />;
+        return <Trash2 size={14} className="text-white" />;
       case "light":
-      case "penerangan":
-        return <Lightbulb size={14} className="text-yellow-500" />;
-      case "road":
-      case "jalan-rusak":
+        return <Lightbulb size={14} className="text-white" />;
       default:
-        return <AlertTriangle size={14} className="text-rose-500" />;
+        return <AlertTriangle size={14} className="text-white" />;
     }
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-ink sm:text-3xl">
-            Moderasi Civic Reports
-          </h1>
-          <p className="mt-1 text-sm text-muted">
-            Tinjau laporan kondisi jalan, banjir, dan infrastruktur dari warga yang mempengaruhi kelayakan lokasi UMKM.
-          </p>
-        </div>
+  const getToneColor = (slug?: string) => {
+    switch (slug) {
+      case "flood":
+        return "#0284c7";
+      case "waste":
+        return "#d97706";
+      case "light":
+        return "#ca8a04";
+      default:
+        return "#ef4444";
+    }
+  };
 
-        <div className="flex items-center gap-3">
-          <ClayButton
-            variant="secondary"
-            onClick={() => void fetchReports()}
-            disabled={loading}
-            className="flex items-center gap-2 text-xs"
+  // ── Render Detail & Moderation Workbench View ───────────────────────────────
+  if (mode === "detail" && selectedReport) {
+    const statusCfg = STATUS_CONFIG[selectedReport.status] || STATUS_CONFIG.reported;
+    const severityCfg = SEVERITY_CONFIG[selectedReport.severity] || SEVERITY_CONFIG.medium;
+    const catSlug = selectedReport.category?.slug || "road";
+
+    return (
+      <div className="space-y-6 text-left max-w-5xl mx-auto">
+        {/* Back navigation */}
+        <div className="flex items-center justify-between border-b border-[#f0f0f8] pb-4">
+          <button
+            type="button"
+            onClick={() => setMode("list")}
+            className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-muted hover:text-ink cursor-pointer"
           >
-            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-            <span>Segarkan</span>
-          </ClayButton>
+            <ArrowLeft size={14} />
+            <span>kembali ke antrean laporan</span>
+          </button>
+
+          <div className="flex items-center gap-2">
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium border ${statusCfg.bg} ${statusCfg.text}`}
+            >
+              {statusCfg.label}
+            </span>
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium border ${severityCfg.bg} ${severityCfg.text}`}
+            >
+              urgensi: {severityCfg.label}
+            </span>
+          </div>
+        </div>
+
+        {/* Workbench Layout: 2 Columns */}
+        <div className="grid gap-6 lg:grid-cols-12">
+          {/* Left Column: Report Evidence & Info (7 cols) */}
+          <div className="space-y-6 lg:col-span-7">
+            <div className="clay rounded-[20px] p-6 bg-white space-y-5">
+              <div className="flex items-start gap-3.5">
+                <div
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] shadow-xs"
+                  style={{ backgroundColor: getToneColor(catSlug) }}
+                >
+                  {getCategoryIcon(catSlug)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-display text-[18px] font-medium text-ink leading-snug">
+                    {selectedReport.title}
+                  </h2>
+                  <p className="mt-1 flex items-center gap-1.5 text-[12px] text-muted">
+                    <MapPin size={12} className="text-primary" />
+                    <span>
+                      {selectedReport.area?.name || "Wilayah Terdata"} ·{" "}
+                      {Number(selectedReport.latitude).toFixed(4)},{" "}
+                      {Number(selectedReport.longitude).toFixed(4)}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="rounded-[12px] bg-slate-50 p-4 border border-slate-100">
+                <span className="text-[11px] font-semibold text-muted tracking-wider block mb-1">
+                  deskripsi lapangan
+                </span>
+                <p className="text-[13px] text-ink leading-relaxed">
+                  {selectedReport.description || "Tidak ada deskripsi tambahan dari pelapor."}
+                </p>
+              </div>
+
+              {/* Photo Evidence */}
+              <div>
+                <span className="text-[11.5px] font-medium text-ink block mb-2">
+                  foto bukti kondisi ({selectedReport.media?.length || 0} lampiran)
+                </span>
+                {selectedReport.media && selectedReport.media.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {selectedReport.media.map((m) => {
+                      const url = getStorageUrl(m.file_path);
+                      if (!url) return null;
+                      return (
+                        <a
+                          key={m.id}
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="group relative overflow-hidden rounded-[10px] border border-slate-200 bg-slate-100 aspect-video flex items-center justify-center"
+                        >
+                          <img
+                            src={url}
+                            alt="Bukti lapangan"
+                            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                            <ExternalLink size={16} />
+                          </div>
+                        </a>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-[10px] border border-dashed border-slate-200 p-6 text-center text-[12px] text-muted">
+                    belum ada lampiran foto untuk laporan ini
+                  </div>
+                )}
+              </div>
+
+              {/* Reporter & Metadata */}
+              <div className="grid grid-cols-2 gap-3 pt-4 border-t border-[#f0f0f8] text-[12px]">
+                <div>
+                  <span className="text-[11px] text-muted font-medium block">pelapor</span>
+                  <p className="mt-0.5 font-medium text-ink">{selectedReport.user?.name || "Anonim / Tamu"}</p>
+                  <p className="text-[11px] text-muted">{selectedReport.user?.email || "—"}</p>
+                </div>
+                <div>
+                  <span className="text-[11px] text-muted font-medium block">waktu dibuat</span>
+                  <p className="mt-0.5 font-medium text-ink">
+                    {selectedReport.created_at
+                      ? new Date(selectedReport.created_at).toLocaleDateString("id-ID", {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "—"}
+                  </p>
+                  <p className="text-[11px] text-emerald-600 font-medium">
+                    {selectedReport.confirmations_count || 0} konfirmasi warga
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Moderation Actions & Audit Trail (5 cols) */}
+          <div className="space-y-6 lg:col-span-5">
+            {/* Moderation Form Card */}
+            <div className="clay rounded-[20px] p-6 bg-white space-y-4">
+              <div className="border-b border-[#f0f0f8] pb-3">
+                <h3 className="font-display text-[15px] font-medium text-ink">
+                  tindakan moderasi
+                </h3>
+                <p className="text-[11.5px] text-muted">
+                  tentukan status verifikasi dan catatan pertimbangan admin
+                </p>
+              </div>
+
+              {modError && (
+                <div className="flex items-center gap-2 rounded-[10px] bg-rose-50 p-3 text-[12px] text-rose-700 border border-rose-100">
+                  <AlertCircle size={15} className="shrink-0" />
+                  <span>{modError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleUpdateStatus} className="space-y-4">
+                <div>
+                  <label className="block text-[12px] font-medium text-ink">
+                    perbarui status verifikasi
+                  </label>
+                  <select
+                    value={modStatus}
+                    onChange={(e) => setModStatus(e.target.value as ReportStatus)}
+                    className="mt-1 w-full rounded-[10px] border border-[#e5e5f0] bg-white px-3 py-2 text-[12.5px] font-medium text-ink outline-none focus:border-primary cursor-pointer"
+                  >
+                    <option value="reported">menunggu verifikasi</option>
+                    <option value="verification">sedang ditinjau</option>
+                    <option value="confirmed">dikonfirmasi warga / admin</option>
+                    <option value="handled">dalam penanganan</option>
+                    <option value="resolved">selesai ditangani</option>
+                    <option value="rejected">ditolak / tidak valid</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-medium text-ink">
+                    catatan moderasi (opsional)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={modNote}
+                    onChange={(e) => setModNote(e.target.value)}
+                    placeholder="Contoh: Kondisi fisik jalan telah dikonfirmasi oleh tim patroli lapangan..."
+                    className="mt-1 w-full rounded-[10px] border border-[#e5e5f0] bg-white px-3 py-2 text-[12.5px] text-ink outline-none focus:border-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-medium text-ink">
+                    unggah foto verifikasi tambahan
+                  </label>
+                  <label className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-[10px] border border-dashed border-[#d5d5e5] bg-slate-50/50 p-3 text-[12px] text-muted hover:bg-slate-100">
+                    <Camera size={15} />
+                    <span>{uploadingMedia ? "mengunggah..." : "pilih foto penanganan lapangan"}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={uploadingMedia}
+                      onChange={handleUploadPhoto}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={modSubmitting}
+                  className="clay-primary w-full inline-flex items-center justify-center gap-1.5 rounded-[10px] py-2 text-[12.5px] font-medium text-white cursor-pointer disabled:opacity-50"
+                >
+                  {modSubmitting && <Spinner size="sm" />}
+                  <span>{modSubmitting ? "memperbarui..." : "terapkan status moderasi"}</span>
+                </button>
+              </form>
+            </div>
+
+            {/* Moderation History Log */}
+            <div className="clay rounded-[20px] p-6 bg-white space-y-3">
+              <div className="border-b border-[#f0f0f8] pb-3">
+                <h3 className="font-display text-[15px] font-medium text-ink">
+                  riwayat verifikasi
+                </h3>
+                <p className="text-[11.5px] text-muted">catatan audit pengubahan status</p>
+              </div>
+
+              {selectedReport.verifications && selectedReport.verifications.length > 0 ? (
+                <div className="space-y-2.5">
+                  {selectedReport.verifications.map((v) => (
+                    <div
+                      key={v.id}
+                      className="rounded-[10px] bg-slate-50 p-2.5 border border-slate-100 text-[11.5px]"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-ink">
+                          {v.moderator?.name || "Administrator"}
+                        </span>
+                        <span className="text-muted text-[10.5px]">
+                          {v.created_at
+                            ? new Date(v.created_at).toLocaleDateString("id-ID", {
+                                day: "numeric",
+                                month: "short",
+                              })
+                            : ""}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-ink">{v.note || `Tindakan: ${v.action}`}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[12px] text-muted py-2">belum ada catatan verifikasi sebelumnya.</p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
+    );
+  }
 
-      {/* KPI Stats Strip */}
-      <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-6">
-        <div className="clay flex flex-col justify-between rounded-2xl p-3.5">
-          <span className="text-[11px] font-medium text-muted">Total Laporan</span>
-          <p className="font-display text-xl font-bold text-ink mt-1">{totalItems}</p>
-        </div>
-
-        <div className="clay flex flex-col justify-between rounded-2xl p-3.5">
-          <span className="text-[11px] font-medium text-amber-600">Menunggu Verifikasi</span>
-          <p className="font-display text-xl font-bold text-amber-700 mt-1">
-            {reports.filter((r) => r.status === "reported").length}
+  // ── Render List View ────────────────────────────────────────────────────────
+  return (
+    <div className="space-y-6 text-left">
+      {/* Header */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-[#f0f0f8] pb-4">
+        <div>
+          <h1 className="font-display text-[22px] font-medium tracking-tight text-ink sm:text-[24px]">
+            moderasi laporan civic
+          </h1>
+          <p className="mt-0.5 text-[12.5px] text-muted">
+            verifikasi laporan kondisi jalan, banjir, sampah, dan ketertiban sebelum memengaruhi analitik lokasi.
           </p>
         </div>
-
-        <div className="clay flex flex-col justify-between rounded-2xl p-3.5">
-          <span className="text-[11px] font-medium text-blue-600">Sedang Ditinjau</span>
-          <p className="font-display text-xl font-bold text-blue-700 mt-1">
-            {reports.filter((r) => r.status === "verification").length}
-          </p>
-        </div>
-
-        <div className="clay flex flex-col justify-between rounded-2xl p-3.5">
-          <span className="text-[11px] font-medium text-indigo-600">Terverifikasi</span>
-          <p className="font-display text-xl font-bold text-indigo-700 mt-1">
-            {reports.filter((r) => r.status === "confirmed").length}
-          </p>
-        </div>
-
-        <div className="clay flex flex-col justify-between rounded-2xl p-3.5">
-          <span className="text-[11px] font-medium text-purple-600">Dalam Penanganan</span>
-          <p className="font-display text-xl font-bold text-purple-700 mt-1">
-            {reports.filter((r) => r.status === "handled").length}
-          </p>
-        </div>
-
-        <div className="clay flex flex-col justify-between rounded-2xl p-3.5">
-          <span className="text-[11px] font-medium text-emerald-600">Selesai</span>
-          <p className="font-display text-xl font-bold text-emerald-700 mt-1">
-            {reports.filter((r) => r.status === "resolved").length}
-          </p>
-        </div>
+        <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-[11.5px] font-medium text-muted">
+          total {totalItems} laporan terdata
+        </span>
       </div>
 
-      {/* Search & Filter Bar */}
-      <div className="clay flex flex-col gap-3 rounded-2xl p-4 md:flex-row md:items-center md:justify-between">
-        <div className="relative flex-1">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cari judul laporan atau deskripsi..."
-            className="w-full rounded-xl border border-[#e2e2ec] bg-white/70 py-2.5 pl-10 pr-4 text-xs font-medium text-ink placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-          />
-        </div>
+      {/* Toolbar: Proportional Search & Filters */}
+      <div className="clay flex flex-wrap items-center justify-between gap-3 rounded-[16px] p-4 bg-white">
+        <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-0">
+          <div className="relative w-full sm:w-64">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Cari judul atau keterangan..."
+              className="w-full rounded-[10px] border border-[#e5e5f0] bg-white pl-8 pr-3 py-1.5 text-[12.5px] text-ink outline-none focus:border-primary"
+            />
+          </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Status Filter */}
           <select
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value);
               setCurrentPage(1);
             }}
-            className="rounded-xl border border-[#e2e2ec] bg-white/70 px-3 py-2 text-xs font-medium text-ink focus:border-primary focus:outline-none"
+            className="rounded-[10px] border border-[#e5e5f0] bg-white px-3 py-1.5 text-[12px] font-medium text-ink outline-none focus:border-primary cursor-pointer"
           >
-            <option value="all">Semua Status</option>
-            <option value="reported">Menunggu Verifikasi</option>
-            <option value="verification">Sedang Ditinjau</option>
-            <option value="confirmed">Terverifikasi</option>
-            <option value="handled">Dalam Penanganan</option>
-            <option value="resolved">Selesai Ditangani</option>
-            <option value="rejected">Ditolak / Invalid</option>
+            <option value="all">semua status</option>
+            <option value="reported">menunggu verifikasi</option>
+            <option value="verification">sedang ditinjau</option>
+            <option value="confirmed">dikonfirmasi</option>
+            <option value="handled">dalam penanganan</option>
+            <option value="resolved">selesai ditangani</option>
+            <option value="rejected">ditolak</option>
           </select>
 
-          {/* Severity Filter */}
           <select
             value={severityFilter}
             onChange={(e) => {
               setSeverityFilter(e.target.value);
               setCurrentPage(1);
             }}
-            className="rounded-xl border border-[#e2e2ec] bg-white/70 px-3 py-2 text-xs font-medium text-ink focus:border-primary focus:outline-none"
+            className="rounded-[10px] border border-[#e5e5f0] bg-white px-3 py-1.5 text-[12px] font-medium text-ink outline-none focus:border-primary cursor-pointer"
           >
-            <option value="all">Semua Urgensi</option>
-            <option value="high">Tinggi / Darurat</option>
-            <option value="medium">Sedang</option>
-            <option value="low">Rendah</option>
+            <option value="all">semua urgensi</option>
+            <option value="low">rendah</option>
+            <option value="medium">sedang</option>
+            <option value="high">tinggi</option>
           </select>
         </div>
+
+        {(search || statusFilter !== "all" || severityFilter !== "all") && (
+          <button
+            type="button"
+            onClick={() => {
+              setSearch("");
+              setStatusFilter("all");
+              setSeverityFilter("all");
+              setCurrentPage(1);
+            }}
+            className="text-[12px] font-medium text-primary hover:underline cursor-pointer"
+          >
+            reset filter
+          </button>
+        )}
       </div>
 
-      {/* Main Reports Table */}
-      <div className="clay overflow-hidden rounded-2xl border border-[#ececf6]">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center p-16 text-muted">
-            <Loader2 size={32} className="animate-spin text-primary" />
-            <p className="mt-3 text-xs font-medium">Memuat data laporan warga...</p>
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center justify-center p-16 text-center">
-            <AlertCircle size={32} className="text-warning" />
-            <p className="mt-3 text-sm font-medium text-ink">{error}</p>
-            <ClayButton variant="secondary" onClick={() => void fetchReports()} className="mt-4 text-xs">
-              Coba Lagi
-            </ClayButton>
-          </div>
-        ) : reports.length === 0 ? (
-          <div className="flex flex-col items-center justify-center p-16 text-center">
-            <CheckCircle2 size={40} className="text-muted/60" />
-            <p className="mt-3 text-sm font-medium text-ink">Tidak ada laporan sesuai filter</p>
-            <p className="mt-1 text-xs text-muted">
-              Semua laporan warga telah dimoderasi atau sesuaikan kriteria pencarian Anda.
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-[#ececf6] bg-canvas/60 uppercase tracking-wider text-muted">
+      {/* Reports Table */}
+      <div className="clay overflow-hidden rounded-[16px] bg-white">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-[13px]">
+            <thead className="border-b border-[#ececf6] bg-slate-50/60 text-[11px] font-semibold text-muted">
+              <tr>
+                <th className="px-5 py-3">laporan & kategori</th>
+                <th className="px-5 py-3">lokasi titik</th>
+                <th className="px-5 py-3">status</th>
+                <th className="px-5 py-3">urgensi</th>
+                <th className="px-5 py-3 text-right">tindakan</th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-[#f0f0f8]">
+              {loading ? (
                 <tr>
-                  <th className="px-5 py-3.5 font-semibold">Kategori & Judul Laporan</th>
-                  <th className="px-5 py-3.5 font-semibold">Tingkat Urgensi</th>
-                  <th className="px-5 py-3.5 font-semibold">Status Moderasi</th>
-                  <th className="px-5 py-3.5 font-semibold">Pelapor & Waktu</th>
-                  <th className="px-5 py-3.5 font-semibold text-center">Bukti Foto</th>
-                  <th className="px-5 py-3.5 text-right font-semibold">Aksi</th>
+                  <td colSpan={5} className="px-5 py-12 text-center text-muted">
+                    <Spinner size="md" className="mx-auto mb-2 text-primary" />
+                    <p className="text-[12.5px]">memuat antrean laporan...</p>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-[#f0f0f8]">
-                {reports.map((item) => {
-                  const statusConf = STATUS_CONFIG[item.status] || STATUS_CONFIG.reported;
-                  const severityConf = SEVERITY_CONFIG[item.severity] || SEVERITY_CONFIG.medium;
-                  const mediaCount = item.media?.length || 0;
+              ) : error ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-8 text-center text-rose-600">
+                    <p className="text-[13px]">{error}</p>
+                    <button
+                      type="button"
+                      onClick={() => void fetchReports()}
+                      className="mt-2 text-[12px] font-medium text-primary underline cursor-pointer"
+                    >
+                      coba lagi
+                    </button>
+                  </td>
+                </tr>
+              ) : reports.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-10 text-center text-muted">
+                    <p className="text-[13px] font-medium text-ink">tidak ada laporan ditemukan</p>
+                    <p className="mt-0.5 text-[11.5px]">coba sesuaikan kata kunci atau filter.</p>
+                  </td>
+                </tr>
+              ) : (
+                reports.map((item) => {
+                  const statusCfg = STATUS_CONFIG[item.status] || STATUS_CONFIG.reported;
+                  const severityCfg = SEVERITY_CONFIG[item.severity] || SEVERITY_CONFIG.medium;
+                  const catSlug = item.category?.slug || "road";
 
                   return (
-                    <tr key={item.id} className="transition-colors hover:bg-white/50">
-                      <td className="px-5 py-3.5 max-w-xs">
-                        <div className="flex items-start gap-2.5">
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-canvas">
-                            {getCategoryIcon(item.category?.slug)}
+                    <tr key={item.id} className="transition-colors hover:bg-slate-50/50">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] shadow-xs"
+                            style={{ backgroundColor: getToneColor(catSlug) }}
+                          >
+                            {getCategoryIcon(catSlug)}
                           </div>
-                          <div>
-                            <p className="font-semibold text-ink line-clamp-1">{item.title}</p>
-                            <p className="text-[11px] text-muted line-clamp-1">
-                              {item.area?.name ||
-                                (item.latitude != null && item.longitude != null
-                                  ? `Titik: ${formatCoord(item.latitude, 3)}, ${formatCoord(item.longitude, 3)}`
-                                  : "Koordinat tidak tersedia")}
+                          <div className="min-w-0">
+                            <p className="font-display font-medium text-ink truncate max-w-sm">
+                              {item.title}
+                            </p>
+                            <p className="text-[11px] text-muted truncate">
+                              {item.category?.name || "laporan civic"} ·{" "}
+                              {item.created_at
+                                ? new Date(item.created_at).toLocaleDateString("id-ID", {
+                                    day: "numeric",
+                                    month: "short",
+                                  })
+                                : "—"}
                             </p>
                           </div>
                         </div>
                       </td>
 
+                      <td className="px-5 py-3.5 text-[12px] text-muted">
+                        <div className="flex items-center gap-1">
+                          <MapPin size={11} className="text-slate-400 shrink-0" />
+                          <span className="truncate max-w-xs">{item.area?.name || "Wilayah Terdata"}</span>
+                        </div>
+                      </td>
+
                       <td className="px-5 py-3.5">
-                        <span className={`inline-flex rounded-lg px-2 py-0.5 text-[10.5px] ${severityConf.badge}`}>
-                          {severityConf.label}
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10.5px] font-medium border ${statusCfg.bg} ${statusCfg.text}`}
+                        >
+                          {statusCfg.label}
                         </span>
                       </td>
 
                       <td className="px-5 py-3.5">
                         <span
-                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ${statusConf.bg} ${statusConf.text}`}
+                          className={`rounded-full px-2 py-0.5 text-[10.5px] font-medium border ${severityCfg.bg} ${severityCfg.text}`}
                         >
-                          <span className={`h-1.5 w-1.5 rounded-full ${statusConf.dot}`} />
-                          {statusConf.label}
+                          {severityCfg.label}
                         </span>
                       </td>
 
-                      <td className="px-5 py-3.5">
-                        <p className="font-medium text-ink">
-                          {item.user?.name || "Warga Anonim"}
-                        </p>
-                        <p className="text-[11px] text-muted flex items-center gap-1 mt-0.5">
-                          <Clock size={10} />
-                          {item.created_at
-                            ? new Date(item.created_at).toLocaleDateString("id-ID", {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                              })
-                            : "-"}
-                        </p>
-                      </td>
-
-                      <td className="px-5 py-3.5 text-center">
-                        {mediaCount > 0 ? (
-                          <span className="inline-flex items-center gap-1 rounded-lg bg-canvas px-2 py-1 text-[11px] font-semibold text-ink">
-                            <Camera size={12} className="text-primary" />
-                            <span>{mediaCount} Foto</span>
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-muted italic">Tidak ada</span>
-                        )}
-                      </td>
-
                       <td className="px-5 py-3.5 text-right">
-                        <ClayButton
-                          variant="primary"
+                        <button
+                          type="button"
                           onClick={() => handleOpenDetail(item)}
-                          className="text-xs px-3 py-1.5 shadow-2xs"
+                          className="clay-press inline-flex items-center gap-1 rounded-[6px] border border-primary/30 bg-primary/5 px-2.5 py-1 text-[11.5px] font-medium text-primary hover:bg-primary/10 cursor-pointer"
                         >
-                          Tinjau & Moderasi
-                        </ClayButton>
+                          <ShieldCheck size={12} />
+                          <span>tinjau & moderasi</span>
+                        </button>
                       </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
 
-        {/* Pagination Footer */}
-        {lastPage > 1 && (
-          <div className="flex items-center justify-between border-t border-[#ececf6] px-5 py-3.5 text-xs text-muted">
-            <p>
-              Halaman <span className="font-semibold text-ink">{currentPage}</span> dari{" "}
-              <span className="font-semibold text-ink">{lastPage}</span>
-            </p>
+        {/* Standard Pagination Footer */}
+        {totalItems > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-[#f0f0f8] px-5 py-3.5 text-[12px] text-muted">
+            <div>
+              menampilkan halaman <span className="font-semibold text-ink">{currentPage}</span> dari{" "}
+              <span className="font-semibold text-ink">{lastPage}</span> (total {totalItems} laporan)
+            </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={currentPage <= 1}
+            <div className="flex items-center gap-1.5">
+              <ClayButton
+                variant="secondary"
+                disabled={loading || currentPage <= 1}
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                className="rounded-lg border border-[#e2e2ec] px-3 py-1 font-medium text-ink disabled:opacity-40"
               >
-                Sebelumnya
-              </button>
-              <button
-                type="button"
-                disabled={currentPage >= lastPage}
-                onClick={() => setCurrentPage((p) => Math.min(lastPage, p + 1))}
-                className="rounded-lg border border-[#e2e2ec] px-3 py-1 font-medium text-ink disabled:opacity-40"
+                sebelumnya
+              </ClayButton>
+
+              <ClayButton
+                variant="secondary"
+                disabled={loading || currentPage >= lastPage}
+                onClick={() => setCurrentPage((p) => p + 1)}
               >
-                Selanjutnya
-              </button>
+                selanjutnya
+              </ClayButton>
             </div>
           </div>
         )}
       </div>
-
-      {/* MODAL: Detail Laporan, Foto Bukti, & Riwayat Moderasi */}
-      <Modal open={detailModalOpen} onOpenChange={setDetailModalOpen}>
-        <ModalContent size="xl">
-          <ModalHeader>
-            <div className="flex items-start justify-between">
-              <div>
-                <ModalTitle>{selectedReport?.title}</ModalTitle>
-                <ModalDescription>
-                  Dilaporkan oleh <strong>{selectedReport?.user?.name || "Warga"}</strong> pada{" "}
-                  {selectedReport?.created_at
-                    ? new Date(selectedReport.created_at).toLocaleString("id-ID")
-                    : "-"}
-                </ModalDescription>
-              </div>
-            </div>
-          </ModalHeader>
-
-          <ModalBody className="space-y-6">
-            {loadingDetail && (
-              <div className="flex items-center gap-2 text-xs text-primary font-medium">
-                <Loader2 size={14} className="animate-spin" />
-                <span>Memperbarui detail riwayat verifikasi...</span>
-              </div>
-            )}
-
-            {/* Report Metadata Strip */}
-            <div className="grid grid-cols-2 gap-3 rounded-2xl bg-canvas p-4 text-xs sm:grid-cols-4">
-              <div>
-                <span className="text-muted">Kategori:</span>
-                <p className="font-semibold text-ink mt-0.5">
-                  {selectedReport?.category?.name || "Kondisi Wilayah"}
-                </p>
-              </div>
-
-              <div>
-                <span className="text-muted">Tingkat Urgensi:</span>
-                <p className="font-semibold text-ink mt-0.5 capitalize">
-                  {selectedReport?.severity || "Sedang"}
-                </p>
-              </div>
-
-              <div>
-                <span className="text-muted">Titik Koordinat:</span>
-                <p className="font-semibold text-ink mt-0.5">
-                  {selectedReport?.latitude != null && selectedReport?.longitude != null
-                    ? `${formatCoord(selectedReport.latitude, 6)}, ${formatCoord(selectedReport.longitude, 6)}`
-                    : "Koordinat tidak tersedia"}
-                </p>
-              </div>
-
-              <div>
-                <span className="text-muted">Dukungan Konfirmasi:</span>
-                <p className="font-semibold text-ink mt-0.5">
-                  {selectedReport?.confirmations_count || 0} konfirmasi warga
-                </p>
-              </div>
-            </div>
-
-            {/* Description */}
-            <div>
-              <span className="text-xs font-semibold text-ink">Deskripsi Situasi Lapangan:</span>
-              <p className="mt-1.5 rounded-xl border border-[#ececf6] bg-white p-3.5 text-xs text-ink leading-relaxed">
-                {selectedReport?.description || "Tidak ada deskripsi rinci dari pelapor."}
-              </p>
-            </div>
-
-            {/* Foto Bukti Media (Task 3) */}
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-ink flex items-center gap-1.5">
-                  <Camera size={14} className="text-primary" />
-                  <span>Foto Bukti Lapangan ({selectedReport?.media?.length || 0})</span>
-                </span>
-
-                <label className="clay-press inline-flex items-center gap-1.5 rounded-lg border border-[#e2e2ec] bg-white px-2.5 py-1 text-[11px] font-semibold text-ink cursor-pointer hover:border-primary hover:text-primary">
-                  <Upload size={12} className={uploadingMedia ? "animate-spin" : ""} />
-                  <span>{uploadingMedia ? "Mengunggah..." : "Tambah Foto"}</span>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handleMediaUpload}
-                    disabled={uploadingMedia}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-
-              {selectedReport?.media && selectedReport.media.length > 0 ? (
-                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  {selectedReport.media.map((m) => (
-                    <div
-                      key={m.id}
-                      onClick={() => setSelectedImagePreview(m.url || `/storage/${m.file_path}`)}
-                      className="group relative aspect-video overflow-hidden rounded-xl border border-[#ececf6] bg-canvas cursor-pointer"
-                    >
-                      <img
-                        src={m.url || `/storage/${m.file_path}`}
-                        alt="Bukti Laporan"
-                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                      />
-                      <div className="absolute inset-0 bg-black/30 opacity-0 transition-opacity group-hover:opacity-100 flex items-center justify-center text-white text-[11px] font-medium">
-                        Klik untuk perbesar
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-2 rounded-xl border border-dashed border-[#dcdce8] p-4 text-center text-xs text-muted">
-                  Belum ada foto bukti diunggah untuk laporan ini. Anda dapat menambahkan foto dokumentasi petugas.
-                </div>
-              )}
-            </div>
-
-            {/* Moderation Action Form (Task 2) */}
-            <form onSubmit={handleModerateSubmit} className="rounded-2xl border border-primary/20 bg-primary-soft/30 p-4">
-              <div className="flex items-center gap-2 font-semibold text-ink text-xs">
-                <ShieldCheck size={16} className="text-primary" />
-                <span>Tindakan Moderasi & Perubahan Status</span>
-              </div>
-
-              {modError && (
-                <div className="mt-2 flex items-center gap-2 rounded-xl bg-rose-50 p-2.5 text-xs text-rose-700">
-                  <AlertCircle size={14} className="shrink-0" />
-                  <span>{modError}</span>
-                </div>
-              )}
-
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div className="sm:col-span-1">
-                  <label className="text-[11px] font-semibold text-muted uppercase tracking-wider">
-                    Ubah Status Menjadi:
-                  </label>
-                  <select
-                    value={modStatus}
-                    onChange={(e) => setModStatus(e.target.value as ReportStatus)}
-                    className="mt-1 w-full rounded-xl border border-[#e2e2ec] bg-white px-3 py-2 text-xs font-semibold text-ink focus:border-primary focus:outline-none"
-                  >
-                    <option value="verification">Sedang Ditinjau</option>
-                    <option value="confirmed">Terverifikasi (Valid)</option>
-                    <option value="handled">Dalam Penanganan Lapangan</option>
-                    <option value="resolved">Selesai Ditangani</option>
-                    <option value="rejected">Tolak / Laporan Palsu</option>
-                  </select>
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="text-[11px] font-semibold text-muted uppercase tracking-wider">
-                    Catatan Moderator / Instruksi Lapangan:
-                  </label>
-                  <input
-                    type="text"
-                    value={modNote}
-                    onChange={(e) => setModNote(e.target.value)}
-                    placeholder="Contoh: Tim Dishub telah meninjau lokasi / penertiban lapak selesai..."
-                    className="mt-1 w-full rounded-xl border border-[#e2e2ec] bg-white px-3 py-2 text-xs text-ink focus:border-primary focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-3 flex justify-end">
-                <ClayButton
-                  type="submit"
-                  variant="primary"
-                  disabled={modSubmitting}
-                  className="text-xs px-4 py-2"
-                >
-                  {modSubmitting ? (
-                    <>
-                      <Loader2 size={13} className="animate-spin mr-1" />
-                      Memproses...
-                    </>
-                  ) : (
-                    "Simpan Tindakan Moderasi"
-                  )}
-                </ClayButton>
-              </div>
-            </form>
-
-            {/* Riwayat Verifikasi (Verification History Timeline - Task 2) */}
-            <div>
-              <span className="text-xs font-semibold text-ink flex items-center gap-1.5">
-                <History size={14} className="text-primary" />
-                <span>Riwayat Audit & Verifikasi ({selectedReport?.verifications?.length || 0})</span>
-              </span>
-
-              <div className="mt-2 space-y-2">
-                {selectedReport?.verifications && selectedReport.verifications.length > 0 ? (
-                  selectedReport.verifications.map((v) => {
-                    const conf = STATUS_CONFIG[v.action as ReportStatus] || STATUS_CONFIG.reported;
-                    return (
-                      <div
-                        key={v.id}
-                        className="flex flex-col gap-1 rounded-xl border border-[#ececf6] bg-white p-3 text-xs"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold ${conf.bg} ${conf.text}`}>
-                              {conf.label}
-                            </span>
-                            <span className="font-medium text-ink">
-                              oleh {v.moderator?.name || "Moderator Petugas"}
-                            </span>
-                          </div>
-
-                          <span className="text-[10.5px] text-muted">
-                            {v.created_at ? new Date(v.created_at).toLocaleString("id-ID") : "-"}
-                          </span>
-                        </div>
-
-                        {v.note && (
-                          <p className="mt-1 text-muted text-[11px] italic bg-canvas/60 p-2 rounded-lg">
-                            &ldquo;{v.note}&rdquo;
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })
-                ) : (
-                  <p className="rounded-xl bg-canvas p-3 text-xs text-muted italic">
-                    Belum ada riwayat tindakan moderasi sebelumnya.
-                  </p>
-                )}
-              </div>
-            </div>
-          </ModalBody>
-
-          <ModalFooter>
-            <ClayButton
-              type="button"
-              variant="secondary"
-              onClick={() => setDetailModalOpen(false)}
-              className="text-xs"
-            >
-              Tutup
-            </ClayButton>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      {/* Lightbox Preview Modal for Image */}
-      {selectedImagePreview && (
-        <div
-          onClick={() => setSelectedImagePreview(null)}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 cursor-pointer"
-        >
-          <div className="relative max-h-[90vh] max-w-[90vw]">
-            <img
-              src={selectedImagePreview}
-              alt="Perbesar Foto Bukti"
-              className="max-h-[85vh] max-w-[85vw] rounded-2xl object-contain shadow-2xl"
-            />
-            <p className="mt-2 text-center text-xs text-white/80">Klik di mana saja untuk menutup</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

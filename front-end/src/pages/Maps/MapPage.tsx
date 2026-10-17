@@ -37,6 +37,9 @@ import { VendorRoutePanel } from "@/components/maps/VendorRoutePanel";
 import { RouteLayer } from "@/components/maps/RouteLayer";
 import { MapPillNav, type MapToolId } from "@/components/maps/MapPillNav";
 import { SearchModal } from "@/components/maps/SearchModal";
+import { ReportMarker, type MapCivicReport } from "@/components/maps/ReportMarker";
+import { CivicReportsMapPanel } from "@/components/maps/CivicReportsMapPanel";
+import { CreateReportModal } from "@/components/maps/CreateReportModal";
 
 import type { BusinessType } from "@/lib/umkmCatalog";
 import type { AnalysisResult } from "@/lib/analysisEngine";
@@ -45,9 +48,10 @@ import { useLocationAnalysis } from "@/hooks/useLocationAnalysis";
 import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import L from "leaflet";
-import { useMap, useMapEvents } from "react-leaflet";
+import { useMapEvents } from "react-leaflet";
 import {
   AlertCircle,
+  AlertTriangle,
   BookOpen,
   CheckCircle2,
   Footprints,
@@ -59,23 +63,6 @@ import {
   Target,
   X,
 } from "lucide-react";
-
-const MapViewController: React.FC<{
-  lat: number | null;
-  lng: number | null;
-}> = ({ lat, lng }) => {
-  const map = useMap();
-
-  useEffect(() => {
-    if (lat === null || lng === null) return;
-
-    map.setView([lat, lng], 18, {
-      animate: false,
-    });
-  }, [map, lat, lng]);
-
-  return null;
-};
 
 // ─── Map Ready Gate: delays children until Leaflet fires whenReady ─────────────
 // This prevents "Cannot destructure property 'zoom' of 't0'" crashes that occur
@@ -117,7 +104,7 @@ const MapEventHandler: React.FC<{
     zoom: number,
     bounds: L.LatLngBounds,
   ) => void;
-  mode: "candidate" | "waypoint" | "none";
+  mode: "candidate" | "waypoint" | "report" | "none";
 }> = ({ onMapClick, onViewportChange, mode }) => {
   const map = useMapEvents({
     click(e) {
@@ -166,7 +153,13 @@ const MapEventHandler: React.FC<{
       const container = map.getContainer();
       if (!container) return;
       const cursor =
-        mode === "candidate" ? "crosshair" : mode === "waypoint" ? "cell" : "";
+        mode === "candidate"
+          ? "crosshair"
+          : mode === "waypoint"
+          ? "cell"
+          : mode === "report"
+          ? "crosshair"
+          : "";
       container.style.cursor = cursor;
       return () => {
         try {
@@ -191,10 +184,7 @@ export function MapPage() {
   const [activeTool, setActiveTool] = useState<MapToolId | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
-  const isCatalogOpen = activeTool === "catalog";
-  const isLayersOpen = activeTool === "layers";
   const isRoutePanelOpen = activeTool === "routes";
-  const isAnalysisPanelOpen = activeTool === "analysis";
 
   const handleToolSelect = (id: MapToolId) => {
     if (id === "search") {
@@ -242,6 +232,60 @@ export function MapPage() {
   const [locivaLoading, setLocivaLoading] = useState(false);
   const [locivaError, setLocivaError] = useState<string | null>(null);
 
+  // ── Civic reports layer & creation flow ───────────────────────────────────
+  const [reports, setReports] = useState<MapCivicReport[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [showReportsLayer, setShowReportsLayer] = useState(true);
+  const [createReportModalOpen, setCreateReportModalOpen] = useState(false);
+  const [selectedReportCoords, setSelectedReportCoords] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const [pickingReportLocation, setPickingReportLocation] = useState(false);
+
+  const fetchReports = useCallback(async () => {
+    setReportsLoading(true);
+    try {
+      const res = await api.get("/reports", { params: { per_page: 100 } });
+      if (res.data?.success && res.data?.data) {
+        const raw = Array.isArray(res.data.data.data)
+          ? res.data.data.data
+          : Array.isArray(res.data.data)
+          ? res.data.data
+          : [];
+        const valid: MapCivicReport[] = raw
+          .filter(
+            (r: any) =>
+              r.latitude != null &&
+              r.longitude != null &&
+              !isNaN(Number(r.latitude)) &&
+              !isNaN(Number(r.longitude))
+          )
+          .map((r: any) => ({
+            id: String(r.id),
+            title: r.title,
+            description: r.description,
+            latitude: Number(r.latitude),
+            longitude: Number(r.longitude),
+            status: r.status || "reported",
+            severity: r.severity || "medium",
+            category: r.category,
+            area: r.area,
+            user: r.user,
+            confirmations_count:
+              r.confirmations_count ?? r.confirmations?.length ?? 0,
+            created_at: r.created_at || new Date().toISOString(),
+            media: r.media || [],
+          }));
+        setReports(valid);
+      }
+    } catch (err) {
+      console.warn("Gagal memuat laporan civic:", err);
+    } finally {
+      setReportsLoading(false);
+    }
+  }, []);
+
   // ── Public vendor routes (shared by community vendors) ───────────────────
   const [publicRoutes, setPublicRoutes] = useState<any[]>([]);
 
@@ -281,12 +325,13 @@ export function MapPage() {
   const [routeCalculation, setRouteCalculation] =
     useState<RouteCalculationResult | null>(null);
 
-  // ── Click mode: either placing candidate or placing waypoint ──────────────
-  const clickMode = useMemo((): "candidate" | "waypoint" | "none" => {
+  // ── Click mode: either placing candidate, waypoint, or report location ──────
+  const clickMode = useMemo((): "candidate" | "waypoint" | "report" | "none" => {
+    if (pickingReportLocation) return "report";
     if (isRoutePanelOpen && activeTool === "routes") return "waypoint";
     if (selectedBusiness) return "candidate";
     return "none";
-  }, [isRoutePanelOpen, activeTool, selectedBusiness]);
+  }, [pickingReportLocation, isRoutePanelOpen, activeTool, selectedBusiness]);
 
   // ── Privacy-Aware Opt-in User GPS Location (Section 6) ───────────────────
   // Location sharing is strictly opt-in and disabled by default. No silent tracking.
@@ -458,6 +503,7 @@ export function MapPage() {
   // Initial load: use a ~4km bounding box around the default center
   useEffect(() => {
     fetchLocivaData(center[0], center[1], 8000);
+    fetchReports();
     const controller = new AbortController();
     // ~0.018° lat/lng ≈ ~2km half-span per side
     const halfSpan = 0.018;
@@ -584,6 +630,20 @@ export function MapPage() {
 
   const handleMapClick = useCallback(
     (lat: number, lng: number) => {
+      if (pickingReportLocation) {
+        setSelectedReportCoords({ lat, lng });
+        // Keep picking mode active so user can reposition — modal opens via button
+        // Immediately open the modal with updated coords so UX is seamless
+        setPickingReportLocation(false);
+        setCreateReportModalOpen(true);
+        toast({
+          title: "Titik lokasi dipilih",
+          description: `Koordinat ${lat.toFixed(4)}, ${lng.toFixed(4)} diterapkan ke form.`,
+          variant: "success",
+        });
+        return;
+      }
+
       if (clickMode === "candidate" && selectedBusiness) {
         const newCandidate: CandidateData = {
           id: activeCandidateId,
@@ -618,6 +678,7 @@ export function MapPage() {
       }
     },
     [
+      pickingReportLocation,
       clickMode,
       selectedBusiness,
       activeCandidateId,
@@ -991,6 +1052,28 @@ export function MapPage() {
               />
             )}
 
+            {activeTool === "reports" && (
+              <CivicReportsMapPanel
+                isOpen={true}
+                onClose={() => setActiveTool(null)}
+                reports={reports}
+                loading={reportsLoading}
+                showReportsLayer={showReportsLayer}
+                onToggleReportsLayer={setShowReportsLayer}
+                onFlyToReport={(lat, lng) => {
+                  mapRef.current?.flyTo([lat, lng], 17);
+                }}
+                onOpenCreateModal={() => {
+                  setSelectedReportCoords(
+                    userLocation
+                      ? { lat: userLocation.lat, lng: userLocation.lng }
+                      : { lat: center[0], lng: center[1] }
+                  );
+                  setCreateReportModalOpen(true);
+                }}
+              />
+            )}
+
             {activeTool === "routes" && (
               <VendorRoutePanel
                 isOpen={true}
@@ -1083,6 +1166,21 @@ export function MapPage() {
           >
             <Footprints size={18} />
           </button>
+
+          {/* Quick Create Civic Report Floating Button */}
+          <button
+            type="button"
+            onClick={() => {
+              // Always enter location-picking mode first so user can tap the map
+              setSelectedReportCoords(null);
+              setPickingReportLocation(true);
+            }}
+            title="Lapor kondisi: klik peta untuk memilih lokasi"
+            className="pointer-events-auto flex items-center gap-1.5 px-3 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl shadow-md transition-all cursor-pointer active:scale-95 text-xs font-semibold"
+          >
+            <AlertTriangle size={15} />
+            <span className="hidden sm:inline">Lapor Kondisi</span>
+          </button>
         </div>
 
         {/* ── Leaflet Map Viewport ─────────────────────────────────────────── */}
@@ -1132,6 +1230,24 @@ export function MapPage() {
                 onViewportChange={loadViewportData}
                 mode={clickMode}
               />
+
+              {/* Temporary preview marker while picking report location */}
+              {pickingReportLocation && selectedReportCoords && (
+                <ReportMarker
+                  key="report-preview"
+                  report={{
+                    id: "__preview__",
+                    title: "Pilih posisi laporan...",
+                    latitude: selectedReportCoords.lat,
+                    longitude: selectedReportCoords.lng,
+                    status: "reported",
+                    severity: "medium",
+                    confirmations_count: 0,
+                    created_at: new Date().toISOString(),
+                    media: [],
+                  }}
+                />
+              )}
             </MapReadyGate>
 
             {/* User GPS location marker */}
@@ -1213,6 +1329,15 @@ export function MapPage() {
                     isDuplicateWithExternal={duplicateInternalIds.has(biz.id)}
                   />
                 ))}
+
+              {/* Civic Reports Layer */}
+              {showReportsLayer &&
+                reports.map((report) => (
+                  <ReportMarker
+                    key={`civic-report-${report.id}`}
+                    report={report}
+                  />
+                ))}
             </MapMarkerClusterGroup>
           </MapContainer>
 
@@ -1260,11 +1385,52 @@ export function MapPage() {
       <MapLegend
         showMapsData={showMapsData}
         showLocivaData={showLocivaData}
+        showReportsData={showReportsLayer}
         mapsCount={filteredExternalPlaces.length}
         locivaCount={filteredLocivaBusinesses.length}
+        reportsCount={reports.length}
         activeCandidateCount={activeCount}
         basemapMode={basemapMode}
         isStale={isPlacesStale}
+      />
+
+      {/* Picking report location banner on map */}
+      {pickingReportLocation && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[450] bg-rose-600 text-white px-5 py-2.5 rounded-full text-xs font-semibold shadow-xl flex items-center gap-3 border border-rose-300 pointer-events-auto">
+          <AlertTriangle size={14} className="shrink-0" />
+          <span>Klik titik mana pun di peta untuk memilih lokasi laporan</span>
+          <button
+            type="button"
+            onClick={() => {
+              setPickingReportLocation(false);
+              setSelectedReportCoords(null);
+            }}
+            className="rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] hover:bg-white/30 cursor-pointer"
+          >
+            Batal
+          </button>
+        </div>
+      )}
+
+      {/* Create report modal */}
+      <CreateReportModal
+        isOpen={createReportModalOpen}
+        onClose={() => {
+          setCreateReportModalOpen(false);
+          setSelectedReportCoords(null);
+        }}
+        selectedCoords={selectedReportCoords}
+        onSelectCoordsOnMap={() => {
+          // Close modal and enter picking mode; modal will re-open after user taps map
+          setCreateReportModalOpen(false);
+          setPickingReportLocation(true);
+        }}
+        onReportCreated={(newReport) => {
+          setReports((prev) => [newReport, ...prev]);
+          setShowReportsLayer(true);
+          setSelectedReportCoords(null);
+          mapRef.current?.flyTo([newReport.latitude, newReport.longitude], 17);
+        }}
       />
     </div>
   );

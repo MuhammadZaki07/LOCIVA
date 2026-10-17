@@ -6,8 +6,9 @@ import {
   Eye,
   Pencil,
   Trash2,
-  Loader2,
   AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
 } from "lucide-react";
 import { getUsers, updateUser, deleteUser } from "@/context/userService";
 import type { ManagedUser } from "@/context/userService";
@@ -15,13 +16,13 @@ import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/ui/Toast";
 import { ClayButton } from "@/components/ui/ClayButton";
 import { useDebounce } from "@/hooks/useDebounce";
+import Spinner from "@/components/ui/Spinner";
 import {
   Modal,
   ModalContent,
   ModalHeader,
   ModalTitle,
   ModalDescription,
-  ModalBody,
   ModalFooter,
 } from "@/components/ui/Modal";
 
@@ -31,11 +32,13 @@ interface ValidationErrors {
 }
 
 type UserRoleFilter = "all" | "admin" | "user";
+type PageMode = "list" | "detail" | "edit";
 
 export default function AdminUsers() {
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
 
+  const [mode, setMode] = useState<PageMode>("list");
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [search, setSearch] = useState("");
   const [role, setRole] = useState<UserRoleFilter>("all");
@@ -50,20 +53,21 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
+  const [activeUser, setActiveUser] = useState<ManagedUser | null>(null);
 
-  const [editingUser, setEditingUser] = useState<ManagedUser | null>(null);
+  // Edit form state
   const [editName, setEditName] = useState("");
   const [editRole, setEditRole] = useState<"admin" | "user">("user");
   const [savingEdit, setSavingEdit] = useState(false);
-  const debouncedSearch = useDebounce(search, 300);
   const [editError, setEditError] = useState<string | null>(null);
-  const [editValidationErrors, setEditValidationErrors] =
-    useState<ValidationErrors>({});
+  const [editValidationErrors, setEditValidationErrors] = useState<ValidationErrors>({});
 
+  // Delete modal state
   const [deletingUser, setDeletingUser] = useState<ManagedUser | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const debouncedSearch = useDebounce(search, 300);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -87,75 +91,58 @@ export default function AdminUsers() {
         setCurrentPage(result.meta.current_page);
       }
     } catch (err) {
-      console.error("Failed to get users:", err);
-      setError("Failed to get users.");
+      console.error("Gagal mengambil data pengguna:", err);
+      setError("Gagal memuat daftar pengguna. Periksa koneksi jaringan Anda.");
     } finally {
       setLoading(false);
     }
   }, [debouncedSearch, role, fromDate, toDate, currentPage]);
 
   useEffect(() => {
-    void fetchUsers();
+    fetchUsers();
   }, [fetchUsers]);
 
-  const handleSearchChange = (value: string) => {
-    setSearch(value);
-    setCurrentPage(1);
-  };
-
-  const handleRoleChange = (value: UserRoleFilter) => {
-    setRole(value);
-    setCurrentPage(1);
+  const handleOpenDetail = (user: ManagedUser) => {
+    setActiveUser(user);
+    setMode("detail");
   };
 
   const handleOpenEdit = (user: ManagedUser) => {
-    setEditingUser(user);
+    setActiveUser(user);
     setEditName(user.name);
     setEditRole(user.role);
     setEditError(null);
     setEditValidationErrors({});
+    setMode("edit");
   };
 
-  const handleSaveEdit = async () => {
-    if (!editingUser) return;
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeUser) return;
 
     try {
       setSavingEdit(true);
       setEditError(null);
       setEditValidationErrors({});
 
-      const updated = await updateUser(editingUser.id, {
+      const updated = await updateUser(activeUser.id, {
         name: editName.trim(),
         role: editRole,
       });
 
-      setSelectedUser((prev) =>
-        prev?.id === updated.id ? { ...prev, ...updated } : prev,
-      );
-
-      setEditingUser(null);
+      setActiveUser((prev) => (prev ? { ...prev, ...updated } : null));
 
       toast({
-        title: "Success",
-        description: `User ${updated.name} updated successfully.`,
+        title: "Pengguna diperbarui",
+        description: `Data ${updated.name} berhasil disimpan.`,
         variant: "success",
       });
 
       await fetchUsers();
-    } catch (err: unknown) {
-      const errObj = err as {
-        response?: {
-          status?: number;
-          data?: {
-            message?: string;
-            errors?: ValidationErrors;
-          };
-        };
-        message?: string;
-      };
-
-      const status = errObj.response?.status;
-      const responseData = errObj.response?.data;
+      setMode("detail");
+    } catch (err: any) {
+      const status = err.response?.status;
+      const responseData = err.response?.data;
 
       if (status === 422 && responseData?.errors) {
         setEditValidationErrors(responseData.errors);
@@ -164,8 +151,8 @@ export default function AdminUsers() {
 
       setEditError(
         responseData?.message ||
-          errObj.message ||
-          "Failed to update user. Please try again.",
+          err.message ||
+          "Gagal memperbarui pengguna. Silakan coba lagi."
       );
     } finally {
       setSavingEdit(false);
@@ -175,8 +162,8 @@ export default function AdminUsers() {
   const handleOpenDelete = (user: ManagedUser) => {
     if (currentUser && String(user.id) === String(currentUser.id)) {
       toast({
-        title: "Action Denied",
-        description: "You cannot delete your own account.",
+        title: "Tindakan ditolak",
+        description: "Anda tidak dapat menghapus akun Anda sendiri yang sedang aktif.",
         variant: "error",
       });
       return;
@@ -189,287 +176,473 @@ export default function AdminUsers() {
   const handleConfirmDelete = async () => {
     if (!deletingUser) return;
 
-    if (currentUser && String(deletingUser.id) === String(currentUser.id)) {
-      setDeleteError("You cannot delete your own account.");
-      return;
-    }
-
     try {
       setIsDeleting(true);
       setDeleteError(null);
 
-      const deletedUser = deletingUser;
-
-      await deleteUser(deletedUser.id);
-
-      if (selectedUser?.id === deletedUser.id) {
-        setSelectedUser(null);
-      }
-
-      setDeletingUser(null);
+      await deleteUser(deletingUser.id);
 
       toast({
-        title: "User Deleted",
-        description: `User ${deletedUser.name} deleted successfully.`,
+        title: "Pengguna dihapus",
+        description: `Akun ${deletingUser.name} telah dihapus dari sistem.`,
         variant: "success",
       });
 
-      if (users.length === 1 && currentPage > 1) {
-        setCurrentPage((page) => page - 1);
-      } else {
-        await fetchUsers();
+      setDeletingUser(null);
+      if (mode !== "list") {
+        setMode("list");
+        setActiveUser(null);
       }
-    } catch (err: unknown) {
-      console.error("Error deleting user:", err);
-
-      const errMsg =
-        err && typeof err === "object" && "response" in err
-          ? (
-              err as {
-                response?: {
-                  data?: { message?: string };
-                };
-              }
-            ).response?.data?.message
-          : null;
-
-      setDeleteError(errMsg || "Failed to delete user. Please try again.");
+      await fetchUsers();
+    } catch (err: any) {
+      setDeleteError(
+        err.response?.data?.message ||
+          err.message ||
+          "Gagal menghapus pengguna. Silakan coba lagi."
+      );
     } finally {
       setIsDeleting(false);
     }
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-display text-[26px] font-medium tracking-tight text-ink sm:text-[30px]">
-            User & Stakeholder Directory
-          </h1>
-          <p className="mt-1 text-[13.5px] text-muted">
-            Manage registered entrepreneurs, community contributors, and
-            administrative privileges.
-          </p>
+  // ── Render Detail View ──────────────────────────────────────────────────────
+  if (mode === "detail" && activeUser) {
+    return (
+      <div className="space-y-6 text-left max-w-4xl mx-auto">
+        {/* Breadcrumb / Back button */}
+        <div className="flex items-center justify-between border-b border-[#f0f0f8] pb-4">
+          <button
+            type="button"
+            onClick={() => setMode("list")}
+            className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-muted hover:text-ink cursor-pointer"
+          >
+            <ArrowLeft size={14} />
+            <span>kembali ke daftar pengguna</span>
+          </button>
+
+          <div className="flex items-center gap-2">
+            <ClayButton
+              variant="secondary"
+              onClick={() => handleOpenEdit(activeUser)}
+            >
+              <Pencil size={14} />
+              <span>edit data</span>
+            </ClayButton>
+
+            <button
+              type="button"
+              onClick={() => handleOpenDelete(activeUser)}
+              className="clay-press inline-flex items-center gap-1.5 rounded-[10px] bg-rose-50 border border-rose-200 px-3 py-1.5 text-[12.5px] font-medium text-rose-700 hover:bg-rose-100 cursor-pointer"
+            >
+              <Trash2 size={14} />
+              <span>hapus akun</span>
+            </button>
+          </div>
         </div>
 
-        <span className="w-fit rounded-full bg-primary-soft px-3 py-1 text-[12px] font-medium text-primary">
-          {totalUsers} registered accounts
+        {/* Profile Card */}
+        <div className="clay rounded-[20px] p-6 bg-white space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary-soft text-2xl font-bold text-primary shadow-xs">
+              <span>{activeUser.name.charAt(0).toUpperCase()}</span>
+              {activeUser.image && (
+                <img
+                  src={activeUser.image}
+                  alt={`Foto ${activeUser.name}`}
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              )}
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-display text-[20px] font-medium text-ink">
+                  {activeUser.name}
+                </h2>
+                <span
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium capitalize ${
+                    activeUser.role === "admin"
+                      ? "bg-primary-soft text-primary"
+                      : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  }`}
+                >
+                  {activeUser.role === "admin" ? <ShieldCheck size={12} /> : <Store size={12} />}
+                  <span>{activeUser.role}</span>
+                </span>
+              </div>
+              <p className="text-[13px] text-muted mt-0.5">{activeUser.email}</p>
+            </div>
+          </div>
+
+          {/* User Details Grid */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 pt-4 border-t border-[#f0f0f8]">
+            <div className="rounded-[12px] bg-slate-50 p-3.5 border border-slate-100">
+              <span className="text-[11px] text-muted font-medium block">
+                tanggal bergabung
+              </span>
+              <p className="mt-1 font-display text-[14px] font-medium text-ink">
+                {activeUser.joinedDate || "—"}
+              </p>
+            </div>
+
+            <div className="rounded-[12px] bg-slate-50 p-3.5 border border-slate-100">
+              <span className="text-[11px] text-muted font-medium block">
+                status verifikasi email
+              </span>
+              <p className="mt-1 font-display text-[14px] font-medium text-emerald-600 flex items-center gap-1">
+                <CheckCircle2 size={13} />
+                <span>terverifikasi</span>
+              </p>
+            </div>
+
+            <div className="rounded-[12px] bg-slate-50 p-3.5 border border-slate-100">
+              <span className="text-[11px] text-muted font-medium block">
+                aktivitas analitik
+              </span>
+              <p className="mt-1 font-display text-[14px] font-medium text-ink">
+                {activeUser.activityCount ?? 0} aksi tercatat
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Render Edit View ────────────────────────────────────────────────────────
+  if (mode === "edit" && activeUser) {
+    return (
+      <div className="space-y-6 text-left max-w-2xl mx-auto">
+        <div className="flex items-center justify-between border-b border-[#f0f0f8] pb-4">
+          <button
+            type="button"
+            onClick={() => setMode("detail")}
+            className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-muted hover:text-ink cursor-pointer"
+          >
+            <ArrowLeft size={14} />
+            <span>batal & kembali ke detail</span>
+          </button>
+
+          <h2 className="font-display text-[16px] font-medium text-ink">
+            edit pengguna
+          </h2>
+        </div>
+
+        {editError && (
+          <div className="flex items-center gap-2 rounded-[12px] bg-rose-50 p-3.5 text-[12.5px] text-rose-700 border border-rose-100">
+            <AlertCircle size={16} className="shrink-0" />
+            <span>{editError}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSaveEdit} className="clay rounded-[20px] p-6 bg-white space-y-5">
+          <div>
+            <label className="block text-[12.5px] font-medium text-ink">
+              nama lengkap pengguna <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              className="mt-1 w-full rounded-[10px] border border-[#e5e5f0] bg-white px-3.5 py-2 text-[13px] text-ink outline-none focus:border-primary"
+            />
+            {editValidationErrors.name?.[0] && (
+              <p className="mt-1 text-[11px] text-rose-600">{editValidationErrors.name[0]}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-[12.5px] font-medium text-ink">
+              alamat email (hanya baca)
+            </label>
+            <input
+              type="text"
+              disabled
+              value={activeUser.email}
+              className="mt-1 w-full rounded-[10px] border border-[#e5e5f0] bg-slate-50 px-3.5 py-2 text-[13px] text-muted outline-none cursor-not-allowed"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[12.5px] font-medium text-ink mb-1.5">
+              peran dalam sistem (role) <span className="text-rose-500">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label
+                className={`clay-soft flex items-center gap-3 rounded-[12px] p-3.5 cursor-pointer border transition-all ${
+                  editRole === "user" ? "border-primary bg-primary/5" : "border-slate-200"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="edit-role"
+                  value="user"
+                  checked={editRole === "user"}
+                  onChange={() => setEditRole("user")}
+                  className="size-4 text-primary"
+                />
+                <div>
+                  <p className="text-[13px] font-medium text-ink">user (pelaku UMKM)</p>
+                  <p className="text-[11px] text-muted">akses publik & analisis lokasi</p>
+                </div>
+              </label>
+
+              <label
+                className={`clay-soft flex items-center gap-3 rounded-[12px] p-3.5 cursor-pointer border transition-all ${
+                  editRole === "admin" ? "border-primary bg-primary/5" : "border-slate-200"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="edit-role"
+                  value="admin"
+                  checked={editRole === "admin"}
+                  onChange={() => setEditRole("admin")}
+                  className="size-4 text-primary"
+                />
+                <div>
+                  <p className="text-[13px] font-medium text-ink">administrator</p>
+                  <p className="text-[11px] text-muted">akses moderasi & kontrol sistem</p>
+                </div>
+              </label>
+            </div>
+            {editValidationErrors.role?.[0] && (
+              <p className="mt-1 text-[11px] text-rose-600">{editValidationErrors.role[0]}</p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-[#f0f0f8]">
+            <ClayButton
+              variant="secondary"
+              type="button"
+              disabled={savingEdit}
+              onClick={() => setMode("detail")}
+            >
+              batal
+            </ClayButton>
+
+            <button
+              type="submit"
+              disabled={savingEdit}
+              className="clay-primary inline-flex items-center gap-1.5 rounded-[10px] px-5 py-2 text-[12.5px] font-medium text-white cursor-pointer disabled:opacity-50"
+            >
+              {savingEdit && <Spinner size="sm" />}
+              <span>{savingEdit ? "menyimpan..." : "simpan perubahan"}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
+  // ── Render List View ────────────────────────────────────────────────────────
+  return (
+    <div className="space-y-6 text-left">
+      {/* Header */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-[#f0f0f8] pb-4">
+        <div>
+          <h1 className="font-display text-[22px] font-medium tracking-tight text-ink sm:text-[24px]">
+            manajemen pengguna
+          </h1>
+          <p className="mt-0.5 text-[12.5px] text-muted">
+            kelola akun pengguna terdaftar, verifikasi peran, dan izin akses sistem LOCIVA.
+          </p>
+        </div>
+        <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-[11.5px] font-medium text-muted">
+          total {totalUsers} pengguna terdaftar
         </span>
       </div>
 
-      {/* Search and Filters */}
-      <div className="flex w-full flex-wrap items-end gap-3">
-        {/* Search */}
-        <div className="relative min-w-50 flex-1">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-muted">
-            <Search size={15} />
+      {/* Toolbar: Proportional Search & Filters */}
+      <div className="clay flex flex-wrap items-center justify-between gap-3 rounded-[16px] p-4 bg-white">
+        <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-0">
+          {/* Proportional Search */}
+          <div className="relative w-full sm:w-64">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Cari nama atau email..."
+              className="w-full rounded-[10px] border border-[#e5e5f0] bg-white pl-8 pr-3 py-1.5 text-[12.5px] text-ink outline-none focus:border-primary"
+            />
           </div>
 
-          <input
-            type="text"
-            value={search}
-            onChange={(event) => handleSearchChange(event.target.value)}
-            placeholder="Search by name or email..."
-            className="clay-inset w-full rounded-[12px] py-2 pl-10 pr-4 text-[13.5px] text-ink placeholder:text-muted/60 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-          />
-        </div>
-
-        {/* Role */}
-        <select
-          value={role}
-          onChange={(event) =>
-            handleRoleChange(event.target.value as UserRoleFilter)
-          }
-          className="clay-inset w-full rounded-xl bg-white px-3.5 py-2 text-[13.5px] text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:w-auto"
-          aria-label="Filter berdasarkan role"
-        >
-          <option value="all">All Roles</option>
-          <option value="admin">Admin</option>
-          <option value="user">User</option>
-        </select>
-
-        {/* From Date */}
-        <div className="w-full sm:w-41.25">
-          <label
-            htmlFor="filter-from-date"
-            className="mb-1.5 block text-[12px] font-medium text-ink"
-          >
-            Joined From
-          </label>
-
-          <input
-            id="filter-from-date"
-            type="date"
-            value={fromDate}
-            max={toDate || undefined}
-            onChange={(event) => {
-              setFromDate(event.target.value);
+          {/* Role Filter */}
+          <select
+            value={role}
+            onChange={(e) => {
+              setRole(e.target.value as UserRoleFilter);
               setCurrentPage(1);
             }}
-            className="clay-inset w-full min-w-0 rounded-xl px-2 py-2 text-[13px] text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-          />
+            className="rounded-[10px] border border-[#e5e5f0] bg-white px-3 py-1.5 text-[12px] font-medium text-ink outline-none focus:border-primary cursor-pointer"
+          >
+            <option value="all">semua peran</option>
+            <option value="user">user (pelaku UMKM)</option>
+            <option value="admin">administrator</option>
+          </select>
+
+          {/* Date range filters */}
+          <div className="hidden md:flex items-center gap-1.5 text-[12px] text-muted">
+            <span>dari:</span>
+            <input
+              type="date"
+              value={fromDate}
+              max={toDate || undefined}
+              onChange={(e) => {
+                setFromDate(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="rounded-[8px] border border-[#e5e5f0] bg-white px-2 py-1 text-[11.5px] text-ink outline-none focus:border-primary"
+            />
+            <span>ke:</span>
+            <input
+              type="date"
+              value={toDate}
+              min={fromDate || undefined}
+              onChange={(e) => {
+                setToDate(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="rounded-[8px] border border-[#e5e5f0] bg-white px-2 py-1 text-[11.5px] text-ink outline-none focus:border-primary"
+            />
+          </div>
         </div>
 
-        {/* To Date */}
-        <div className="w-full sm:w-41.25">
-          <label
-            htmlFor="filter-to-date"
-            className="mb-1.5 block text-[12px] font-medium text-ink"
-          >
-            Joined To
-          </label>
-
-          <input
-            id="filter-to-date"
-            type="date"
-            value={toDate}
-            min={fromDate || undefined}
-            onChange={(event) => {
-              setToDate(event.target.value);
+        {(fromDate || toDate || search || role !== "all") && (
+          <button
+            type="button"
+            onClick={() => {
+              setSearch("");
+              setRole("all");
+              setFromDate("");
+              setToDate("");
               setCurrentPage(1);
             }}
-            className="clay-inset w-full min-w-0 rounded-xl px-2 py-2 text-[13px] text-ink focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-          />
-        </div>
-
-        {/* Reset */}
-        <ClayButton
-          variant="secondary"
-          disabled={!fromDate && !toDate}
-          onClick={() => {
-            setFromDate("");
-            setToDate("");
-            setCurrentPage(1);
-          }}
-        >
-          Reset
-        </ClayButton>
+            className="text-[12px] font-medium text-primary hover:underline cursor-pointer"
+          >
+            reset filter
+          </button>
+        )}
       </div>
 
       {/* Users Table */}
-      <div className="clay overflow-hidden rounded-[20px]">
+      <div className="clay overflow-hidden rounded-[16px] bg-white">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-[13px]">
-            <thead className="border-b border-[#ececf6] bg-white/60 text-[11.5px] uppercase tracking-wider text-muted">
+            <thead className="border-b border-[#ececf6] bg-slate-50/60 text-[11px] font-semibold text-muted">
               <tr>
-                <th className="px-6 py-3.5 font-medium">user profile</th>
-                <th className="px-6 py-3.5 font-medium">system role</th>
-                <th className="px-6 py-3.5 font-medium">activity</th>
-                <th className="px-6 py-3.5 font-medium">joined date</th>
-                <th className="px-6 py-3.5 text-right font-medium">actions</th>
+                <th className="px-5 py-3">pengguna</th>
+                <th className="px-5 py-3">peran sistem</th>
+                <th className="px-5 py-3">tanggal bergabung</th>
+                <th className="px-5 py-3 text-right">tindakan</th>
               </tr>
             </thead>
 
             <tbody className="divide-y divide-[#f0f0f8]">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-muted">
-                    <div className="flex items-center justify-center gap-2">
-                      <Loader2
-                        size={16}
-                        className="animate-spin text-primary"
-                      />
-                      <span>Loading users...</span>
-                    </div>
+                  <td colSpan={4} className="px-5 py-12 text-center text-muted">
+                    <Spinner size="md" className="mx-auto mb-2 text-primary" />
+                    <p className="text-[12.5px]">memuat data pengguna...</p>
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td
-                    colSpan={5}
-                    className="px-6 py-8 text-center text-red-500"
-                  >
-                    <div className="space-y-3">
-                      <p>{error}</p>
-                      <ClayButton
-                        variant="secondary"
-                        onClick={() => void fetchUsers()}
-                      >
-                        Try Again
-                      </ClayButton>
-                    </div>
+                  <td colSpan={4} className="px-5 py-8 text-center text-rose-600">
+                    <p className="text-[13px]">{error}</p>
+                    <button
+                      type="button"
+                      onClick={() => void fetchUsers()}
+                      className="mt-2 text-[12px] font-medium text-primary underline cursor-pointer"
+                    >
+                      coba lagi
+                    </button>
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-muted">
-                    No users found.
+                  <td colSpan={4} className="px-5 py-10 text-center text-muted">
+                    <p className="text-[13px] font-medium text-ink">tidak ada pengguna ditemukan</p>
+                    <p className="mt-0.5 text-[11.5px]">coba sesuaikan kata kunci pencarian atau filter peran.</p>
                   </td>
                 </tr>
               ) : (
-                users.map((user) => (
-                  <tr
-                    key={user.id}
-                    className="transition-colors hover:bg-white/50"
-                  >
-                    <td className="px-6 py-4">
+                users.map((item) => (
+                  <tr key={item.id} className="transition-colors hover:bg-slate-50/50">
+                    <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary-soft text-[12px] font-bold text-primary">
-                          {user.image ? (
+                          {item.image ? (
                             <img
-                              src={user.image}
-                              alt={`Profile ${user.name}`}
+                              src={item.image}
+                              alt={item.name}
                               className="h-full w-full object-cover"
-                              onError={(event) => {
-                                event.currentTarget.style.display = "none";
-                              }}
                             />
                           ) : (
-                            user.name.charAt(0).toUpperCase()
+                            item.name.charAt(0).toUpperCase()
                           )}
                         </div>
-
-                        <div>
-                          <p className="flex items-center gap-1.5 font-medium text-ink">
-                            <span>{user.name}</span>
-                            {currentUser &&
-                              String(user.id) === String(currentUser.id) && (
-                                <span className="rounded-sm bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                                  You
-                                </span>
-                              )}
+                        <div className="min-w-0">
+                          <p className="flex items-center gap-1.5 font-medium text-ink truncate">
+                            <span>{item.name}</span>
+                            {currentUser && String(item.id) === String(currentUser.id) && (
+                              <span className="rounded-[4px] bg-primary/10 px-1 py-0.2 text-[9.5px] font-medium text-primary">
+                                Anda
+                              </span>
+                            )}
                           </p>
-                          <p className="text-[11.5px] text-muted">
-                            {user.email}
-                          </p>
+                          <p className="text-[11px] text-muted truncate">{item.email}</p>
                         </div>
                       </div>
                     </td>
 
-                    <td className="px-6 py-4">
+                    <td className="px-5 py-3.5">
                       <span
                         className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium capitalize ${
-                          user.role === "admin"
+                          item.role === "admin"
                             ? "bg-primary-soft text-primary"
-                            : "bg-[#e8f6ee] text-potential"
+                            : "bg-emerald-50 text-emerald-700 border border-emerald-200"
                         }`}
                       >
-                        {user.role === "admin" ? (
-                          <ShieldCheck size={11} />
-                        ) : (
-                          <Store size={11} />
-                        )}
-                        {user.role}
+                        {item.role === "admin" ? <ShieldCheck size={11} /> : <Store size={11} />}
+                        <span>{item.role}</span>
                       </span>
                     </td>
 
-                    <td className="px-6 py-4 text-muted">
-                      {user.activityCount ?? "-"} simulated actions
+                    <td className="px-5 py-3.5 text-[12px] text-muted">
+                      {item.joinedDate || "—"}
                     </td>
 
-                    <td className="px-6 py-4 text-muted">{user.joinedDate}</td>
-
-                    <td className="px-6 py-4 text-right">
-                      <div className="inline-flex items-center gap-1">
+                    <td className="px-5 py-3.5 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
-                          onClick={() => setSelectedUser(user)}
-                          title="Lihat detail pengguna"
-                          aria-label={`Lihat detail ${user.name}`}
-                          className="clay-press inline-flex items-center justify-center rounded-lg border border-[#ececf6] bg-white p-2 text-muted transition-colors hover:bg-primary-soft hover:text-primary"
+                          onClick={() => handleOpenDetail(item)}
+                          className="clay-press inline-flex items-center gap-1 rounded-[6px] border border-slate-200 bg-white px-2.5 py-1 text-[11.5px] font-medium text-muted hover:text-ink cursor-pointer"
                         >
-                          <Eye size={15} />
+                          <Eye size={12} />
+                          <span>detail</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(item)}
+                          className="clay-press inline-flex items-center gap-1 rounded-[6px] border border-slate-200 bg-white px-2.5 py-1 text-[11.5px] font-medium text-muted hover:text-ink cursor-pointer"
+                        >
+                          <Pencil size={12} />
+                          <span>edit</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={Boolean(currentUser && String(item.id) === String(currentUser.id))}
+                          onClick={() => handleOpenDelete(item)}
+                          className="clay-press inline-flex items-center gap-1 rounded-[6px] border border-rose-200 bg-rose-50 px-2 py-1 text-[11.5px] font-medium text-rose-700 hover:bg-rose-100 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                          title="Hapus akun pengguna"
+                        >
+                          <Trash2 size={12} />
                         </button>
                       </div>
                     </td>
@@ -479,341 +652,83 @@ export default function AdminUsers() {
             </tbody>
           </table>
         </div>
+
+        {/* Standard Pagination Footer */}
+        {totalUsers > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-[#f0f0f8] px-5 py-3.5 text-[12px] text-muted">
+            <div>
+              menampilkan halaman <span className="font-semibold text-ink">{currentPage}</span> dari{" "}
+              <span className="font-semibold text-ink">{lastPage}</span> (total {totalUsers} pengguna)
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <ClayButton
+                variant="secondary"
+                disabled={loading || currentPage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              >
+                sebelumnya
+              </ClayButton>
+
+              <ClayButton
+                variant="secondary"
+                disabled={loading || currentPage >= lastPage}
+                onClick={() => setCurrentPage((p) => p + 1)}
+              >
+                selanjutnya
+              </ClayButton>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Pagination */}
-      {!loading && !error && lastPage > 1 && (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-muted">
-            Showing {Math.min((currentPage - 1) * perPage + 1, totalUsers)}-
-            {Math.min(currentPage * perPage, totalUsers)} of {totalUsers} users
-          </p>
-
-          <div className="flex gap-2">
-            <ClayButton
-              variant="secondary"
-              disabled={loading || currentPage <= 1}
-              onClick={() => setCurrentPage((page) => page - 1)}
-            >
-              Previous
-            </ClayButton>
-
-            <ClayButton
-              variant="secondary"
-              disabled={loading || currentPage >= lastPage}
-              onClick={() => setCurrentPage((page) => page + 1)}
-            >
-              Next
-            </ClayButton>
-          </div>
-        </div>
-      )}
-
-      {/* User Detail Modal */}
-      <Modal
-        open={selectedUser !== null}
-        onOpenChange={(open) => {
-          if (!open) setSelectedUser(null);
-        }}
-      >
-        <ModalContent size="md" showClose>
-          {selectedUser && (
-            <>
-              <ModalHeader>
-                <ModalTitle id="user-detail-title">User Detail</ModalTitle>
-                <ModalDescription>User account information.</ModalDescription>
-              </ModalHeader>
-
-              <ModalBody>
-                <div className="flex items-center gap-4">
-                  <div className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary-soft text-xl font-bold text-primary">
-                    <span>{selectedUser.name.charAt(0).toUpperCase()}</span>
-
-                    {selectedUser.image && (
-                      <img
-                        src={selectedUser.image}
-                        alt={`Foto profil ${selectedUser.name}`}
-                        className="absolute inset-0 h-full w-full object-cover"
-                        onError={(event) => {
-                          event.currentTarget.style.display = "none";
-                        }}
-                      />
-                    )}
-                  </div>
-
-                  <div className="min-w-0">
-                    <h3 className="wrap-break-word text-base font-semibold text-ink">
-                      {selectedUser.name}
-                    </h3>
-                    <p className="break-all text-sm text-muted">
-                      {selectedUser.email}
-                    </p>
-
-                    <span
-                      className={`mt-2 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium capitalize ${
-                        selectedUser.role === "admin"
-                          ? "bg-primary-soft text-primary"
-                          : "bg-[#e8f6ee] text-potential"
-                      }`}
-                    >
-                      {selectedUser.role === "admin" ? (
-                        <ShieldCheck size={11} />
-                      ) : (
-                        <Store size={11} />
-                      )}
-                      {selectedUser.role}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mt-6 space-y-4 rounded-xl bg-white/60 p-4">
-                  <div>
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted">
-                      Joined Date
-                    </p>
-                    <p className="mt-1 text-sm text-ink">
-                      {selectedUser.joinedDate || "-"}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-muted">
-                      Activity
-                    </p>
-                    <p className="mt-1 text-sm text-ink">
-                      {selectedUser.activityCount ?? "-"} simulated actions
-                    </p>
-                  </div>
-                </div>
-              </ModalBody>
-
-              <ModalFooter className="border-t border-[#ececf6] pt-4">
-                <ClayButton
-                  variant="secondary"
-                  className="!border-0 !bg-[#e8edff] !text-[#4256a8] hover:!bg-[#dce4ff]"
-                  onClick={() => handleOpenEdit(selectedUser)}
-                >
-                  <Pencil size={15} />
-                  Edit
-                </ClayButton>
-
-                <ClayButton
-                  variant="secondary"
-                  className="!border-0 !bg-[#feecec] !text-[#c53030] hover:!bg-[#fddada]"
-                  onClick={() => handleOpenDelete(selectedUser)}
-                >
-                  <Trash2 size={15} />
-                  Delete
-                </ClayButton>
-              </ModalFooter>
-            </>
-          )}
-        </ModalContent>
-      </Modal>
-
-      {/* Edit User Modal */}
-      <Modal
-        open={editingUser !== null}
-        onOpenChange={(open) => {
-          if (!open && !savingEdit) setEditingUser(null);
-        }}
-      >
-        <ModalContent size="md" showClose={!savingEdit}>
-          <ModalHeader>
-            <ModalTitle id="edit-user-title">Edit User Data</ModalTitle>
-            <ModalDescription>
-              Edit user information and system role.
-            </ModalDescription>
-          </ModalHeader>
-
-          <ModalBody>
-            {editError && (
-              <div className="mb-4 flex items-center gap-2 rounded-[10px] bg-[#feecec] p-3 text-[12.5px] text-[#c53030]">
-                <AlertCircle size={16} className="shrink-0" />
-                <span>{editError}</span>
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div>
-                <label
-                  htmlFor="edit-user-name"
-                  className="mb-1.5 block text-[12px] font-medium text-ink"
-                >
-                  User Name
-                </label>
-
-                <input
-                  id="edit-user-name"
-                  type="text"
-                  value={editName}
-                  onChange={(event) => {
-                    setEditName(event.target.value);
-                    setEditValidationErrors((prev) => ({
-                      ...prev,
-                      name: undefined,
-                    }));
-                  }}
-                  disabled={savingEdit}
-                  placeholder="Masukkan nama pengguna"
-                  className={`clay-inset w-full rounded-xl px-3.5 py-2 text-[13.5px] text-ink focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60 ${
-                    editValidationErrors.name
-                      ? "border border-warning focus:border-warning"
-                      : "focus:border-primary"
-                  }`}
-                />
-
-                {editValidationErrors.name && (
-                  <p className="mt-1.5 flex items-center gap-1 text-[12px] text-warning">
-                    <AlertCircle size={13} />
-                    {editValidationErrors.name[0]}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label
-                  htmlFor="edit-user-role"
-                  className="mb-1.5 block text-[12px] font-medium text-ink"
-                >
-                  System Role
-                </label>
-
-                <select
-                  id="edit-user-role"
-                  value={editRole}
-                  onChange={(event) => {
-                    setEditRole(event.target.value as "admin" | "user");
-                    setEditValidationErrors((prev) => ({
-                      ...prev,
-                      role: undefined,
-                    }));
-                  }}
-                  disabled={savingEdit}
-                  className={`clay-inset w-full rounded-xl bg-white px-3.5 py-2 text-[13.5px] text-ink focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60 ${
-                    editValidationErrors.role
-                      ? "border border-warning focus:border-warning"
-                      : "focus:border-primary"
-                  }`}
-                >
-                  <option value="user">User (Entrepreneur)</option>
-                  <option value="admin">Admin (Administrator)</option>
-                </select>
-
-                {editValidationErrors.role && (
-                  <p className="mt-1.5 flex items-center gap-1 text-[12px] text-warning">
-                    <AlertCircle size={13} />
-                    {editValidationErrors.role[0]}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label
-                  htmlFor="edit-user-email"
-                  className="mb-1.5 block text-[12px] font-medium text-muted"
-                >
-                  Email (Read-only)
-                </label>
-
-                <input
-                  id="edit-user-email"
-                  type="email"
-                  value={editingUser?.email || ""}
-                  disabled
-                  className="w-full cursor-not-allowed rounded-xl border border-[#ececf6] bg-[#f8f8fc] px-3.5 py-2 text-[13.5px] text-muted"
-                />
-              </div>
-            </div>
-          </ModalBody>
-
-          <ModalFooter className="border-t border-[#ececf6] pt-4">
-            <ClayButton
-              variant="secondary"
-              disabled={savingEdit}
-              onClick={() => setEditingUser(null)}
-            >
-              Batal
-            </ClayButton>
-
-            <ClayButton
-              variant="primary"
-              disabled={savingEdit}
-              onClick={() => void handleSaveEdit()}
-              className="min-w-22.5"
-            >
-              {savingEdit ? (
-                <span className="flex items-center gap-1.5">
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>Saving...</span>
-                </span>
-              ) : (
-                "Simpan"
-              )}
-            </ClayButton>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      {/* Delete User Confirmation Modal */}
+      {/* Delete Confirmation Modal (kept strictly for confirmation) */}
       <Modal
         open={deletingUser !== null}
         onOpenChange={(open) => {
-          if (!open && !isDeleting) setDeletingUser(null);
+          if (!open) {
+            setDeletingUser(null);
+            setDeleteError(null);
+          }
         }}
       >
-        <ModalContent size="sm" showClose={!isDeleting}>
-          <ModalHeader>
-            <ModalTitle id="delete-user-title" className="text-warning">
-              Delete User Confirmation
-            </ModalTitle>
-            <ModalDescription>
-              This action cannot be undone. Deleting the user account will
-            </ModalDescription>
-          </ModalHeader>
+        <ModalContent size="sm" showClose>
+          {deletingUser && (
+            <>
+              <ModalHeader>
+                <ModalTitle>Konfirmasi Hapus Pengguna</ModalTitle>
+                <ModalDescription>
+                  Apakah Anda yakin ingin menghapus akun <strong>{deletingUser.name}</strong> ({deletingUser.email})? Tindakan ini tidak dapat dibatalkan.
+                </ModalDescription>
+              </ModalHeader>
 
-          <ModalBody>
-            {deleteError && (
-              <div className="mb-3 flex items-center gap-2 rounded-[10px] bg-[#feecec] p-3 text-[12.5px] text-[#c53030]">
-                <AlertCircle size={16} className="shrink-0" />
-                <span>{deleteError}</span>
-              </div>
-            )}
-
-            {deletingUser && (
-              <div className="rounded-xl bg-[#fff8e7] p-3.5 text-[13px] text-ink">
-                Are you sure you want to delete the user account{" "}
-                <span className="font-semibold">{deletingUser.name}</span> (
-                {deletingUser.email})?
-              </div>
-            )}
-          </ModalBody>
-
-          <ModalFooter className="border-t border-[#ececf6] pt-4">
-            <ClayButton
-              variant="secondary"
-              disabled={isDeleting}
-              onClick={() => setDeletingUser(null)}
-            >
-              Cancel
-            </ClayButton>
-
-            <ClayButton
-              variant="secondary"
-              disabled={isDeleting}
-              onClick={() => void handleConfirmDelete()}
-              className="!border-0 !bg-[#feecec] !text-[#c53030] hover:!bg-[#fddada]"
-            >
-              {isDeleting ? (
-                <span className="flex items-center gap-1.5">
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>Deleting...</span>
-                </span>
-              ) : (
-                "Delete User"
+              {deleteError && (
+                <div className="p-3 text-[12px] text-rose-700 bg-rose-50 rounded-[10px] border border-rose-200">
+                  {deleteError}
+                </div>
               )}
-            </ClayButton>
-          </ModalFooter>
+
+              <ModalFooter className="border-t border-[#ececf6] pt-3 flex items-center justify-end gap-2">
+                <ClayButton
+                  variant="secondary"
+                  disabled={isDeleting}
+                  onClick={() => setDeletingUser(null)}
+                >
+                  batal
+                </ClayButton>
+
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={handleConfirmDelete}
+                  className="clay-press inline-flex items-center gap-1.5 rounded-[10px] bg-rose-600 px-4 py-2 text-[12.5px] font-medium text-white hover:bg-rose-700 cursor-pointer disabled:opacity-50"
+                >
+                  {isDeleting && <Spinner size="sm" />}
+                  <span>{isDeleting ? "menghapus..." : "ya, hapus pengguna"}</span>
+                </button>
+              </ModalFooter>
+            </>
+          )}
         </ModalContent>
       </Modal>
     </div>

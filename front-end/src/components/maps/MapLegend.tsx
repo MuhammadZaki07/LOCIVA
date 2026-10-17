@@ -6,8 +6,10 @@ import { cn } from '@/lib/utils';
 interface MapLegendProps {
   showMapsData?: boolean;
   showLocivaData?: boolean;
+  showReportsData?: boolean;
   mapsCount?: number;
   locivaCount?: number;
+  reportsCount?: number;
   activeCandidateCount?: number;
   basemapMode?: 'default' | 'satellite';
   isStale?: boolean;
@@ -16,8 +18,10 @@ interface MapLegendProps {
 export const MapLegend: React.FC<MapLegendProps> = ({
   showMapsData = true,
   showLocivaData = true,
+  showReportsData = true,
   mapsCount = 0,
   locivaCount = 0,
+  reportsCount = 0,
   activeCandidateCount = 0,
   basemapMode = 'default',
   isStale = false,
@@ -46,6 +50,14 @@ export const MapLegend: React.FC<MapLegendProps> = ({
             <span className="font-semibold text-indigo-600">
               {showLocivaData ? locivaCount : 0} Businesses
             </span>
+            {showReportsData && (
+              <>
+                <span>·</span>
+                <span className="font-semibold text-rose-600">
+                  {reportsCount} Laporan
+                </span>
+              </>
+            )}
             {isExpanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
           </div>
         </button>
@@ -89,6 +101,21 @@ export const MapLegend: React.FC<MapLegendProps> = ({
                   </div>
                   <span className="font-bold text-muted">
                     {showLocivaData ? `${locivaCount} businesses` : "Disabled"}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-1 rounded bg-slate-50/80">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={cn(
+                        "size-2.5 rounded-md",
+                        showReportsData ? "bg-rose-500" : "bg-slate-300"
+                      )}
+                    />
+                    <span className="text-ink font-medium">Laporan Kondisi Warga (Civic)</span>
+                  </div>
+                  <span className="font-bold text-muted">
+                    {showReportsData ? `${reportsCount} titik` : "Disabled"}
                   </span>
                 </div>
 

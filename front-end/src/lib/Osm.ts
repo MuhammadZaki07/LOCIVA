@@ -346,7 +346,7 @@ function generateFallbackName(tags: Record<string, string>): string {
   return locationHint ? `${capitalised} — ${locationHint}` : capitalised;
 }
 
-function aroundQuery(lat: number, lng: number, radius: number): string {
+export function aroundQuery(lat: number, lng: number, radius: number): string {
   const around = `(around:${Math.round(radius)},${lat.toFixed(5)},${lng.toFixed(5)})`;
   return `[out:json][timeout:25];
 (
@@ -737,7 +737,7 @@ export async function searchPlaces(
   const features = json.features ?? [];
 
   return features
-    .map((feature) => {
+    .map((feature): GeocodeResult | null => {
       const [lng, lat] = feature.geometry?.coordinates ?? [];
       if (typeof lat !== "number" || typeof lng !== "number") return null;
       const p = feature.properties;
@@ -758,7 +758,7 @@ export async function searchPlaces(
         name: p.name,
         city: p.city || p.locality,
         street: p.street,
-      } satisfies GeocodeResult;
+      };
     })
     .filter((item): item is GeocodeResult => item !== null);
 }

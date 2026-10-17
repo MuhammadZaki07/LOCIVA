@@ -109,7 +109,7 @@ export function calculateAnalysis(
 
   // Opportunity Score
   let oppScore = 40; // Base score
-  const relevantPOI: { name: string; category: string; distance: number; relevance: 'high' | 'medium' | 'low' }[] = [];
+  const relevantPOI: AnalysisResult['relevantPOI'] = [];
 
   const foundCategories = new Set<string>();
 

@@ -31,7 +31,7 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({ results, activ
   let maxScore = -Infinity;
 
   validResults.forEach(({ id, result }) => {
-    const score = result.opportunityScore - (result.competitionScore * 0.8) + (result.accessibilityScore * 0.5);
+    const score = (result.opportunityScore ?? 0) - ((result.competitionScore ?? 0) * 0.8) + ((result.accessibilityScore ?? 0) * 0.5);
     if (score > maxScore) {
       maxScore = score;
       bestId = id;

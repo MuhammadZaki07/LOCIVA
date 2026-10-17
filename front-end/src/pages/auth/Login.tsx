@@ -17,7 +17,7 @@ interface ValidationErrors {
 }
 
 export default function Login() {
-  const { login, loginWithGoogle, user } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 

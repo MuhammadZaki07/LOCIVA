@@ -1,7 +1,7 @@
-import { BookOpen, Layers, Route, Search, Target, Bookmark, Scale } from "lucide-react";
+import { BookOpen, Layers, Route, Search, Target, Bookmark, Scale, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type MapToolId = "catalog" | "search" | "layers" | "candidates" | "analysis" | "compare" | "routes";
+export type MapToolId = "catalog" | "search" | "layers" | "candidates" | "analysis" | "compare" | "routes" | "reports";
 
 interface MapPillNavProps {
   active: MapToolId | null;
@@ -11,13 +11,14 @@ interface MapPillNavProps {
 }
 
 const ITEMS: { id: MapToolId; label: string; icon: typeof Search }[] = [
-  { id: "catalog",    label: "Business Catalog",    icon: BookOpen  },
-  { id: "search",     label: "Search Location",     icon: Search    },
-  { id: "layers",     label: "Layers & POIs",       icon: Layers    },
-  { id: "candidates", label: "Saved Candidates",    icon: Bookmark  },
-  { id: "analysis",   label: "Location Analysis",   icon: Target    },
-  { id: "compare",    label: "Compare Candidates",  icon: Scale     },
-  { id: "routes",     label: "Vendor Routes",       icon: Route     },
+  { id: "catalog",    label: "Business Catalog",    icon: BookOpen      },
+  { id: "search",     label: "Search Location",     icon: Search        },
+  { id: "reports",    label: "Civic Reports",       icon: AlertTriangle },
+  { id: "layers",     label: "Layers & POIs",       icon: Layers        },
+  { id: "candidates", label: "Saved Candidates",    icon: Bookmark      },
+  { id: "analysis",   label: "Location Analysis",   icon: Target        },
+  { id: "compare",    label: "Compare Candidates",  icon: Scale         },
+  { id: "routes",     label: "Vendor Routes",       icon: Route         },
 ];
 
 export function MapPillNav({

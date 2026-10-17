@@ -101,6 +101,18 @@ const router = createBrowserRouter([
                 path: "/admin/profile",
                 lazy: page(() => import("@/pages/Profile")),
               },
+              {
+                path: "/admin/data-quality",
+                lazy: page(() => import("@/pages/dashboard/AdminDataQuality")),
+              },
+              {
+                path: "/admin/data-sources",
+                lazy: page(() => import("@/pages/dashboard/AdminDataSources")),
+              },
+              {
+                path: "/admin/system-health",
+                lazy: page(() => import("@/pages/dashboard/AdminSystemHealth")),
+              },
             ],
           },
         ],

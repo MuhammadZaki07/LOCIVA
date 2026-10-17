@@ -25,7 +25,7 @@ export const ButtonGoogle: React.FC<ButtonGoogleProps> = ({
   return (
     <ClayButton
       type="button"
-      variant={variant}
+      variant="secondary"
       onClick={onClick}
       className={cn(
         "inline-flex items-center justify-center gap-2 my-3 disabled:opacity-45 disabled:cursor-not-allowed",
