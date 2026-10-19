@@ -90,6 +90,38 @@ export default function UserDashboard() {
     null,
   );
 
+  const getPageNumbers = (
+    currentPage: number,
+    lastPage: number,
+  ): (number | "...")[] => {
+    if (lastPage <= 7) {
+      return Array.from({ length: lastPage }, (_, i) => i + 1);
+    }
+
+    const pages: (number | "...")[] = [];
+
+    pages.push(1);
+
+    const start = Math.max(2, currentPage - 2);
+    const end = Math.min(lastPage - 1, currentPage + 2);
+
+    if (start > 2) {
+      pages.push("...");
+    }
+
+    for (let page = start; page <= end; page++) {
+      pages.push(page);
+    }
+
+    if (end < lastPage - 1) {
+      pages.push("...");
+    }
+
+    pages.push(lastPage);
+
+    return pages;
+  };
+
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -823,7 +855,8 @@ export default function UserDashboard() {
                             <span className="block">Location Coordinates</span>
 
                             <span className="mt-1 block truncate font-medium text-slate-600">
-                              {Number.isFinite(Number(biz.latitude)) && Number.isFinite(Number(biz.longitude))
+                              {Number.isFinite(Number(biz.latitude)) &&
+                              Number.isFinite(Number(biz.longitude))
                                 ? `${Number(biz.latitude).toFixed(5)}, ${Number(biz.longitude).toFixed(5)}`
                                 : "-"}
                             </span>
@@ -857,17 +890,43 @@ export default function UserDashboard() {
                     {businessTotal} businesses
                   </span>
 
-                  <div className="flex items-center justify-end gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
                     <button
                       type="button"
                       onClick={() =>
                         setBusinessPage((prev) => Math.max(1, prev - 1))
                       }
                       disabled={businessPage <= 1 || loading}
-                      className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-ink transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-ink transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Previous
                     </button>
+
+                    {getPageNumbers(businessPage, businessLastPage).map(
+                      (page, index) =>
+                        page === "..." ? (
+                          <span
+                            key={`ellipsis-${index}`}
+                            className="px-1 text-slate-400"
+                          >
+                            …
+                          </span>
+                        ) : (
+                          <button
+                            key={page}
+                            type="button"
+                            onClick={() => setBusinessPage(page)}
+                            disabled={loading || businessPage === page}
+                            className={`min-w-9 rounded-xl px-3 py-2 text-xs font-bold transition disabled:cursor-default ${
+                              businessPage === page
+                                ? "bg-primary text-white"
+                                : "border border-slate-200 bg-white text-ink hover:bg-slate-100"
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        ),
+                    )}
 
                     <button
                       type="button"
@@ -877,7 +936,7 @@ export default function UserDashboard() {
                         )
                       }
                       disabled={businessPage >= businessLastPage || loading}
-                      className="inline-flex items-center rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white transition hover:bg-primary-deep disabled:cursor-not-allowed disabled:opacity-40"
+                      className="inline-flex items-center rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white transition hover:bg-primary-deep disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Next
                       <ArrowRight size={13} className="ml-1" />
@@ -1059,7 +1118,8 @@ export default function UserDashboard() {
                     size={14}
                   />
 
-                  {Number.isFinite(parseFloat(formData.latitude)) && Number.isFinite(parseFloat(formData.longitude)) ? (
+                  {Number.isFinite(parseFloat(formData.latitude)) &&
+                  Number.isFinite(parseFloat(formData.longitude)) ? (
                     <span className="font-medium text-ink">
                       {parseFloat(formData.latitude).toFixed(6)},{" "}
                       {parseFloat(formData.longitude).toFixed(6)}

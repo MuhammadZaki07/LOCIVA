@@ -17,6 +17,31 @@ class UserRepository extends BaseRepository
     }
 
 
+
+    public function finds(int|string $id, array $columns = ['*'])
+    {
+        return $this->model->newQuery()
+            ->withCount([
+                'businesses',
+                'reports',
+                'vendorRoutes',
+            ])
+            ->with([
+                'businesses' => fn($query) => $query
+                    ->latest()
+                    ->limit(5),
+
+                'reports' => fn($query) => $query
+                    ->latest()
+                    ->limit(5),
+
+                'vendorRoutes' => fn($query) => $query
+                    ->latest()
+                    ->limit(5),
+            ])
+            ->find($id, $columns);
+    }
+
     public function PaginateFilter(array $filters = [], int $perPage = 10)
     {
         $query = $this->model->newQuery();

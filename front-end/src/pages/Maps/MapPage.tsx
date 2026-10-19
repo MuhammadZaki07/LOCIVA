@@ -5,6 +5,7 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Map as MapContainer,
   MapTileLayer,
@@ -179,6 +180,97 @@ export function MapPage() {
   const [center, setCenter] = useState<[number, number]>([-7.9797, 112.6304]); // Default to Malang coordinates
   const { toast } = useToast();
   const mapRef = useRef<L.Map>(null);
+  const [searchParams] = useSearchParams();
+
+  // ── Focus on specific object when navigated from Admin User Detail ──────────
+  // Reads ?focusType=business|report|route &focusId=ID from URL.
+  // Runs once after mount, waits for map to be ready before flying.
+  useEffect(() => {
+    const focusType = searchParams.get("focusType");
+    const focusId = searchParams.get("focusId");
+
+    if (!focusType || !focusId) return;
+
+    // Wait for map to initialise — poll until mapRef is populated
+    let attempts = 0;
+    const maxAttempts = 40; // 4 seconds max (40 × 100ms)
+
+    const tryFocus = async () => {
+      attempts += 1;
+      const map = mapRef.current;
+
+      if (!map) {
+        if (attempts < maxAttempts) {
+          setTimeout(tryFocus, 100);
+        }
+        return;
+      }
+
+      try {
+        if (focusType === "business") {
+          const res = await api.get(`/businesses/${focusId}`);
+          const biz = res.data?.data;
+          if (biz?.latitude != null && biz?.longitude != null) {
+            map.flyTo([Number(biz.latitude), Number(biz.longitude)], 17);
+          }
+        } else if (focusType === "report") {
+          const res = await api.get(`/reports/${focusId}`);
+          const report = res.data?.data;
+          if (report?.latitude != null && report?.longitude != null) {
+            map.flyTo(
+              [Number(report.latitude), Number(report.longitude)],
+              17,
+            );
+          }
+        } else if (focusType === "route") {
+          // Try sessionStorage bridge first (set by AdminUsers before navigation)
+          const stored = sessionStorage.getItem(
+            `lociva_focus_route_${focusId}`,
+          );
+          if (stored) {
+            try {
+              const waypoints: Array<{ lat: number; lng: number }> =
+                JSON.parse(stored);
+              if (waypoints.length >= 2) {
+                const bounds = L.latLngBounds(
+                  waypoints.map((w) => [w.lat, w.lng] as [number, number]),
+                );
+                map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+                // Clean up after use
+                sessionStorage.removeItem(`lociva_focus_route_${focusId}`);
+              }
+            } catch {
+              // ignore parse errors
+            }
+            return;
+          }
+
+          // Fallback: try API (only works if owner or shared route)
+          try {
+            const res = await api.get(`/vendor-routes/${focusId}`);
+            const route = res.data?.data;
+            const waypoints: Array<{ lat: number; lng: number }> =
+              route?.waypoints ?? [];
+            if (waypoints.length >= 2) {
+              const bounds = L.latLngBounds(
+                waypoints.map((w) => [w.lat, w.lng] as [number, number]),
+              );
+              map.fitBounds(bounds, { padding: [60, 60], maxZoom: 16 });
+            }
+          } catch {
+            // Route not accessible — silent fail
+          }
+        }
+      } catch {
+        // Network or not-found errors — silent fail, do not disturb the map
+      }
+    };
+
+    // Delay slightly to allow Leaflet to finish initialisation
+    const timer = setTimeout(tryFocus, 300);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount only
 
   // ── Navigation / Panel tool state ──────────────────────────────────────────
   const [activeTool, setActiveTool] = useState<MapToolId | null>(null);

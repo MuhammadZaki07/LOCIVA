@@ -82,4 +82,19 @@ class User extends Authenticatable
 
         $this->notify(new CustomResetPasswordNotification($url));
     }
+
+    public function businesses()
+    {
+        return $this->hasMany(Business::class);
+    }
+
+    public function reports()
+    {
+        return $this->hasMany(Report::class);
+    }
+
+    public function vendorRoutes()
+    {
+        return $this->hasMany(VendorRoute::class);
+    }
 }

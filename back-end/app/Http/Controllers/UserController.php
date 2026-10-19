@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Helpers\ApiResponse;
 use App\Helpers\PaginationHelper;
 use App\Http\Requests\UserRequestUpdate;
+use App\Http\Resources\UserDetailResource;
 use App\Http\Resources\UserResource;
 use App\Repositories\UserRepository;
 use App\Traits\UploadTrait;
@@ -48,11 +49,11 @@ class UserController extends Controller
     public function show(string $id)
     {
         try {
-            $data = $this->userRepo->find($id);
+            $data = $this->userRepo->finds($id);
 
             if (!$data) return ApiResponse::error('Data not found', 404);
 
-            return ApiResponse::success(UserResource::make($data), 'Data retrieved successfully');
+            return ApiResponse::success(UserDetailResource::make($data), 'Data retrieved successfully');
         } catch (\Throwable $th) {
             return ApiResponse::error('Failed get data: ' . $th->getMessage(), 500);
         }

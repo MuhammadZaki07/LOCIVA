@@ -21,6 +21,72 @@ export interface UserApi {
   created_at?: string;
 }
 
+
+export interface UserBusiness {
+  id: string;
+  name: string;
+  description: string | null;
+  address: string | null;
+  latitude: number;
+  longitude: number;
+  image: string | null;
+  created_at: string;
+}
+
+export interface UserReport {
+  id: string;
+  title: string;
+  description: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  status: string;
+  severity: string;
+  category_id: string | null;
+  area_id: string | null;
+  occurred_at: string | null;
+  confirmed_at: string | null;
+  resolved_at: string | null;
+  created_at: string;
+}
+
+export interface UserVendorRoute {
+  id: string;
+  name: string;
+  waypoints: Array<{ lat: number; lng: number; name?: string; stop_duration?: number }>;
+  route_geometry: [number, number][] | null;
+  distance: number | null;
+  estimated_duration: number | null;
+  status: string | null;
+  is_shared: boolean;
+  business: { id: string; name: string } | null;
+  created_at: string;
+}
+
+export interface UserDetailApi extends UserApi {
+  businesses_count: number;
+  reports_count: number;
+  vendorRoutes_count: number;
+  businesses: UserBusiness[];
+  reports: UserReport[];
+  vendorRoutes: UserVendorRoute[];
+}
+
+export interface UserDetailResponse {
+  success: boolean;
+  message: string;
+  data: UserDetailApi;
+}
+
+export interface ManagedUserDetail extends ManagedUser {
+  businesses_count: number;
+  reports_count: number;
+  vendorRoutes_count: number;
+  businesses: UserBusiness[];
+  reports: UserReport[];
+  vendorRoutes: UserVendorRoute[];
+}
+
+
 export interface UserFilters {
   search?: string;
   role?: "admin" | "user" | "";
@@ -98,7 +164,20 @@ export const getCurrentUser = async (): Promise<ManagedUser> => {
 
 export const getProfile = getCurrentUser;
 
-
+ export const formatUserDetail = (user: UserDetailApi): ManagedUserDetail => {
+    return {
+      ...formatUser(user),
+      businesses_count: user.businesses_count ?? 0,
+      reports_count: user.reports_count ?? 0,
+      vendorRoutes_count: user.vendorRoutes_count ?? 0,
+      businesses: (user.businesses ?? []).map((business) => ({
+        ...business,
+        image: getStorageUrl(business.image),
+      })),
+      reports: user.reports ?? [],
+      vendorRoutes: user.vendorRoutes ?? [],
+    };
+  };
 
 export const getUsers = async (
   filters: UserFilters = {},
@@ -120,9 +199,12 @@ export const getUsers = async (
 
 
 
-export const getUserById = async (id: string): Promise<ManagedUser> => {
-  const response = await api.get<UserSingleResponse>(`/users/${id}`);
-  return formatUser(response.data.data);
+export const getUserById = async (
+  id: string,
+): Promise<ManagedUserDetail> => {
+  const response = await api.get<UserDetailResponse>(`/users/${id}`);
+
+  return formatUserDetail(response.data.data);
 };
 
 export const updateUser = async (
