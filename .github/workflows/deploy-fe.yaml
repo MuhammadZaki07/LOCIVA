@@ -22,7 +22,7 @@ jobs:
 
       - name: Build
         working-directory: ./front-end
-        run: npm build
+        run: npm run build
 
       - name: Deploy
         uses: SamKirkland/FTP-Deploy-Action@v4.4.0
