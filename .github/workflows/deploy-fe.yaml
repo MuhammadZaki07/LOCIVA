@@ -34,5 +34,5 @@ jobs:
           server: ftpupload.net
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASS }}
-          local-dir: ./front-end/build/
+          local-dir: ./front-end/dist/
           server-dir: /lociva.freedev.app/htdocs/public/
