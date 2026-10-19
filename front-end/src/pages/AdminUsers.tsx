@@ -17,11 +17,9 @@ import {
   ExternalLink,
 } from "lucide-react";
 
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import dayjs, { Dayjs } from "dayjs";
-import "dayjs/locale/id";
+import dayjs from "dayjs";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 import {
   getUsers,
@@ -60,14 +58,13 @@ interface ValidationErrors {
 type UserRoleFilter = "all" | "admin" | "user";
 type PageMode = "list" | "detail" | "edit";
 
-// ─── Status badge helpers ─────────────────────────────────────────────────────
 const reportStatusLabel: Record<string, string> = {
-  reported: "Dilaporkan",
-  verification: "Verifikasi",
-  confirmed: "Dikonfirmasi",
-  handled: "Ditangani",
-  resolved: "Selesai",
-  rejected: "Ditolak",
+  reported: "Reported",
+  verification: "Under Verification",
+  confirmed: "Confirmed",
+  handled: "In Progress",
+  resolved: "Resolved",
+  rejected: "Rejected",
 };
 
 const reportStatusColor: Record<string, string> = {
@@ -80,9 +77,9 @@ const reportStatusColor: Record<string, string> = {
 };
 
 const routeStatusLabel: Record<string, string> = {
-  planned: "Direncanakan",
-  active: "Aktif",
-  completed: "Selesai",
+  planned: "Planned",
+  active: "Active",
+  completed: "Completed",
 };
 
 export default function AdminUsers() {
@@ -154,8 +151,8 @@ export default function AdminUsers() {
         setCurrentPage(result.meta.current_page);
       }
     } catch (err) {
-      console.error("Gagal mengambil data pengguna:", err);
-      setError("Gagal memuat daftar pengguna. Periksa koneksi jaringan Anda.");
+      console.error("Failed to fetch users:", err);
+      setError("Failed to load users. Please check your network connection.");
     } finally {
       setLoading(false);
     }
@@ -165,7 +162,7 @@ export default function AdminUsers() {
     void fetchUsers();
   }, [fetchUsers]);
 
-  // Open user detail and fetch complete data from API
+  // Open user details
   const handleOpenDetail = async (user: ManagedUser) => {
     setActiveUser(user);
     setUserDetail(null);
@@ -179,11 +176,43 @@ export default function AdminUsers() {
       setUserDetail(detail);
       setActiveUser(detail);
     } catch (err) {
-      console.error("Gagal mengambil detail pengguna:", err);
-      setDetailError("Gagal memuat detail pengguna. Silakan coba lagi.");
+      console.error("Failed to fetch user details:", err);
+      setDetailError("Failed to load user details. Please try again.");
     } finally {
       setLoadingDetail(false);
     }
+  };
+
+  const getPageNumbers = (
+    currentPage: number,
+    lastPage: number,
+  ): (number | "...")[] => {
+    if (lastPage <= 7) {
+      return Array.from({ length: lastPage }, (_, i) => i + 1);
+    }
+
+    const pages: (number | "...")[] = [];
+
+    pages.push(1);
+
+    const start = Math.max(2, currentPage - 2);
+    const end = Math.min(lastPage - 1, currentPage + 2);
+
+    if (start > 2) {
+      pages.push("...");
+    }
+
+    for (let page = start; page <= end; page++) {
+      pages.push(page);
+    }
+
+    if (end < lastPage - 1) {
+      pages.push("...");
+    }
+
+    pages.push(lastPage);
+
+    return pages;
   };
 
   // Open edit form
@@ -214,21 +243,19 @@ export default function AdminUsers() {
 
       setActiveUser((prev) => (prev ? { ...prev, ...updated } : null));
 
-      // Refresh list data
       await fetchUsers();
 
-      // Refresh detail data if available
       try {
         const detail = await getUserById(activeUser.id);
         setUserDetail(detail);
         setActiveUser(detail);
       } catch (detailErr) {
-        console.error("Gagal memperbarui detail pengguna:", detailErr);
+        console.error("Failed to refresh user details:", detailErr);
       }
 
       toast({
-        title: "Pengguna diperbarui",
-        description: `Data ${updated.name} berhasil disimpan.`,
+        title: "User Updated",
+        description: `${updated.name} has been updated successfully.`,
         variant: "success",
       });
 
@@ -245,7 +272,7 @@ export default function AdminUsers() {
       setEditError(
         responseData?.message ||
           err.message ||
-          "Gagal memperbarui pengguna. Silakan coba lagi.",
+          "Failed to update user. Please try again.",
       );
     } finally {
       setSavingEdit(false);
@@ -256,9 +283,8 @@ export default function AdminUsers() {
   const handleOpenDelete = (user: ManagedUser) => {
     if (currentUser && String(user.id) === String(currentUser.id)) {
       toast({
-        title: "Tindakan ditolak",
-        description:
-          "Anda tidak dapat menghapus akun Anda sendiri yang sedang aktif.",
+        title: "Action Denied",
+        description: "You cannot delete your own active account.",
         variant: "error",
       });
       return;
@@ -279,8 +305,8 @@ export default function AdminUsers() {
       await deleteUser(deletingUser.id);
 
       toast({
-        title: "Pengguna dihapus",
-        description: `Akun ${deletingUser.name} telah dihapus dari sistem.`,
+        title: "User Deleted",
+        description: `The account belonging to ${deletingUser.name} has been deleted.`,
         variant: "success",
       });
 
@@ -293,7 +319,7 @@ export default function AdminUsers() {
         setMode("list");
       }
 
-      // If the last item on a page is deleted, go back one page.
+      // Move back one page if the last item on the current page is deleted.
       if (users.length === 1 && currentPage > 1) {
         setCurrentPage((page) => page - 1);
       } else {
@@ -303,7 +329,7 @@ export default function AdminUsers() {
       setDeleteError(
         err.response?.data?.message ||
           err.message ||
-          "Gagal menghapus pengguna. Silakan coba lagi.",
+          "Failed to delete user. Please try again.",
       );
     } finally {
       setIsDeleting(false);
@@ -316,7 +342,7 @@ export default function AdminUsers() {
       return (
         <div className="flex flex-col items-center justify-center gap-3 py-16">
           <Spinner size="md" />
-          <p className="text-sm text-muted">Memuat detail pengguna...</p>
+          <p className="text-sm text-muted">Loading user details...</p>
         </div>
       );
     }
@@ -327,7 +353,7 @@ export default function AdminUsers() {
           <AlertCircle size={28} className="mx-auto text-rose-500" />
 
           <p className="text-sm text-rose-600">
-            {detailError ?? "Data detail pengguna tidak tersedia."}
+            {detailError ?? "User details are unavailable."}
           </p>
 
           <div className="flex justify-center gap-2">
@@ -335,7 +361,7 @@ export default function AdminUsers() {
               variant="secondary"
               onClick={() => void handleOpenDetail(activeUser)}
             >
-              Coba lagi
+              Try Again
             </ClayButton>
 
             <ClayButton
@@ -346,7 +372,7 @@ export default function AdminUsers() {
                 setUserDetail(null);
               }}
             >
-              Kembali
+              Back
             </ClayButton>
           </div>
         </div>
@@ -367,7 +393,7 @@ export default function AdminUsers() {
             className="inline-flex cursor-pointer items-center gap-1.5 text-[12.5px] font-medium text-muted hover:text-ink"
           >
             <ArrowLeft size={14} />
-            <span>Kembali ke daftar pengguna</span>
+            <span>Back to User List</span>
           </button>
 
           <div className="flex items-center gap-2">
@@ -376,7 +402,7 @@ export default function AdminUsers() {
               onClick={() => handleOpenEdit(userDetail)}
             >
               <Pencil size={14} />
-              <span>Edit data</span>
+              <span>Edit User</span>
             </ClayButton>
 
             <button
@@ -385,7 +411,7 @@ export default function AdminUsers() {
               className="clay-press inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] border border-rose-200 bg-rose-50 px-3 py-1.5 text-[12.5px] font-medium text-rose-700 hover:bg-rose-100"
             >
               <Trash2 size={14} />
-              <span>Hapus akun</span>
+              <span>Delete Account</span>
             </button>
           </div>
         </div>
@@ -399,7 +425,7 @@ export default function AdminUsers() {
               {userDetail.image && (
                 <img
                   src={userDetail.image}
-                  alt={`Foto ${userDetail.name}`}
+                  alt={`Photo of ${userDetail.name}`}
                   className="absolute inset-0 h-full w-full object-cover"
                 />
               )}
@@ -437,7 +463,7 @@ export default function AdminUsers() {
           <div className="grid gap-3 border-t border-[#f0f0f8] pt-4 sm:grid-cols-2">
             <div className="rounded-[12px] border border-slate-100 bg-slate-50 p-3.5">
               <span className="block text-[11px] font-medium text-muted">
-                Tanggal bergabung
+                Date Joined
               </span>
               <p className="mt-1 font-display text-[14px] font-medium text-ink">
                 {userDetail.joinedDate || "—"}
@@ -446,11 +472,11 @@ export default function AdminUsers() {
 
             <div className="rounded-[12px] border border-slate-100 bg-slate-50 p-3.5">
               <span className="block text-[11px] font-medium text-muted">
-                Status verifikasi email
+                Email Verification Status
               </span>
               <p className="mt-1 flex items-center gap-1 font-display text-[14px] font-medium text-emerald-600">
                 <CheckCircle2 size={13} />
-                <span>Terverifikasi</span>
+                <span>Verified</span>
               </p>
             </div>
           </div>
@@ -459,7 +485,7 @@ export default function AdminUsers() {
           <div className="grid gap-3 border-t border-[#f0f0f8] pt-4 sm:grid-cols-3">
             <div className="rounded-[12px] border border-slate-100 bg-slate-50 p-3.5">
               <span className="block text-[11px] font-medium text-muted">
-                Jumlah bisnis
+                Total Businesses
               </span>
               <p className="mt-1 font-display text-xl font-semibold text-ink">
                 {userDetail.businesses_count}
@@ -468,7 +494,7 @@ export default function AdminUsers() {
 
             <div className="rounded-[12px] border border-slate-100 bg-slate-50 p-3.5">
               <span className="block text-[11px] font-medium text-muted">
-                Jumlah laporan
+                Total Reports
               </span>
               <p className="mt-1 font-display text-xl font-semibold text-ink">
                 {userDetail.reports_count}
@@ -477,7 +503,7 @@ export default function AdminUsers() {
 
             <div className="rounded-[12px] border border-slate-100 bg-slate-50 p-3.5">
               <span className="block text-[11px] font-medium text-muted">
-                Jumlah rute
+                Total Routes
               </span>
               <p className="mt-1 font-display text-xl font-semibold text-ink">
                 {userDetail.vendorRoutes_count}
@@ -485,16 +511,17 @@ export default function AdminUsers() {
             </div>
           </div>
         </div>
+
         <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
           {/* User businesses */}
           <div className="clay space-y-4 rounded-[20px] bg-white p-6">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-display text-base font-medium text-ink">
-                  Bisnis pengguna
+                  User Businesses
                 </h3>
                 <p className="mt-1 text-[12.5px] text-muted">
-                  Daftar bisnis terbaru milik pengguna ini.
+                  Recent businesses registered by this user.
                 </p>
               </div>
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-muted">
@@ -506,10 +533,10 @@ export default function AdminUsers() {
               <div className="rounded-xl border border-dashed border-slate-200 py-8 text-center">
                 <Store size={24} className="mx-auto text-muted" />
                 <p className="mt-2 text-sm font-medium text-ink">
-                  Belum ada bisnis
+                  No Businesses Yet
                 </p>
                 <p className="mt-1 text-xs text-muted">
-                  Pengguna ini belum mendaftarkan bisnis.
+                  This user has not registered any businesses.
                 </p>
               </div>
             ) : (
@@ -544,9 +571,7 @@ export default function AdminUsers() {
 
                       <p className="mt-1 flex items-center gap-1 truncate text-xs text-muted">
                         <MapPin size={12} className="shrink-0" />
-                        <span>
-                          {business.address || "Alamat belum tersedia"}
-                        </span>
+                        <span>{business.address || "Address unavailable"}</span>
                       </p>
 
                       {business.description && (
@@ -568,10 +593,10 @@ export default function AdminUsers() {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-display text-base font-medium text-ink">
-                  Laporan pengguna
+                  User Reports
                 </h3>
                 <p className="mt-1 text-[12.5px] text-muted">
-                  Laporan infrastruktur terbaru dari pengguna ini.
+                  Recent infrastructure reports submitted by this user.
                 </p>
               </div>
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-muted">
@@ -583,10 +608,10 @@ export default function AdminUsers() {
               <div className="rounded-xl border border-dashed border-slate-200 py-8 text-center">
                 <FileText size={24} className="mx-auto text-muted" />
                 <p className="mt-2 text-sm font-medium text-ink">
-                  Belum ada laporan
+                  No Reports Yet
                 </p>
                 <p className="mt-1 text-xs text-muted">
-                  Pengguna ini belum membuat laporan.
+                  This user has not submitted any reports.
                 </p>
               </div>
             ) : (
@@ -598,9 +623,9 @@ export default function AdminUsers() {
                     onClick={() => {
                       if (report.latitude == null || report.longitude == null) {
                         toast({
-                          title: "Koordinat tidak tersedia",
+                          title: "Coordinates Unavailable",
                           description:
-                            "Laporan ini tidak memiliki koordinat lokasi.",
+                            "This report does not have location coordinates.",
                           variant: "error",
                         });
                         return;
@@ -632,7 +657,7 @@ export default function AdminUsers() {
                         <span className="text-[10px] text-muted">
                           {report.latitude != null && report.longitude != null
                             ? `${Number(report.latitude).toFixed(4)}, ${Number(report.longitude).toFixed(4)}`
-                            : "Koordinat tidak tersedia"}
+                            : "Coordinates unavailable"}
                         </span>
                       </div>
                     </div>
@@ -652,10 +677,10 @@ export default function AdminUsers() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-display text-base font-medium text-ink">
-                Rute pengguna
+                User Routes
               </h3>
               <p className="mt-1 text-[12.5px] text-muted">
-                Rute usaha keliling terbaru milik pengguna ini.
+                Recent mobile business routes created by this user.
               </p>
             </div>
             <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-muted">
@@ -666,11 +691,9 @@ export default function AdminUsers() {
           {userDetail.vendorRoutes.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-200 py-8 text-center">
               <Route size={24} className="mx-auto text-muted" />
-              <p className="mt-2 text-sm font-medium text-ink">
-                Belum ada rute
-              </p>
+              <p className="mt-2 text-sm font-medium text-ink">No Routes Yet</p>
               <p className="mt-1 text-xs text-muted">
-                Pengguna ini belum membuat rute usaha keliling.
+                This user has not created any mobile business routes.
               </p>
             </div>
           ) : (
@@ -682,15 +705,16 @@ export default function AdminUsers() {
                   onClick={() => {
                     if (!route.waypoints || route.waypoints.length < 2) {
                       toast({
-                        title: "Data rute tidak lengkap",
+                        title: "Incomplete Route Data",
                         description:
-                          "Rute ini tidak memiliki waypoint yang cukup untuk ditampilkan.",
+                          "This route does not have enough waypoints to be displayed.",
                         variant: "error",
                       });
                       return;
                     }
-                    // Simpan waypoints ke sessionStorage sebagai bridge
-                    // karena endpoint /vendor-routes/{id} hanya accessible oleh pemilik
+
+                    // Store waypoints in sessionStorage as a bridge.
+                    // The /vendor-routes/{id} endpoint is only accessible to the owner.
                     sessionStorage.setItem(
                       `lociva_focus_route_${route.id}`,
                       JSON.stringify(route.waypoints),
@@ -715,7 +739,7 @@ export default function AdminUsers() {
                         </span>
                       )}
                       <span className="text-[10px] text-muted">
-                        {route.waypoints?.length ?? 0} titik singgah
+                        {route.waypoints?.length ?? 0} stops
                         {route.distance != null
                           ? ` · ${route.distance.toFixed(1)} km`
                           : ""}
@@ -744,11 +768,11 @@ export default function AdminUsers() {
             className="inline-flex cursor-pointer items-center gap-1.5 text-[12.5px] font-medium text-muted hover:text-ink"
           >
             <ArrowLeft size={14} />
-            <span>Batal & kembali</span>
+            <span>Cancel and Go Back</span>
           </button>
 
           <h2 className="font-display text-[16px] font-medium text-ink">
-            Edit pengguna
+            Edit User
           </h2>
         </div>
 
@@ -765,7 +789,7 @@ export default function AdminUsers() {
         >
           <div>
             <label className="block text-[12.5px] font-medium text-ink">
-              Nama lengkap pengguna <span className="text-rose-500">*</span>
+              Full Name <span className="text-rose-500">*</span>
             </label>
 
             <input
@@ -785,7 +809,7 @@ export default function AdminUsers() {
 
           <div>
             <label className="block text-[12.5px] font-medium text-ink">
-              Alamat email (hanya baca)
+              Email Address (Read Only)
             </label>
 
             <input
@@ -798,7 +822,7 @@ export default function AdminUsers() {
 
           <div>
             <label className="mb-1.5 block text-[12.5px] font-medium text-ink">
-              Peran dalam sistem (role) <span className="text-rose-500">*</span>
+              System Role <span className="text-rose-500">*</span>
             </label>
 
             <div className="grid grid-cols-2 gap-3">
@@ -820,10 +844,10 @@ export default function AdminUsers() {
 
                 <div>
                   <p className="text-[13px] font-medium text-ink">
-                    User (pelaku UMKM)
+                    User (Business Owner)
                   </p>
                   <p className="text-[11px] text-muted">
-                    Akses publik & analisis lokasi
+                    Public Access & Location Analysis
                   </p>
                 </div>
               </label>
@@ -849,7 +873,7 @@ export default function AdminUsers() {
                     Administrator
                   </p>
                   <p className="text-[11px] text-muted">
-                    Akses moderasi & kontrol sistem
+                    Moderation & System Control
                   </p>
                 </div>
               </label>
@@ -869,7 +893,7 @@ export default function AdminUsers() {
               disabled={savingEdit}
               onClick={() => setMode(userDetail ? "detail" : "list")}
             >
-              Batal
+              Cancel
             </ClayButton>
 
             <button
@@ -878,7 +902,7 @@ export default function AdminUsers() {
               className="clay-primary inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] px-5 py-2 text-[12.5px] font-medium text-white disabled:opacity-50"
             >
               {savingEdit && <Spinner size="sm" />}
-              <span>{savingEdit ? "Menyimpan..." : "Simpan perubahan"}</span>
+              <span>{savingEdit ? "Saving..." : "Save Changes"}</span>
             </button>
           </div>
         </form>
@@ -893,23 +917,21 @@ export default function AdminUsers() {
       <div className="flex flex-col gap-2 border-b border-[#f0f0f8] pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-display text-[22px] font-medium tracking-tight text-ink sm:text-[24px]">
-            Manajemen pengguna
+            User Management
           </h1>
           <p className="mt-0.5 text-[12.5px] text-muted">
-            Kelola akun pengguna terdaftar, verifikasi peran, dan izin akses
-            sistem LOCIVA.
+            Manage registered user accounts, verify roles, and control access to
+            the LOCIVA system.
           </p>
         </div>
 
         <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-[11.5px] font-medium text-muted">
-          Total {totalUsers} pengguna terdaftar
+          Total {totalUsers} registered users
         </span>
       </div>
 
       {/* Search and filters */}
-
-      {/* Search and filters */}
-      <div className="clay flex flex-wrap items-center gap-3 rounded-[16px] bg-white p-4">
+      <div className="flex flex-wrap items-center gap-3">
         {/* Search */}
         <div className="relative w-full sm:w-52">
           <Search
@@ -924,7 +946,7 @@ export default function AdminUsers() {
               setSearch(e.target.value);
               setCurrentPage(1);
             }}
-            placeholder="Cari pengguna..."
+            placeholder="Search users..."
             className="w-full rounded-[10px] border border-[#e5e5f0] bg-white py-2 pl-8 pr-3 text-[12.5px] text-ink outline-none focus:border-primary"
           />
         </div>
@@ -938,71 +960,35 @@ export default function AdminUsers() {
           }}
           className="w-full cursor-pointer rounded-[10px] border border-[#e5e5f0] bg-white px-3 py-2 text-[12px] text-ink outline-none focus:border-primary sm:w-40"
         >
-          <option value="all">Semua peran</option>
-          <option value="user">User</option>
+          <option value="all">All Roles</option>
           <option value="admin">Admin</option>
+          <option value="user">User</option>
         </select>
 
-        {/* Date filters */}
-        <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="id">
-          <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-2">
-            <DatePicker
-              label="Dari tanggal"
-              format="DD/MM/YYYY"
-              value={fromDate ? dayjs(fromDate) : null}
-              maxDate={toDate ? dayjs(toDate) : undefined}
-              onChange={(value: Dayjs | null) => {
-                setFromDate(value?.isValid() ? value.format("YYYY-MM-DD") : "");
-                setCurrentPage(1);
-              }}
-              slotProps={{
-                textField: {
-                  size: "small",
-                  sx: {
-                    width: { xs: "100%", sm: 165 },
-                    "& .MuiInputBase-root": {
-                      borderRadius: "10px",
-                      fontSize: "12px",
-                      backgroundColor: "#fff",
-                    },
-                    "& .MuiInputLabel-root": {
-                      fontSize: "12px",
-                    },
-                  },
-                },
-              }}
-            />
+        {/* Date range filter */}
+        <div className="w-full sm:w-50">
+          <DatePicker
+            selectsRange
+            startDate={fromDate ? dayjs(fromDate).toDate() : null}
+            endDate={toDate ? dayjs(toDate).toDate() : null}
+            onChange={(dates) => {
+              const [start, end] = dates;
 
-            <DatePicker
-              label="Sampai tanggal"
-              format="DD/MM/YYYY"
-              value={toDate ? dayjs(toDate) : null}
-              minDate={fromDate ? dayjs(fromDate) : undefined}
-              onChange={(value: Dayjs | null) => {
-                setToDate(value?.isValid() ? value.format("YYYY-MM-DD") : "");
-                setCurrentPage(1);
-              }}
-              slotProps={{
-                textField: {
-                  size: "small",
-                  sx: {
-                    width: { xs: "100%", sm: 165 },
-                    "& .MuiInputBase-root": {
-                      borderRadius: "10px",
-                      fontSize: "12px",
-                      backgroundColor: "#fff",
-                    },
-                    "& .MuiInputLabel-root": {
-                      fontSize: "12px",
-                    },
-                  },
-                },
-              }}
-            />
-          </div>
-        </LocalizationProvider>
+              setFromDate(start ? dayjs(start).format("YYYY-MM-DD") : "");
+              setToDate(end ? dayjs(end).format("YYYY-MM-DD") : "");
 
-        {/* Reset filter */}
+              setCurrentPage(1);
+            }}
+            dateFormat="dd/MM/yyyy"
+            placeholderText="Select date range"
+            isClearable
+            calendarClassName="lociva-calendar"
+            wrapperClassName="w-full"
+            className="w-full rounded-[10px] border border-[#e5e5f0] bg-white px-3 py-2 text-[12px] text-ink outline-none focus:border-primary"
+          />
+        </div>
+
+        {/* Reset filters */}
         {(fromDate || toDate || search || role !== "all") && (
           <button
             type="button"
@@ -1015,7 +1001,7 @@ export default function AdminUsers() {
             }}
             className="cursor-pointer whitespace-nowrap text-[12px] font-medium text-primary hover:underline"
           >
-            Reset filter
+            Reset Filters
           </button>
         )}
       </div>
@@ -1026,10 +1012,10 @@ export default function AdminUsers() {
           <table className="w-full text-left text-[13px]">
             <thead className="border-b border-[#ececf6] bg-slate-50/60 text-[11px] font-semibold text-muted">
               <tr>
-                <th className="px-5 py-3">Pengguna</th>
-                <th className="px-5 py-3">Peran sistem</th>
-                <th className="px-5 py-3">Tanggal bergabung</th>
-                <th className="px-5 py-3 text-right">Tindakan</th>
+                <th className="px-5 py-3">User</th>
+                <th className="px-5 py-3">System Role</th>
+                <th className="px-5 py-3">Date Joined</th>
+                <th className="px-5 py-3 text-right">Actions</th>
               </tr>
             </thead>
 
@@ -1038,7 +1024,7 @@ export default function AdminUsers() {
                 <tr>
                   <td colSpan={4} className="px-5 py-12 text-center text-muted">
                     <Spinner size="md" className="mx-auto mb-2 text-primary" />
-                    <p className="text-[12.5px]">Memuat data pengguna...</p>
+                    <p className="text-[12.5px]">Loading users...</p>
                   </td>
                 </tr>
               ) : error ? (
@@ -1053,7 +1039,7 @@ export default function AdminUsers() {
                       onClick={() => void fetchUsers()}
                       className="mt-2 cursor-pointer text-[12px] font-medium text-primary underline"
                     >
-                      Coba lagi
+                      Try Again
                     </button>
                   </td>
                 </tr>
@@ -1061,10 +1047,10 @@ export default function AdminUsers() {
                 <tr>
                   <td colSpan={4} className="px-5 py-10 text-center text-muted">
                     <p className="text-[13px] font-medium text-ink">
-                      Tidak ada pengguna ditemukan
+                      No Users Found
                     </p>
                     <p className="mt-0.5 text-[11.5px]">
-                      Coba sesuaikan kata kunci pencarian atau filter peran.
+                      Try adjusting your search keywords or role filter.
                     </p>
                   </td>
                 </tr>
@@ -1094,7 +1080,7 @@ export default function AdminUsers() {
                             {currentUser &&
                               String(item.id) === String(currentUser.id) && (
                                 <span className="rounded-[4px] bg-primary/10 px-1 py-0.5 text-[9.5px] font-medium text-primary">
-                                  Anda
+                                  You
                                 </span>
                               )}
                           </p>
@@ -1135,29 +1121,8 @@ export default function AdminUsers() {
                           className="clay-press inline-flex cursor-pointer items-center gap-1 rounded-[6px] border border-slate-200 bg-white px-2.5 py-1 text-[11.5px] font-medium text-muted hover:text-ink"
                         >
                           <Eye size={12} />
-                          <span>Detail</span>
+                          <span>Details</span>
                         </button>
-
-                        {/* <button
-                          type="button"
-                          onClick={() => handleOpenEdit(item)}
-                          className="clay-press inline-flex cursor-pointer items-center gap-1 rounded-[6px] border border-slate-200 bg-white px-2.5 py-1 text-[11.5px] font-medium text-muted hover:text-ink"
-                        >
-                          <Pencil size={12} />
-                          <span>Edit</span>
-                        </button> */}
-
-                        {/* {(!currentUser ||
-                          String(item.id) !== String(currentUser.id)) && (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenDelete(item)}
-                            className="clay-press ..."
-                            title="Hapus akun pengguna"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        )} */}
                       </div>
                     </td>
                   </tr>
@@ -1167,32 +1132,61 @@ export default function AdminUsers() {
           </table>
         </div>
 
-        {/* Pagination */}
+        {/* User Pagination */}
         {totalUsers > 0 && (
-          <div className="flex flex-col gap-3 border-t border-[#f0f0f8] px-5 py-3.5 text-[12px] text-muted sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              Menampilkan halaman{" "}
-              <span className="font-semibold text-ink">{currentPage}</span> dari{" "}
-              <span className="font-semibold text-ink">{lastPage}</span> (total{" "}
-              {totalUsers} pengguna)
-            </div>
+          <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-xs text-muted">
+              Page <strong>{currentPage}</strong> of <strong>{lastPage}</strong>
+              {" ("}
+              {totalUsers} users total
+              {")"}
+            </span>
 
-            <div className="flex items-center gap-1.5">
-              <ClayButton
-                variant="secondary"
-                disabled={loading || currentPage <= 1}
-                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage <= 1 || loading}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-ink transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Sebelumnya
-              </ClayButton>
+                Previous
+              </button>
 
-              <ClayButton
-                variant="secondary"
-                disabled={loading || currentPage >= lastPage}
-                onClick={() => setCurrentPage((page) => page + 1)}
+              {getPageNumbers(currentPage, lastPage).map((page, index) =>
+                page === "..." ? (
+                  <span
+                    key={`ellipsis-${index}`}
+                    className="px-1 text-slate-400"
+                  >
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => setCurrentPage(page)}
+                    disabled={loading || currentPage === page}
+                    className={`min-w-9 rounded-xl px-3 py-2 text-xs font-bold transition disabled:cursor-default ${
+                      currentPage === page
+                        ? "bg-primary text-white"
+                        : "border border-slate-200 bg-white text-ink hover:bg-slate-100"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ),
+              )}
+
+              <button
+                type="button"
+                onClick={() =>
+                  setCurrentPage((prev) => Math.min(lastPage, prev + 1))
+                }
+                disabled={currentPage >= lastPage || loading}
+                className="rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white transition hover:bg-primary-deep disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Selanjutnya
-              </ClayButton>
+                Next
+              </button>
             </div>
           </div>
         )}
@@ -1212,11 +1206,11 @@ export default function AdminUsers() {
           {deletingUser && (
             <>
               <ModalHeader>
-                <ModalTitle>Konfirmasi Hapus Pengguna</ModalTitle>
+                <ModalTitle>Confirm User Deletion</ModalTitle>
                 <ModalDescription>
-                  Apakah Anda yakin ingin menghapus akun{" "}
+                  Are you sure you want to delete the account belonging to{" "}
                   <strong>{deletingUser.name}</strong> ({deletingUser.email})?
-                  Tindakan ini tidak dapat dibatalkan.
+                  This action cannot be undone.
                 </ModalDescription>
               </ModalHeader>
 
@@ -1232,7 +1226,7 @@ export default function AdminUsers() {
                   disabled={isDeleting}
                   onClick={() => setDeletingUser(null)}
                 >
-                  Batal
+                  Cancel
                 </ClayButton>
 
                 <button
@@ -1242,9 +1236,7 @@ export default function AdminUsers() {
                   className="clay-press inline-flex cursor-pointer items-center gap-1.5 rounded-[10px] bg-rose-600 px-4 py-2 text-[12.5px] font-medium text-white hover:bg-rose-700 disabled:opacity-50"
                 >
                   {isDeleting && <Spinner size="sm" />}
-                  <span>
-                    {isDeleting ? "Menghapus..." : "Ya, hapus pengguna"}
-                  </span>
+                  <span>{isDeleting ? "Deleting..." : "Yes, Delete User"}</span>
                 </button>
               </ModalFooter>
             </>

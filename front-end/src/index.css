@@ -283,4 +283,87 @@ body {
   .marker-cluster div {
     font-family: inherit;
   }
+
+
+/* LOCIVA Date Picker */
+.lociva-calendar.react-datepicker {
+  border: 1px solid #ebebf5 !important;
+  border-radius: 16px !important;
+  overflow: hidden;
+  background: var(--color-surface) !important;
+  color: var(--color-ink);
+  font-family: var(--font-sans) !important;
+  box-shadow: 0 8px 24px rgb(71 71 184 / 12%) !important;
+}
+
+.lociva-calendar .react-datepicker__header {
+  background: var(--color-canvas) !important;
+  border-bottom: 1px solid #ececf6 !important;
+  padding-top: 14px;
+}
+
+.lociva-calendar .react-datepicker__current-month {
+  color: var(--color-ink) !important;
+  font-family: var(--font-display) !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+}
+
+.lociva-calendar .react-datepicker__day-name {
+  color: var(--color-muted) !important;
+  font-size: 11px;
+}
+
+.lociva-calendar .react-datepicker__day {
+  width: 30px;
+  line-height: 30px;
+  margin: 3px;
+  border-radius: 8px !important;
+  color: var(--color-ink);
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.lociva-calendar .react-datepicker__day:hover {
+  background: var(--color-primary-soft) !important;
+  color: var(--color-primary-deep) !important;
+}
+
+.lociva-calendar .react-datepicker__day--in-range,
+.lociva-calendar .react-datepicker__day--in-selecting-range {
+  background: var(--color-primary-soft) !important;
+  color: var(--color-primary-deep) !important;
+  border-radius: 6px !important;
+}
+
+.lociva-calendar .react-datepicker__day--selected,
+.lociva-calendar .react-datepicker__day--range-start,
+.lociva-calendar .react-datepicker__day--range-end {
+  background: var(--color-primary) !important;
+  color: #fff !important;
+  border-radius: 8px !important;
+  font-weight: 600;
+}
+
+.lociva-calendar .react-datepicker__day--today {
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+.lociva-calendar .react-datepicker__day--outside-month {
+  color: #b7b7c8 !important;
+}
+
+.lociva-calendar .react-datepicker__day--disabled {
+  color: #c9c9d5 !important;
+  cursor: not-allowed;
+}
+
+.lociva-calendar .react-datepicker__navigation {
+  top: 12px;
+}
+
+.lociva-calendar .react-datepicker__navigation-icon::before {
+  border-color: var(--color-primary) !important;
+}
+
 }
