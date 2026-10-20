@@ -160,7 +160,7 @@ export default function Login() {
 
             <ButtonGoogle
               className="w-full"
-              variant="outline"
+              variant="default"
               onClick={handleGoogleClick}
               disabled={isSubmitting}
             >
@@ -170,7 +170,7 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} className="mt-5 space-y-4">
             <div>
-              <Label htmlFor="email">email address</Label>
+              <Label htmlFor="email">Email address</Label>
 
               <div className="relative mt-1.5">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-muted">
@@ -208,7 +208,7 @@ export default function Login() {
 
             <div>
               <div className="flex items-center justify-between">
-                <Label htmlFor="password">password</Label>
+                <Label htmlFor="password">Password</Label>
               </div>
 
               <div className="relative mt-1.5">

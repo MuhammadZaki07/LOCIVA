@@ -16,19 +16,18 @@ export const ButtonGoogle: React.FC<ButtonGoogleProps> = ({
   ...props
 }) => {
   const variants = {
-    default: "w-full",
+    default: "w-full bg-white border border-[#e4e4ef] py-2 rounded-md",
     outline:
       "w-full !bg-white !text-ink !border !border-[#e4e4ef] hover:!bg-[#f8f8fc]",
     soft: "w-full !bg-[#f7f7fc] !text-ink !border !border-[#e8e8f2] hover:!bg-white",
   };
 
   return (
-    <ClayButton
+    <button
       type="button"
-      variant="secondary"
       onClick={onClick}
       className={cn(
-        "inline-flex items-center justify-center gap-2 my-3 disabled:opacity-45 disabled:cursor-not-allowed",
+        "inline-flex items-center cursor-pointer font-semibold justify-center gap-2 my-3 disabled:opacity-45 disabled:cursor-not-allowed",
         variants[variant],
         className
       )}
@@ -54,6 +53,6 @@ export const ButtonGoogle: React.FC<ButtonGoogleProps> = ({
       </svg>
 
       <span>{children ?? "Masuk dengan Google"}</span>
-    </ClayButton>
+    </button>
   );
 };

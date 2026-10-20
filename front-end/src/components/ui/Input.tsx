@@ -20,7 +20,7 @@ export function Input({
                 error
                     ? [
                           "border border-red-500",
-                          "text-red-900",
+                          "text-red-500",
                           "placeholder:text-red-500/60",
                           "shadow-[inset_2px_2px_5px_rgba(239,68,68,0.12),inset_-2px_-2px_5px_rgba(255,255,255,0.8)]",
                           "focus:border-red-500",

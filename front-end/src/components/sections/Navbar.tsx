@@ -69,7 +69,7 @@ export function Navbar() {
               <a
                 key={link.href}
                 href={link.href}
-                className="pill-bubble-item rounded-full px-3 py-1 text-[13px] font-medium text-muted no-underline transition-colors hover:bg-white hover:text-ink hover:shadow-sm"
+                className="pill-bubble-item capitalize rounded-full px-3 py-1 text-[13px] font-medium text-muted no-underline transition-colors hover:bg-white hover:text-ink hover:shadow-sm"
               >
                 {link.label}
               </a>
@@ -91,15 +91,6 @@ export function Navbar() {
                     <LayoutDashboard size={13} />
                   )}
                   <span className="max-w-[110px] truncate">{user.name}</span>
-                </Link>
-
-                <Link
-                  to={user.role === "admin" ? "/admin/profile" : "/profile"}
-                  className="pill-bubble-item hidden sm:inline-flex items-center gap-1 rounded-full border border-[#ececf6] bg-white px-2.5 py-1 text-[11.5px] font-medium text-muted hover:text-ink transition-colors no-underline"
-                  title="Profile"
-                >
-                  <UserIcon size={12} className="text-primary" />
-                  <span>profil</span>
                 </Link>
 
                 <button

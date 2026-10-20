@@ -138,7 +138,7 @@ export const BpsLegend: React.FC<BpsLegendProps> = ({ isVisible, onClose }) => {
   if (!isVisible) return null;
 
   return (
-    <div className="fixed bottom-24 left-4 md:bottom-8 md:left-4 z-[400] bg-white/95 backdrop-blur-md p-3.5 rounded-2xl shadow-xl border border-slate-200/80 max-w-xs space-y-2.5 animate-in fade-in duration-200">
+    <div className="fixed bottom-20 right-105 md:bottom-8 md:right-105 z-[400] bg-white/95 backdrop-blur-md p-3.5 rounded-md shadow-sm border border-slate-200/80 max-w-xs space-y-2.5 animate-in fade-in duration-200">
       <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-1.5">
         <div className="flex items-center gap-1.5 text-xs font-bold text-ink">
           <Users size={14} className="text-primary" />

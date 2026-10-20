@@ -7,6 +7,7 @@ import { CandidateStatsModal } from './CandidateStatsModal';
 import { cn } from '@/lib/utils';
 import { formatDistance, CATEGORY_BY_ID } from '@/lib/Osm';
 import { AlertTriangle, Target, Activity, Save, CheckCircle2, Globe, Database, X, BarChart3 } from 'lucide-react';
+import LogoPuzzleLoader from '../ui/Logopuzzleloader';
 
 interface AnalysisPanelProps {
   business: BusinessType;
@@ -38,10 +39,12 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
 
   return (
-    <div className={cn(
-      "fixed md:static inset-x-0 bottom-0 md:inset-auto md:right-0 z-[500] w-full md:w-96 bg-surface border-t md:border-l border-slate-200 flex flex-col transition-transform duration-300 max-h-[85vh] md:max-h-screen",
-      !isOpen && "translate-y-full md:translate-y-0 md:translate-x-full md:hidden"
-    )}>
+<div
+  className={cn(
+    "fixed inset-x-0 bottom-0 z-[500] flex max-h-[85dvh] min-h-0 w-full flex-col overflow-hidden border-t border-slate-200 bg-surface transition-transform duration-300 md:static md:inset-auto md:right-0 md:h-full md:max-h-full md:min-h-0 md:w-full md:border-l md:border-t-0",
+    !isOpen && "translate-y-full md:hidden md:translate-x-full"
+  )}
+>
       {/* Header */}
       <div className="p-4 border-b border-slate-200 bg-surface md:bg-transparent flex justify-between items-center sticky top-0 z-10">
         <div>
@@ -105,7 +108,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
 
         {isAnalyzing ? (
           <div className="flex flex-col items-center justify-center py-12 space-y-4">
-            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+            <LogoPuzzleLoader size={50}/>
             <p className="text-muted font-medium text-sm">Analyzing location feasibility...</p>
           </div>
         ) : error ? (

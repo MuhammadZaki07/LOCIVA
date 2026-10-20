@@ -29,8 +29,8 @@ export const MapLegend: React.FC<MapLegendProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div className="absolute bottom-6 right-6 z-[400] max-w-xs transition-all">
-      <div className="clay rounded-2xl shadow-lg border border-white/80 overflow-hidden bg-surface/95 backdrop-blur-xs">
+    <div className="absolute bottom-6 right-6 z-[400] max-w-sm transition-all">
+      <div className="clay rounded-md shadow-lg border border-white/80 overflow-hidden bg-surface/95 backdrop-blur-xs">
         {/* Toggle bar */}
         <button
           type="button"
