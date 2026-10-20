@@ -41,6 +41,7 @@ import { SearchModal } from "@/components/maps/SearchModal";
 import { ReportMarker, type MapCivicReport } from "@/components/maps/ReportMarker";
 import { CivicReportsMapPanel } from "@/components/maps/CivicReportsMapPanel";
 import { CreateReportModal } from "@/components/maps/CreateReportModal";
+import { BpsLayer, BpsLegend } from "@/components/maps/BpsLayer";
 
 import type { BusinessType } from "@/lib/umkmCatalog";
 import type { AnalysisResult } from "@/lib/analysisEngine";
@@ -62,6 +63,7 @@ import {
   Satellite,
   Scale,
   Target,
+  Users,
   X,
 } from "lucide-react";
 
@@ -328,6 +330,7 @@ export function MapPage() {
   const [reports, setReports] = useState<MapCivicReport[]>([]);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [showReportsLayer, setShowReportsLayer] = useState(true);
+  const [showBpsLayer, setShowBpsLayer] = useState(false);
   const [createReportModalOpen, setCreateReportModalOpen] = useState(false);
   const [selectedReportCoords, setSelectedReportCoords] = useState<{
     lat: number;
@@ -1259,6 +1262,25 @@ export function MapPage() {
             <Footprints size={18} />
           </button>
 
+          {/* BPS Population Density Layer Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowBpsLayer((v) => !v)}
+            title={
+              showBpsLayer
+                ? "Sembunyikan layer kepadatan penduduk BPS"
+                : "Tampilkan layer kepadatan penduduk BPS"
+            }
+            className={cn(
+              "pointer-events-auto p-3 bg-white/95 backdrop-blur-xs border border-slate-200/80 rounded-2xl shadow-md transition-all flex items-center justify-center cursor-pointer active:scale-95",
+              showBpsLayer
+                ? "text-indigo-600 border-indigo-200 bg-indigo-50/50"
+                : "text-muted hover:text-ink",
+            )}
+          >
+            <Users size={18} />
+          </button>
+
           {/* Quick Create Civic Report Floating Button */}
           <button
             type="button"
@@ -1370,6 +1392,9 @@ export function MapPage() {
                 />
               );
             })}
+
+            {/* BPS Demographic Choropleth Layer */}
+            <BpsLayer isVisible={showBpsLayer} />
 
             {/* Route Layer */}
             <RouteLayer
@@ -1484,6 +1509,12 @@ export function MapPage() {
         activeCandidateCount={activeCount}
         basemapMode={basemapMode}
         isStale={isPlacesStale}
+      />
+
+      {/* ── BPS Population Density Floating Legend ───────────────────────── */}
+      <BpsLegend
+        isVisible={showBpsLayer}
+        onClose={() => setShowBpsLayer(false)}
       />
 
       {/* Picking report location banner on map */}

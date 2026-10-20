@@ -13,6 +13,11 @@
     RefreshCw,
     Compass,
     X,
+    BarChart3,
+    Activity,
+    ShieldAlert,
+    Footprints,
+    Calendar,
   } from "lucide-react";
   import api from "@/context/apiClient";
   import { useToast } from "@/components/ui/Toast";
@@ -48,17 +53,28 @@
     description?: string;
     simulations?: {
       id: string;
-      target_market: string;
+      candidate_id?: string;
+      target_market?: string;
       latitude: number;
       longitude: number;
       radius_m: number;
       business_type?: BusinessTypeItem | null;
+      location?: {
+        name?: string;
+        address?: string;
+      } | null;
       score?: {
+        status?: string;
         target_market_score?: number;
         competition_score?: number;
         accessibility_score?: number;
+        population_score?: number;
+        pedestrian_score?: number;
+        area_compatibility_score?: number;
+        infrastructure_score?: number;
         total_score?: number;
       } | null;
+      created_at?: string;
     }[];
     created_at?: string;
   }
@@ -75,6 +91,10 @@
     const [businesses, setBusinesses] = useState<UserBusiness[]>([]);
     const [businessTypes, setBusinessTypes] = useState<BusinessTypeItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [selectedCandidateDetail, setSelectedCandidateDetail] = useState<{
+      session: SimulationSessionItem;
+      simulation: NonNullable<SimulationSessionItem["simulations"]>[number];
+    } | null>(null);
 
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -653,8 +673,8 @@
                             onClick={() =>
                               handleDeleteSession(session.id, session.name)
                             }
-                            className="rounded p-1 text-slate-400 transition-colors hover:text-red-600"
-                            title="Delete this session"
+                            className="rounded p-1 text-slate-400 transition-colors hover:text-red-600 cursor-pointer"
+                            title="Hapus sesi ini"
                           >
                             <Trash2 size={13} />
                           </button>
@@ -674,7 +694,7 @@
                         </p>
 
                         <div className="mt-3 flex items-baseline gap-1.5">
-                          <span className="font-display text-[30px] font-bold text-ink">
+                          <span className="font-display text-[30px] font-bold text-ink tabular-nums">
                             {score}
                           </span>
                           <span className="text-[13px] text-muted">/ 100</span>
@@ -683,16 +703,68 @@
                           </span>
                         </div>
 
+                        {/* Candidate points pills if multiple */}
+                        {session.simulations && session.simulations.length > 0 && (
+                          <div className="mt-2.5 flex flex-wrap gap-1.5">
+                            {session.simulations.map((sim, sIdx) => {
+                              const candLetter =
+                                sim.candidate_id ||
+                                (sim.target_market
+                                  ? sim.target_market.replace("Candidate_", "")
+                                  : String.fromCharCode(65 + sIdx));
+                              const candScore =
+                                sim.score?.total_score ||
+                                sim.score?.target_market_score ||
+                                0;
+                              return (
+                                <button
+                                  key={sim.id}
+                                  type="button"
+                                  onClick={() =>
+                                    setSelectedCandidateDetail({
+                                      session,
+                                      simulation: sim,
+                                    })
+                                  }
+                                  className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-[11px] font-medium text-slate-700 flex items-center gap-1 transition-colors cursor-pointer"
+                                  title={`Buka statistik kandidat ${candLetter}`}
+                                >
+                                  <span className="size-3.5 rounded-full bg-primary text-white text-[9px] flex items-center justify-center font-bold">
+                                    {candLetter}
+                                  </span>
+                                  <span className="tabular-nums font-semibold">{candScore}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+
                         {session.description && (
                           <p className="mt-2 text-[11.5px] leading-5 text-muted">
                             {session.description}
                           </p>
                         )}
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            firstSim &&
+                            setSelectedCandidateDetail({
+                              session,
+                              simulation: firstSim,
+                            })
+                          }
+                          disabled={!firstSim}
+                          className="w-full mt-3.5 py-2 px-3 rounded-xl text-xs font-semibold bg-primary-soft hover:bg-primary/20 text-primary flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          <BarChart3 size={13} />
+                          <span>Lihat Statistik Lengkap</span>
+                        </button>
                       </div>
 
                       <div className="flex items-center justify-between border-t border-[#f0f0f8] pt-3">
                         <span className="text-[11px] text-muted">
-                          {session.simulations?.length || 1} candidate points
+                          {session.simulations?.length || 1} titik kandidat
                         </span>
 
                         <button
@@ -701,13 +773,202 @@
                           disabled={!firstSim}
                           className="inline-flex cursor-pointer items-center gap-1 text-[12px] font-bold text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          <span>View on Map</span>
+                          <span>Buka di Maps</span>
                           <ArrowRight size={12} />
                         </button>
                       </div>
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Modal Detail Statistik Kandidat Tersimpan */}
+            {selectedCandidateDetail && (
+              <div
+                role="dialog"
+                aria-modal="true"
+                className="fixed inset-0 z-[1000] flex items-center justify-center p-3 sm:p-6 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200"
+                onClick={() => setSelectedCandidateDetail(null)}
+              >
+                <div
+                  className="relative w-full max-w-2xl max-h-[90vh] flex flex-col bg-white rounded-2xl shadow-2xl border border-slate-200/80 overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/70 backdrop-blur-md">
+                    <div className="flex items-center gap-3">
+                      <div className="size-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-sm">
+                        {selectedCandidateDetail.simulation.candidate_id ||
+                          (selectedCandidateDetail.simulation.target_market
+                            ? selectedCandidateDetail.simulation.target_market.replace("Candidate_", "")
+                            : "A")}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-semibold text-ink font-display">
+                            Statistik Kandidat{" "}
+                            {selectedCandidateDetail.simulation.candidate_id ||
+                              (selectedCandidateDetail.simulation.target_market
+                                ? selectedCandidateDetail.simulation.target_market.replace("Candidate_", "")
+                                : "A")}
+                          </h3>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700">
+                            {selectedCandidateDetail.simulation.business_type?.name || "Katalog UMKM"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted mt-0.5">
+                          Sesi: {selectedCandidateDetail.session.name}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCandidateDetail(null)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-ink hover:bg-slate-200/60 transition-colors cursor-pointer"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  {/* Body */}
+                  <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+                    {/* Status & Lokasi */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted">Status Analisis:</span>
+                        <span
+                          className={`font-semibold px-2 py-0.5 rounded-full text-[11px] ${
+                            selectedCandidateDetail.simulation.score
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-amber-100 text-amber-800"
+                          }`}
+                        >
+                          {selectedCandidateDetail.simulation.score
+                            ? "Analisis Selesai (Terhitung)"
+                            : "Belum Dianalisis"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-slate-600 font-mono text-[11px]">
+                        <MapPin size={12} className="text-primary" />
+                        <span>
+                          {Number(selectedCandidateDetail.simulation.latitude).toFixed(5)},{" "}
+                          {Number(selectedCandidateDetail.simulation.longitude).toFixed(5)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Ringkasan Skor Utama */}
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted mb-3">
+                        Ringkasan Skor Kelayakan Spasial
+                      </h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-100">
+                          <span className="text-[11px] text-muted block">Total Skor</span>
+                          <span className="text-2xl font-bold font-display text-ink tabular-nums mt-1 block">
+                            {selectedCandidateDetail.simulation.score?.total_score ?? "N/A"}
+                          </span>
+                          <span className="text-[10px] text-muted">Skala 0-100</span>
+                        </div>
+
+                        <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-100">
+                          <span className="text-[11px] text-muted block">Peluang Pasar</span>
+                          <span className="text-2xl font-bold font-display text-emerald-600 tabular-nums mt-1 block">
+                            {selectedCandidateDetail.simulation.score?.target_market_score ?? "N/A"}
+                          </span>
+                          <span className="text-[10px] text-muted">Segmen sasaran</span>
+                        </div>
+
+                        <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-100">
+                          <span className="text-[11px] text-muted block">Persaingan</span>
+                          <span className="text-2xl font-bold font-display text-amber-600 tabular-nums mt-1 block">
+                            {selectedCandidateDetail.simulation.score?.competition_score ?? "N/A"}
+                          </span>
+                          <span className="text-[10px] text-muted">Tingkat kompetisi</span>
+                        </div>
+
+                        <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-100">
+                          <span className="text-[11px] text-muted block">Aksesibilitas</span>
+                          <span className="text-2xl font-bold font-display text-indigo-600 tabular-nums mt-1 block">
+                            {selectedCandidateDetail.simulation.score?.accessibility_score ?? "N/A"}
+                          </span>
+                          <span className="text-[10px] text-muted">Jaringan & transit</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Indikator Lanjutan */}
+                    <div>
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted mb-2">
+                        Indikator Spasial Pendukung
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                        <div className="p-2.5 rounded-lg bg-white border border-slate-100 flex items-center justify-between">
+                          <span className="text-muted">Populasi & Demografi</span>
+                          <span className="font-bold text-ink tabular-nums">
+                            {selectedCandidateDetail.simulation.score?.population_score ?? "Data Regional"}
+                          </span>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-white border border-slate-100 flex items-center justify-between">
+                          <span className="text-muted">Lalu Lintas Pejalan</span>
+                          <span className="font-bold text-ink tabular-nums">
+                            {selectedCandidateDetail.simulation.score?.pedestrian_score ?? "Terkorelasi POI"}
+                          </span>
+                        </div>
+                        <div className="p-2.5 rounded-lg bg-white border border-slate-100 flex items-center justify-between">
+                          <span className="text-muted">Kesesuaian Zona</span>
+                          <span className="font-bold text-ink tabular-nums">
+                            {selectedCandidateDetail.simulation.score?.area_compatibility_score ?? "Sesuai"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Catchment Info */}
+                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 text-xs space-y-1.5 text-slate-600">
+                      <div className="flex justify-between">
+                        <span>Radius Jangkauan Layanan:</span>
+                        <span className="font-semibold text-ink">
+                          {selectedCandidateDetail.simulation.radius_m || 500} meter
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Luas Estimasi Catchment Area:</span>
+                        <span className="font-semibold text-ink">
+                          {(Math.PI * Math.pow((selectedCandidateDetail.simulation.radius_m || 500) / 1000, 2)).toFixed(2)} km²
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-200/60 leading-relaxed">
+                        Data disimpan permanen di database LOCIVA. Skor dihitung saat simulasi dijalankan dan dapat dievaluasi ulang langsung di peta.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleOpenSimulationOnMap(selectedCandidateDetail.simulation);
+                        setSelectedCandidateDetail(null);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary-deep transition-colors cursor-pointer shadow-xs"
+                    >
+                      <Compass size={13} />
+                      <span>Buka & Analisis di Maps</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCandidateDetail(null)}
+                      className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-ink text-xs font-semibold transition-colors cursor-pointer"
+                    >
+                      Tutup
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

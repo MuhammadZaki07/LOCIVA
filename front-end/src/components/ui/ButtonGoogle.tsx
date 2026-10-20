@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 type ButtonGoogleVariant = "default" | "outline" | "soft";
 
-interface ButtonGoogleProps extends React.ComponentProps<typeof ClayButton> {
+interface ButtonGoogleProps extends Omit<React.ComponentProps<typeof ClayButton>, "variant"> {
   variant?: ButtonGoogleVariant;
 }
 

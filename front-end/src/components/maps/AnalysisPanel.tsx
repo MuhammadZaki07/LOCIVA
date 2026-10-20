@@ -1,11 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { AnalysisResult } from '@/lib/analysisEngine';
 import type { BusinessType } from '@/lib/umkmCatalog';
 import { ScoreGauge } from './ScoreGauge';
 import { RadiusControl } from './RadiusControl';
+import { CandidateStatsModal } from './CandidateStatsModal';
 import { cn } from '@/lib/utils';
 import { formatDistance, CATEGORY_BY_ID } from '@/lib/Osm';
-import { AlertTriangle, Target, Activity, Save, CheckCircle2, Globe, Database, X } from 'lucide-react';
+import { AlertTriangle, Target, Activity, Save, CheckCircle2, Globe, Database, X, BarChart3 } from 'lucide-react';
 
 interface AnalysisPanelProps {
   business: BusinessType;
@@ -34,6 +35,8 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   isPersistedInDb,
   onSaveCandidate,
 }) => {
+  const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+
   return (
     <div className={cn(
       "fixed md:static inset-x-0 bottom-0 md:inset-auto md:right-0 z-[500] w-full md:w-96 bg-surface border-t md:border-l border-slate-200 flex flex-col transition-transform duration-300 max-h-[85vh] md:max-h-screen",
@@ -142,6 +145,15 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               <ScoreGauge score={result.competitionScore ?? 0} label="Competition Level" inverted />
               <ScoreGauge score={result.accessibilityScore ?? 0} label="Accessibility" />
               <ScoreGauge score={result.dataConfidence} label="Data Confidence" />
+
+              <button
+                type="button"
+                onClick={() => setIsStatsModalOpen(true)}
+                className="w-full py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-ink border border-slate-200 transition-all cursor-pointer shadow-2xs"
+              >
+                <BarChart3 size={15} className="text-primary" />
+                <span>Lihat Statistik Lengkap</span>
+              </button>
             </div>
 
             {/* Data Transparency: Sources */}
@@ -222,6 +234,14 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           </div>
         )}
       </div>
+
+      {/* Full Statistics Dialog */}
+      <CandidateStatsModal
+        isOpen={isStatsModalOpen}
+        onClose={() => setIsStatsModalOpen(false)}
+        result={result}
+        business={business}
+      />
     </div>
   );
 };

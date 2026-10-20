@@ -70,6 +70,21 @@ Route::get('/vendor-routes/recommendations', [VendorRouteController::class, 'rec
 // Location Analysis (core UMKM feature — public, no auth needed)
 Route::post('/analysis/location', [LocationAnalysisController::class, 'analyze']);
 
+// BPS WebAPI Integration (Badan Pusat Statistik)
+Route::prefix('bps')->group(function () {
+    Route::get('/status', [\App\Http\Controllers\BpsController::class, 'status']);
+    Route::get('/domains', [\App\Http\Controllers\BpsController::class, 'domains']);
+    Route::get('/demographics', [\App\Http\Controllers\BpsController::class, 'demographics']);
+    Route::get('/map-layer', [\App\Http\Controllers\BpsController::class, 'mapLayer']);
+});
+
+// Geospatial Routing & OSRMRoute
+Route::prefix('routing')->group(function () {
+    Route::get('/status', [\App\Http\Controllers\OsrmRouteController::class, 'status']);
+    Route::post('/calculate', [\App\Http\Controllers\OsrmRouteController::class, 'calculate']);
+    Route::get('/places', [\App\Http\Controllers\OsrmRouteController::class, 'places']);
+});
+
 /*
 |--------------------------------------------------------------------------
 | Authenticated Routes

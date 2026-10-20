@@ -14,7 +14,6 @@ import {
   RefreshCw,
   CheckCircle2,
   X,
-  AlertCircle,
 } from "lucide-react";
 import api from "@/context/apiClient";
 import { calculateRoute, type RouteWaypoint, type RouteCalculationResult } from "@/lib/routing";
@@ -427,6 +426,17 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
                 value={routeName}
                 onChange={(e) => setRouteName(e.target.value)}
                 placeholder="Contoh: Rute Bakso Siang SCBD"
+                className="w-full px-3 py-2 bg-slate-100 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary border border-slate-200"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-muted mb-1">Catatan Rute (Opsional):</label>
+              <input
+                type="text"
+                value={routeNotes}
+                onChange={(e) => setRouteNotes(e.target.value)}
+                placeholder="Contoh: Bawa stok lebih saat jam makan siang"
                 className="w-full px-3 py-2 bg-slate-100 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-primary border border-slate-200"
               />
             </div>

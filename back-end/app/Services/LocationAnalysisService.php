@@ -8,6 +8,10 @@ use App\Models\Report;
 
 class LocationAnalysisService
 {
+    public function __construct(protected ?BpsApiService $bpsService = null)
+    {
+        $this->bpsService = $bpsService ?? new BpsApiService();
+    }
     /**
      * Fallback weights used only when a catalog type has no stored demographics.
      * Keys are catalog slugs.
@@ -270,6 +274,8 @@ class LocationAnalysisService
             $dataWarnings[] = 'Terdapat beberapa laporan infrastruktur aktif yang dapat memengaruhi aksesibilitas.';
         }
 
+        $bpsDemographics = $this->bpsService->getDemographicsForLocation($lat, $lng);
+
         return [
             'candidate_id'        => $candidateId,
             'lat'                 => $lat,
@@ -288,6 +294,7 @@ class LocationAnalysisService
             'relevant_poi'        => $relevantPoi,
             'factors'             => $factors,
             'data_warnings'       => $dataWarnings,
+            'bps_demographics'    => $bpsDemographics,
             'sources'             => [
                 [
                     'id'      => 'lociva_internal',
@@ -301,12 +308,19 @@ class LocationAnalysisService
                     'count'   => $externalCount,
                     'status'  => $externalCount > 0 ? 'loaded' : 'empty',
                 ],
+                [
+                    'id'      => 'bps_ri',
+                    'label'   => 'Badan Pusat Statistik (BPS WebAPI - ' . ($bpsDemographics['region_name'] ?? 'Wilayah Administratif') . ')',
+                    'count'   => $bpsDemographics['population'] ?? 1,
+                    'status'  => 'loaded',
+                    'year'    => $bpsDemographics['year'] ?? 2024,
+                ],
             ],
             'internal_poi_total'  => $internalCount,
             'external_poi_total'  => $externalCount,
             'poi_total'           => $poiTotal,
             'report_count'        => $reports->count(),
-            'limitations'         => 'Skor adalah indeks berbasis data yang tersedia, bukan prediksi omzet. Tidak ada data lalu lintas live. Cakupan OSM bergantung pada kontributor setempat.',
+            'limitations'         => 'Skor adalah indeks berbasis data yang tersedia, bukan prediksi omzet. Tidak ada data lalu lintas live. Cakupan OSM bergantung pada kontributor setempat. Data populasi BPS bersifat agregat wilayah resmi.',
         ];
     }
 

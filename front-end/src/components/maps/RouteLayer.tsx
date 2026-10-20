@@ -19,18 +19,32 @@ export const RouteLayer: React.FC<RouteLayerProps> = ({
 }) => {
   return (
     <>
-      {/* 1. Active Calculated Route Polyline */}
+      {/* 1. Active Calculated Route Polyline with High-Contrast Casing */}
       {currentCalculation && currentCalculation.coordinates.length > 1 && (
-        <MapPolyline
-          positions={currentCalculation.coordinates}
-          pathOptions={{
-            color: "#4f46e5",
-            weight: 5,
-            opacity: 0.88,
-            lineJoin: "round",
-            lineCap: "round",
-          }}
-        />
+        <>
+          {/* Outer Casing Polyline for High Contrast against Satellite & Light Maps */}
+          <MapPolyline
+            positions={currentCalculation.coordinates}
+            pathOptions={{
+              color: "#ffffff",
+              weight: 9,
+              opacity: 0.95,
+              lineJoin: "round",
+              lineCap: "round",
+            }}
+          />
+          {/* Inner Core Route Polyline */}
+          <MapPolyline
+            positions={currentCalculation.coordinates}
+            pathOptions={{
+              color: "#4338ca",
+              weight: 5.5,
+              opacity: 1,
+              lineJoin: "round",
+              lineCap: "round",
+            }}
+          />
+        </>
       )}
 
       {/* 2. Active Route Waypoint Markers */}
@@ -41,22 +55,23 @@ export const RouteLayer: React.FC<RouteLayerProps> = ({
         const iconNode = (
           <div
             style={{
-              backgroundColor: isFirst ? "#10b981" : isLast ? "#6366f1" : "#1e293b",
-              width: "26px",
-              height: "26px",
+              backgroundColor: isFirst ? "#059669" : isLast ? "#4f46e5" : "#1e293b",
+              width: isFirst || isLast ? "30px" : "24px",
+              height: isFirst || isLast ? "30px" : "24px",
               borderRadius: "50%",
-              border: "2px solid white",
-              boxShadow: "0 2px 6px rgba(0,0,0,0.35)",
+              border: "2.5px solid white",
+              boxShadow: "0 3px 10px rgba(0,0,0,0.35)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               color: "white",
-              fontWeight: "bold",
-              fontSize: "11px",
+              fontWeight: 700,
+              fontSize: isFirst || isLast ? "12px" : "10px",
               cursor: "pointer",
             }}
+            title={isFirst ? "Titik Awal (Origin)" : isLast ? "Titik Tujuan (Destination)" : `Titik Singgah ${idx + 1}`}
           >
-            {idx + 1}
+            {isFirst ? "A" : isLast ? "B" : idx + 1}
           </div>
         );
 

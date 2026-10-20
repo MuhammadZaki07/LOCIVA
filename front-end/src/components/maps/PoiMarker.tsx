@@ -19,14 +19,14 @@ export const PoiMarker: React.FC<PoiMarkerProps> = ({
   distanceFromCandidate,
   isDuplicateWithInternal = false,
 }) => {
-  const cat = CATEGORY_BY_ID[place.category] || {
+  const cat = (CATEGORY_BY_ID as Record<string, { id: string; label: string; color: string }>)[place.category] || {
     id: place.category,
     label: place.category,
     color: "#6b7280",
   };
 
   const getIcon = () => {
-    switch (place.category) {
+    switch (place.category as string) {
       case "cafe":         return <Coffee size={12} className="text-white" />;
       case "food":         return <Utensils size={12} className="text-white" />;
       case "campus":       return <GraduationCap size={12} className="text-white" />;

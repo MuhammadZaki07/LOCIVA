@@ -12,6 +12,19 @@ class AreaController extends Controller
     public function __construct(protected AreaRepository $repo) {}
 
     /**
+     * Display a listing of areas.
+     */
+    public function index()
+    {
+        try {
+            $areas = $this->repo->all();
+            return ApiResponse::success($areas, "Areas retrieved successfully.");
+        } catch (\Throwable $th) {
+            return ApiResponse::error($th->getMessage());
+        }
+    }
+
+    /**
      * Store a newly created resource in storage.
      */
     public function store(AreaRequest $request)
