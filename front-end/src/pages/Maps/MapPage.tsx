@@ -44,7 +44,8 @@ import {
 } from "@/components/maps/ReportMarker";
 import { CivicReportsMapPanel } from "@/components/maps/CivicReportsMapPanel";
 import { CreateReportModal } from "@/components/maps/CreateReportModal";
-import { BpsLayer, BpsLegend } from "@/components/maps/BpsLayer";
+import { BpsLayer, BpsLegend, BpsLayerStatus } from "@/components/maps/BpsLayer";
+import type { BpsLegendEntry } from "@/components/maps/BpsLayer";
 
 import type { BusinessType } from "@/lib/umkmCatalog";
 import type { AnalysisResult } from "@/lib/analysisEngine";
@@ -170,7 +171,7 @@ const MapEventHandler: React.FC<{
       return () => {
         try {
           container.style.cursor = "";
-        } catch {}
+        } catch { }
       };
     } catch (err) {
       console.warn("[MapEventHandler] cursor effect: map not ready", err);
@@ -331,6 +332,12 @@ export function MapPage() {
   const [reportsLoading, setReportsLoading] = useState(false);
   const [showReportsLayer, setShowReportsLayer] = useState(true);
   const [showBpsLayer, setShowBpsLayer] = useState(false);
+  const [bpsLayerLevel, setBpsLayerLevel] = useState<"regency" | "district">("regency");
+  const [bpsRegionName, setBpsRegionName] = useState<string>("Provinsi Jawa Timur");
+  const [bpsLoading, setBpsLoading] = useState(false);
+  const [bpsError, setBpsError] = useState<string | null>(null);
+  const [bpsLegendEntries, setBpsLegendEntries] = useState<BpsLegendEntry[]>([]);
+  const [bpsLegendYear, setBpsLegendYear] = useState<number>(new Date().getFullYear());
   const [createReportModalOpen, setCreateReportModalOpen] = useState(false);
   const [selectedReportCoords, setSelectedReportCoords] = useState<{
     lat: number;
@@ -558,8 +565,15 @@ export function MapPage() {
           return;
         }
 
+        // Cancel any in-flight request BEFORE creating a new AbortController.
+        // This prevents stale responses from overwriting fresh viewport results
+        // (race condition when user pans quickly).
         viewportAbortRef.current?.abort();
         viewportAbortRef.current = new AbortController();
+        // Capture the signal for THIS specific request.
+        // If another pan fires before this completes, the ref is replaced and
+        // our local `currentSignal` will be aborted by the next call.
+        const currentSignal = viewportAbortRef.current.signal;
 
         setViewportPlacesLoading(true);
         setViewportPlacesError(null);
@@ -577,7 +591,7 @@ export function MapPage() {
             west,
             north,
             east,
-            viewportAbortRef.current.signal,
+            currentSignal,
           );
           setViewportPlaces(places);
           setIsPlacesStale(places.some((p) => p.isStale));
@@ -614,7 +628,7 @@ export function MapPage() {
       controller.signal,
     )
       .then((places) => setViewportPlaces(places))
-      .catch(() => {});
+      .catch(() => { });
     return () => controller.abort();
   }, [fetchLocivaData, center]);
 
@@ -654,11 +668,11 @@ export function MapPage() {
           location_name: `Candidate Point ${candidate.id}`,
           scores: analysis
             ? {
-                opportunity_score: analysis.opportunityScore,
-                competition_score: analysis.competitionScore,
-                accessibility_score: analysis.accessibilityScore,
-                data_confidence: analysis.dataConfidence,
-              }
+              opportunity_score: analysis.opportunityScore,
+              competition_score: analysis.competitionScore,
+              accessibility_score: analysis.accessibilityScore,
+              data_confidence: analysis.dataConfidence,
+            }
             : undefined,
         });
         setIsPersistedInDb(true);
@@ -1368,6 +1382,19 @@ export function MapPage() {
                 mode={clickMode}
               />
 
+              {/* BPS Demographic Choropleth Layer — must be inside MapReadyGate for Leaflet context */}
+              <BpsLayer
+                isVisible={showBpsLayer}
+                level={bpsLayerLevel}
+                onLoadingChange={setBpsLoading}
+                onErrorChange={setBpsError}
+                onLegendReady={(entries, year, regionName) => {
+                  setBpsLegendEntries(entries);
+                  setBpsLegendYear(year);
+                  if (regionName) setBpsRegionName(regionName);
+                }}
+              />
+
               {/* Temporary preview marker while picking report location */}
               {pickingReportLocation && selectedReportCoords && (
                 <ReportMarker
@@ -1416,10 +1443,7 @@ export function MapPage() {
               );
             })}
 
-            {/* BPS Demographic Choropleth Layer */}
-            <BpsLayer isVisible={showBpsLayer} />
 
-            {/* Route Layer */}
             <RouteLayer
               activeWaypoints={activeWaypoints}
               currentCalculation={routeCalculation}
@@ -1427,7 +1451,7 @@ export function MapPage() {
               showPublicRoutes={showPublicRoutes}
             />
 
-            {/* Clustered POIs and LOCIVA Businesses Group (Rendered without needing candidate) */}
+
             <MapMarkerClusterGroup
               spiderfyOnMaxZoom={true}
               showCoverageOnHover={false}
@@ -1440,11 +1464,11 @@ export function MapPage() {
                     distanceFromCandidate={
                       activeCandidate
                         ? distanceMeters(
-                            activeCandidate.lat,
-                            activeCandidate.lng,
-                            place.lat,
-                            place.lng,
-                          )
+                          activeCandidate.lat,
+                          activeCandidate.lng,
+                          place.lat,
+                          place.lng,
+                        )
                         : undefined
                     }
                     isDuplicateWithInternal={duplicateExternalIds.has(place.id)}
@@ -1459,11 +1483,11 @@ export function MapPage() {
                     distanceFromCandidate={
                       activeCandidate
                         ? distanceMeters(
-                            activeCandidate.lat,
-                            activeCandidate.lng,
-                            biz.latitude,
-                            biz.longitude,
-                          )
+                          activeCandidate.lat,
+                          activeCandidate.lng,
+                          biz.latitude,
+                          biz.longitude,
+                        )
                         : undefined
                     }
                     isDuplicateWithExternal={duplicateInternalIds.has(biz.id)}
@@ -1534,10 +1558,21 @@ export function MapPage() {
         isStale={isPlacesStale}
       />
 
-      {/* ── BPS Population Density Floating Legend ───────────────────────── */}
+      {/* ── BPS Population Density Floating Legend & Status ──────────────── */}
       <BpsLegend
         isVisible={showBpsLayer}
         onClose={() => setShowBpsLayer(false)}
+        entries={bpsLegendEntries}
+        year={bpsLegendYear}
+        regionName={bpsRegionName}
+        level={bpsLayerLevel}
+        onLevelChange={setBpsLayerLevel}
+      />
+
+      <BpsLayerStatus
+        isVisible={showBpsLayer}
+        loading={bpsLoading}
+        error={bpsError}
       />
 
       {/* Picking report location banner on map */}

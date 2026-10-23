@@ -310,10 +310,12 @@ class LocationAnalysisService
                 ],
                 [
                     'id'      => 'bps_ri',
-                    'label'   => 'Badan Pusat Statistik (BPS WebAPI - ' . ($bpsDemographics['region_name'] ?? 'Wilayah Administratif') . ')',
-                    'count'   => $bpsDemographics['population'] ?? 1,
-                    'status'  => 'loaded',
-                    'year'    => $bpsDemographics['year'] ?? 2024,
+                    'label'   => ($bpsDemographics['status'] ?? '') === 'unsupported_region'
+                        ? 'Badan Pusat Statistik (BPS - Wilayah Belum Didukung)'
+                        : 'Badan Pusat Statistik (BPS WebAPI - ' . ($bpsDemographics['region_name'] ?? 'Wilayah Administratif') . ')',
+                    'count'   => $bpsDemographics['population'] ?? 0,
+                    'status'  => ($bpsDemographics['status'] ?? '') === 'unsupported_region' ? 'unavailable' : 'loaded',
+                    'year'    => $bpsDemographics['year'] ?? null,
                 ],
             ],
             'internal_poi_total'  => $internalCount,

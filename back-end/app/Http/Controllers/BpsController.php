@@ -57,9 +57,12 @@ class BpsController extends Controller
     /**
      * Get GeoJSON choropleth features for map population density layer.
      */
-    public function mapLayer()
+    public function mapLayer(\Illuminate\Http\Request $request)
     {
-        $layer = $this->bpsService->getMapChoroplethFeatureCollection();
+        $level = (string) $request->query('level', 'regency');
+        $domain = (string) $request->query('domain', '3500');
+
+        $layer = $this->bpsService->getMapChoroplethFeatureCollection($level, $domain);
 
         return response()->json($layer);
     }
