@@ -13,6 +13,7 @@ import RootLayout from "@/layouts/Rootlayout";
 import { ForgetPassword } from "@/pages/auth/ForgetPassword";
 import { ResetPassword } from "@/components/ui/ResetPassword";
 import { MapPage } from "@/pages/Maps/MapPage";
+import CandidateStatistics from "@/pages/CandidateStatistics";
 
 const page = (load: () => Promise<{ default: ComponentType }>) => async () => ({
   Component: (await load()).default,
@@ -31,8 +32,8 @@ const router = createBrowserRouter([
         element: <AuthCallback />,
       },
       {
-        path:"/view-maps",
-        element:<MapPage/>
+        path: "/view-maps",
+        element: <MapPage />,
       },
       {
         element: <GuestRoute />,
@@ -47,11 +48,11 @@ const router = createBrowserRouter([
           },
           {
             path: "/forget-password",
-            element: <ForgetPassword/>,
+            element: <ForgetPassword />,
           },
           {
             path: "/reset-password",
-            element: <ResetPassword/>,
+            element: <ResetPassword />,
           },
         ],
       },
@@ -65,6 +66,10 @@ const router = createBrowserRouter([
               {
                 path: "/dashboard",
                 lazy: page(() => import("@/pages/dashboard/UserDashboard")),
+              },
+              {
+                path: "/candidate-statistics",
+                element: <CandidateStatistics />,
               },
               {
                 path: "/profile",

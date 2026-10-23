@@ -38,15 +38,17 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
 
   return (
-    <div className={cn(
-      "fixed md:static inset-x-0 bottom-0 md:inset-auto md:right-0 z-[500] w-full md:w-96 bg-surface border-t md:border-l border-slate-200 flex flex-col transition-transform duration-300 max-h-[85vh] md:max-h-screen",
-      !isOpen && "translate-y-full md:translate-y-0 md:translate-x-full md:hidden"
-    )}>
+    <div
+      className={cn(
+        "fixed inset-x-0 bottom-0 z-[500] flex h-[85dvh] flex-col overflow-hidden border-t border-slate-200 bg-surface transition-transform duration-300 md:static md:h-full md:max-h-screen md:min-h-0 md:w-full md:border-l",
+        !isOpen && "translate-y-full md:hidden",
+      )}
+    >
       {/* Header */}
       <div className="p-4 border-b border-slate-200 bg-surface md:bg-transparent flex justify-between items-center sticky top-0 z-10">
         <div>
           <h2 className="text-xl font-display font-bold text-ink">
-            Candidate {result?.candidateId || 'A'}
+            Candidate {result?.candidateId || "A"}
           </h2>
           <p className="text-sm text-muted">{business.name}</p>
         </div>
@@ -74,14 +76,18 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           <button
             type="button"
             onClick={onSaveCandidate}
-            disabled={isPersistedInDb || isAnalyzing || result?.isValidLocation === false}
+            disabled={
+              isPersistedInDb ||
+              isAnalyzing ||
+              result?.isValidLocation === false
+            }
             className={cn(
               "w-full py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all",
               result?.isValidLocation === false
                 ? "bg-slate-200 text-slate-500 cursor-not-allowed opacity-60"
                 : isPersistedInDb
-                ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default"
-                : "bg-primary text-white hover:bg-primary/90 shadow-sm cursor-pointer"
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default"
+                  : "bg-primary text-white hover:bg-primary/90 shadow-sm cursor-pointer",
             )}
           >
             {result?.isValidLocation === false ? (
@@ -106,7 +112,9 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         {isAnalyzing ? (
           <div className="flex flex-col items-center justify-center py-12 space-y-4">
             <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-            <p className="text-muted font-medium text-sm">Analyzing location feasibility...</p>
+            <p className="text-muted font-medium text-sm">
+              Analyzing location feasibility...
+            </p>
           </div>
         ) : error ? (
           <div className="p-4 bg-red-50 text-red-600 rounded-xl flex items-start space-x-3 border border-red-200">
@@ -120,10 +128,13 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               <span>Unsupported Location (Sea / Offshore)</span>
             </div>
             <p className="text-xs text-amber-900 leading-relaxed">
-              {result.unsupportedReason || "The candidate coordinates are located in open sea or offshore waters. Land-based commercial feasibility scores cannot be calculated for water bodies."}
+              {result.unsupportedReason ||
+                "The candidate coordinates are located in open sea or offshore waters. Land-based commercial feasibility scores cannot be calculated for water bodies."}
             </p>
             <div className="p-2.5 rounded-xl bg-white/70 border border-amber-200/50 text-[11px] text-amber-800">
-              <span className="font-semibold">Action needed:</span> Drag or click candidate marker onto a valid land area or populated settlement to view feasibility analysis.
+              <span className="font-semibold">Action needed:</span> Drag or
+              click candidate marker onto a valid land area or populated
+              settlement to view feasibility analysis.
             </div>
           </div>
         ) : result ? (
@@ -133,7 +144,9 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               <div className="p-3 bg-orange-50 text-orange-700 rounded-xl text-xs flex items-start space-x-2 border border-orange-200">
                 <AlertTriangle className="shrink-0 mt-0.5" size={16} />
                 <div className="space-y-1">
-                  {result.dataWarnings.map((w, i) => <p key={i}>{w}</p>)}
+                  {result.dataWarnings.map((w, i) => (
+                    <p key={i}>{w}</p>
+                  ))}
                 </div>
               </div>
             )}
@@ -158,7 +171,9 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
 
             {/* Data Transparency: Sources */}
             <div className="p-3.5 rounded-xl border border-slate-100 bg-slate-50 space-y-2">
-              <h4 className="text-xs font-bold text-ink uppercase tracking-wide">Data Source Transparency</h4>
+              <h4 className="text-xs font-bold text-ink uppercase tracking-wide">
+                Data Source Transparency
+              </h4>
               <div className="flex items-center justify-between text-xs">
                 <span className="flex items-center gap-1.5 text-muted">
                   <Globe size={13} className="text-sky-500" />
@@ -178,7 +193,9 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                 </span>
               </div>
               <p className="text-[10.5px] text-slate-400 pt-1.5 border-t border-slate-200/60 leading-relaxed">
-                Analysis reflects real sampled spatial data and does not guarantee commercial outcomes. OpenStreetMap coverage varies across regions.
+                Analysis reflects real sampled spatial data and does not
+                guarantee commercial outcomes. OpenStreetMap coverage varies
+                across regions.
               </p>
             </div>
 
@@ -186,16 +203,33 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             <div className="space-y-3">
               <h3 className="font-bold text-ink text-base">Key Factors</h3>
               <div className="grid grid-cols-1 gap-2">
-                {result.factors.map(f => (
-                  <div key={f.key} className="p-3 rounded-xl border border-slate-100 bg-slate-50 flex items-start space-x-3">
-                    <div className={cn(
-                      "mt-0.5",
-                      f.impact === 'positive' ? "text-green-600" : f.impact === 'negative' ? "text-red-600" : "text-slate-400"
-                    )}>
-                      {f.impact === 'positive' ? <Target size={16} /> : f.impact === 'negative' ? <AlertTriangle size={16} /> : <Activity size={16} />}
+                {result.factors.map((f) => (
+                  <div
+                    key={f.key}
+                    className="p-3 rounded-xl border border-slate-100 bg-slate-50 flex items-start space-x-3"
+                  >
+                    <div
+                      className={cn(
+                        "mt-0.5",
+                        f.impact === "positive"
+                          ? "text-green-600"
+                          : f.impact === "negative"
+                            ? "text-red-600"
+                            : "text-slate-400",
+                      )}
+                    >
+                      {f.impact === "positive" ? (
+                        <Target size={16} />
+                      ) : f.impact === "negative" ? (
+                        <AlertTriangle size={16} />
+                      ) : (
+                        <Activity size={16} />
+                      )}
                     </div>
                     <div>
-                      <div className="text-sm font-bold text-ink">{f.label}</div>
+                      <div className="text-sm font-bold text-ink">
+                        {f.label}
+                      </div>
                       <div className="text-xs text-muted mt-0.5">{f.note}</div>
                     </div>
                   </div>
@@ -205,23 +239,40 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
 
             {/* Nearby Places */}
             <div className="space-y-3">
-              <h3 className="font-bold text-ink text-base">Nearby Places ({result.relevantPOI.length})</h3>
+              <h3 className="font-bold text-ink text-base">
+                Nearby Places ({result.relevantPOI.length})
+              </h3>
               <div className="space-y-2">
-                {result.relevantPOI.length > 0 ? result.relevantPOI.map((poi, idx) => {
-                  const cat = CATEGORY_BY_ID[poi.category as keyof typeof CATEGORY_BY_ID];
-                  return (
-                    <div key={idx} className="flex justify-between items-center text-sm p-2.5 bg-slate-50 rounded-xl border border-slate-100">
-                      <div className="flex items-center space-x-2 overflow-hidden">
-                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cat?.color || '#ccc' }} />
-                        <span className="truncate text-ink font-medium">{poi.name || cat?.label || poi.category}</span>
+                {result.relevantPOI.length > 0 ? (
+                  result.relevantPOI.map((poi, idx) => {
+                    const cat =
+                      CATEGORY_BY_ID[
+                        poi.category as keyof typeof CATEGORY_BY_ID
+                      ];
+                    return (
+                      <div
+                        key={idx}
+                        className="flex justify-between items-center text-sm p-2.5 bg-slate-50 rounded-xl border border-slate-100"
+                      >
+                        <div className="flex items-center space-x-2 overflow-hidden">
+                          <span
+                            className="w-2.5 h-2.5 rounded-full shrink-0"
+                            style={{ backgroundColor: cat?.color || "#ccc" }}
+                          />
+                          <span className="truncate text-ink font-medium">
+                            {poi.name || cat?.label || poi.category}
+                          </span>
+                        </div>
+                        <span className="text-muted font-medium whitespace-nowrap ml-2 text-xs">
+                          {formatDistance(poi.distance)}
+                        </span>
                       </div>
-                      <span className="text-muted font-medium whitespace-nowrap ml-2 text-xs">
-                        {formatDistance(poi.distance)}
-                      </span>
-                    </div>
-                  );
-                }) : (
-                  <p className="text-sm text-muted">No relevant places found within this radius.</p>
+                    );
+                  })
+                ) : (
+                  <p className="text-sm text-muted">
+                    No relevant places found within this radius.
+                  </p>
                 )}
               </div>
             </div>

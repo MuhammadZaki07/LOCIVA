@@ -2,7 +2,11 @@ import { useState, useCallback, useRef } from "react";
 import { calculateAnalysis } from "@/lib/analysisEngine";
 import type { AnalysisResult } from "@/lib/analysisEngine";
 import type { BusinessType } from "@/lib/umkmCatalog";
-import { fetchPlacesAround, validateCandidateGeospatial, type Place } from "@/lib/Osm";
+import {
+  fetchPlacesAround,
+  validateCandidateGeospatial,
+  type Place,
+} from "@/lib/Osm";
 import api, { classifyApiError } from "@/context/apiClient";
 
 export function useLocationAnalysis() {
@@ -31,7 +35,11 @@ export function useLocationAnalysis() {
 
       try {
         // 1. Real geospatial validation (detects sea / open ocean / offshore - Section 4)
-        const geoCheck = await validateCandidateGeospatial(lat, lng, abortControllerRef.current.signal);
+        const geoCheck = await validateCandidateGeospatial(
+          lat,
+          lng,
+          abortControllerRef.current.signal,
+        );
 
         if (thisRequestId !== requestIdRef.current) {
           return null;
@@ -67,18 +75,26 @@ export function useLocationAnalysis() {
             allPlaces: [],
             factors: [],
             dataWarnings: [
-              geoCheck.reason || "Candidate location is in open sea or offshore water. Cannot calculate feasibility scores for non-land areas.",
+              geoCheck.reason ||
+                "Candidate location is in open sea or offshore water. Cannot calculate feasibility scores for non-land areas.",
             ],
             updatedAt: Date.now(),
             isValidLocation: false,
             isWaterOrOffshore: true,
-            unsupportedReason: geoCheck.reason || "Location is situated in the sea or unsupported offshore water.",
+            unsupportedReason:
+              geoCheck.reason ||
+              "Location is situated in the sea or unsupported offshore water.",
           };
         }
 
         let places = knownPlaces ?? [];
         if (!knownPlaces) {
-          places = await fetchPlacesAround(lat, lng, radius, abortControllerRef.current.signal);
+          places = await fetchPlacesAround(
+            lat,
+            lng,
+            radius,
+            abortControllerRef.current.signal,
+          );
         }
 
         if (thisRequestId !== requestIdRef.current) {
@@ -115,25 +131,38 @@ export function useLocationAnalysis() {
           if (data && thisRequestId === requestIdRef.current) {
             return {
               ...clientResult,
-              opportunityScore: data.opportunity_score ?? clientResult.opportunityScore,
-              competitionScore: data.competition_score ?? clientResult.competitionScore,
-              accessibilityScore: data.accessibility_score ?? clientResult.accessibilityScore,
-              dataConfidence: data.data_confidence ?? clientResult.dataConfidence,
-              competitorCount: data.competitor_count ?? clientResult.competitorCount,
-              nearestCompetitor: data.nearest_competitor ?? clientResult.nearestCompetitor,
-              relevantPOI: (data.relevant_poi ?? clientResult.relevantPOI).map((poi: Record<string, unknown>, index: number) => ({
-                ...clientResult.relevantPOI[index],
-                ...poi,
-              })),
-              factors: (data.factors ?? clientResult.factors).map((f: Record<string, unknown>) => ({
-                key: String(f.key ?? ""),
-                label: String(f.label ?? ""),
-                value: Number(f.value ?? 0),
-                impact: (f.impact as AnalysisResult["factors"][number]["impact"]) ?? "neutral",
-                note: String(f.note ?? ""),
-              })),
+              opportunityScore:
+                data.opportunity_score ?? clientResult.opportunityScore,
+              competitionScore:
+                data.competition_score ?? clientResult.competitionScore,
+              accessibilityScore:
+                data.accessibility_score ?? clientResult.accessibilityScore,
+              dataConfidence:
+                data.data_confidence ?? clientResult.dataConfidence,
+              competitorCount:
+                data.competitor_count ?? clientResult.competitorCount,
+              nearestCompetitor:
+                data.nearest_competitor ?? clientResult.nearestCompetitor,
+              relevantPOI: (data.relevant_poi ?? clientResult.relevantPOI).map(
+                (poi: Record<string, unknown>, index: number) => ({
+                  ...clientResult.relevantPOI[index],
+                  ...poi,
+                }),
+              ),
+              factors: (data.factors ?? clientResult.factors).map(
+                (f: Record<string, unknown>) => ({
+                  key: String(f.key ?? ""),
+                  label: String(f.label ?? ""),
+                  value: Number(f.value ?? 0),
+                  impact:
+                    (f.impact as AnalysisResult["factors"][number]["impact"]) ??
+                    "neutral",
+                  note: String(f.note ?? ""),
+                }),
+              ),
               dataWarnings: data.data_warnings ?? clientResult.dataWarnings,
-              sources: data.sources,
+              sources: data.sources ?? clientResult.sources,
+              internalBusinessCount: Number(data.internal_business_count ?? 0),
               limitations: data.limitations,
               allPlaces: clientResult.allPlaces,
             };
@@ -155,7 +184,10 @@ export function useLocationAnalysis() {
           return null;
         }
         if (thisRequestId === requestIdRef.current) {
-          const message = err instanceof Error ? err.message : "Failed to perform location analysis";
+          const message =
+            err instanceof Error
+              ? err.message
+              : "Failed to perform location analysis";
           setError(message);
         }
         return null;

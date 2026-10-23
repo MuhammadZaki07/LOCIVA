@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Business;
 use App\Models\BusinessType;
 use App\Models\Poi;
 use App\Models\Report;
@@ -55,6 +56,11 @@ class LocationAnalysisService
 
     public function analyze(array $input): array
     {
+        \Illuminate\Support\Facades\Log::info(
+            'LocationAnalysisService terpanggil',
+            ['input' => $input]
+        );
+
         $lat          = (float) $input['lat'];
         $lng          = (float) $input['lng'];
         $radius       = (float) $input['radius'];
@@ -114,6 +120,16 @@ class LocationAnalysisService
             ->limit(500)
             ->get();
 
+        $internalBusinesses = Business::query()
+            ->selectRaw(
+                'businesses.*, (6371000 * acos(LEAST(1.0, cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude))))) AS distance',
+                [$lat, $lng, $lat]
+            )
+            ->having('distance', '<=', $radius)
+            ->orderBy('distance')
+            ->limit(500)
+            ->get();
+
         $reports = Report::selectRaw(
             'id, title, status, severity, latitude, longitude,
             (6371000 * acos(LEAST(1.0, cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude))))) AS distance',
@@ -130,6 +146,15 @@ class LocationAnalysisService
                 'name'     => $poi->name,
                 'category' => $poi->category,
                 'distance' => (float) $poi->distance,
+                'source'   => 'lociva_internal',
+            ];
+        }
+
+        foreach ($internalBusinesses as $business) {
+            $normalized[] = [
+                'name'     => $business->name,
+                'category' => $business->businessType?->slug ?? 'service',
+                'distance' => (float) $business->distance,
                 'source'   => 'lociva_internal',
             ];
         }
@@ -153,8 +178,23 @@ class LocationAnalysisService
             ];
         }
 
-        $internalCount = $internalPois->count();
-        $externalCount = count($normalized) - $internalCount;
+        $internalCount = $internalPois->count()
+            + $internalBusinesses->count();
+
+        \Illuminate\Support\Facades\Log::info('Location Analysis Debug', [
+            'lat' => $lat,
+            'lng' => $lng,
+            'radius' => $radius,
+            'internal_pois' => $internalPois->count(),
+            'internal_businesses' => $internalBusinesses->count(),
+            'internal_business_count' => $internalBusinesses->count(),
+            'internal_count' => $internalCount,
+        ]);
+
+        $externalCount = count(array_filter(
+            $normalized,
+            fn($poi) => $poi['source'] !== 'lociva_internal'
+        ));
 
         $opportunityScore = 40;
         $factors = [];
@@ -215,7 +255,7 @@ class LocationAnalysisService
 
         $nearestCompetitor = null;
         if ($competitorCount > 0) {
-            usort($competitors, fn ($a, $b) => $a['distance'] <=> $b['distance']);
+            usort($competitors, fn($a, $b) => $a['distance'] <=> $b['distance']);
             $nearestCompetitor = [
                 'name'     => $competitors[0]['name'],
                 'distance' => (int) round($competitors[0]['distance']),
@@ -242,7 +282,7 @@ class LocationAnalysisService
 
         $relevantKeys = array_keys($weights);
         $relevantPoi = [];
-        usort($normalized, fn ($a, $b) => $a['distance'] <=> $b['distance']);
+        usort($normalized, fn($a, $b) => $a['distance'] <=> $b['distance']);
         foreach ($normalized as $poi) {
             $mapped = self::CATEGORY_MAP[$poi['category']] ?? $poi['category'];
             if ($mapped && in_array($mapped, $relevantKeys, true)) {
@@ -284,7 +324,7 @@ class LocationAnalysisService
             'business_type'       => $slug,
             'business_type_name'  => $businessType?->name,
             'is_valid_location'   => true,
-            'is_water_or_offshore'=> false,
+            'is_water_or_offshore' => false,
             'opportunity_score'   => $opportunityScore,
             'competition_score'   => $competitionScore,
             'accessibility_score' => $accessibilityScore,
@@ -297,16 +337,16 @@ class LocationAnalysisService
             'bps_demographics'    => $bpsDemographics,
             'sources'             => [
                 [
-                    'id'      => 'lociva_internal',
-                    'label'   => 'POI & laporan internal LOCIVA',
-                    'count'   => $internalCount,
-                    'status'  => $internalCount > 0 ? 'loaded' : 'empty',
+                    'id'     => 'lociva_internal',
+                    'label'  => 'POI & laporan internal LOCIVA',
+                    'count'  => $internalCount,
+                    'status' => $internalCount > 0 ? 'loaded' : 'empty',
                 ],
                 [
-                    'id'      => 'openstreetmap',
-                    'label'   => 'OpenStreetMap / Overpass (eksternal, tidak disimpan sebagai usaha LOCIVA)',
-                    'count'   => $externalCount,
-                    'status'  => $externalCount > 0 ? 'loaded' : 'empty',
+                    'id'     => 'openstreetmap',
+                    'label'  => 'OpenStreetMap / Overpass (eksternal, tidak disimpan sebagai usaha LOCIVA)',
+                    'count'  => $externalCount,
+                    'status' => $externalCount > 0 ? 'loaded' : 'empty',
                 ],
                 [
                     'id'      => 'bps_ri',

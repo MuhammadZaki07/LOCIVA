@@ -38,7 +38,10 @@ import { VendorRoutePanel } from "@/components/maps/VendorRoutePanel";
 import { RouteLayer } from "@/components/maps/RouteLayer";
 import { MapPillNav, type MapToolId } from "@/components/maps/MapPillNav";
 import { SearchModal } from "@/components/maps/SearchModal";
-import { ReportMarker, type MapCivicReport } from "@/components/maps/ReportMarker";
+import {
+  ReportMarker,
+  type MapCivicReport,
+} from "@/components/maps/ReportMarker";
 import { CivicReportsMapPanel } from "@/components/maps/CivicReportsMapPanel";
 import { CreateReportModal } from "@/components/maps/CreateReportModal";
 import { BpsLayer, BpsLegend } from "@/components/maps/BpsLayer";
@@ -159,10 +162,10 @@ const MapEventHandler: React.FC<{
         mode === "candidate"
           ? "crosshair"
           : mode === "waypoint"
-          ? "cell"
-          : mode === "report"
-          ? "crosshair"
-          : "";
+            ? "cell"
+            : mode === "report"
+              ? "crosshair"
+              : "";
       container.style.cursor = cursor;
       return () => {
         try {
@@ -219,10 +222,7 @@ export function MapPage() {
           const res = await api.get(`/reports/${focusId}`);
           const report = res.data?.data;
           if (report?.latitude != null && report?.longitude != null) {
-            map.flyTo(
-              [Number(report.latitude), Number(report.longitude)],
-              17,
-            );
+            map.flyTo([Number(report.latitude), Number(report.longitude)], 17);
           }
         } else if (focusType === "route") {
           // Try sessionStorage bridge first (set by AdminUsers before navigation)
@@ -346,15 +346,15 @@ export function MapPage() {
         const raw = Array.isArray(res.data.data.data)
           ? res.data.data.data
           : Array.isArray(res.data.data)
-          ? res.data.data
-          : [];
+            ? res.data.data
+            : [];
         const valid: MapCivicReport[] = raw
           .filter(
             (r: any) =>
               r.latitude != null &&
               r.longitude != null &&
               !isNaN(Number(r.latitude)) &&
-              !isNaN(Number(r.longitude))
+              !isNaN(Number(r.longitude)),
           )
           .map((r: any) => ({
             id: String(r.id),
@@ -421,7 +421,11 @@ export function MapPage() {
     useState<RouteCalculationResult | null>(null);
 
   // ── Click mode: either placing candidate, waypoint, or report location ──────
-  const clickMode = useMemo((): "candidate" | "waypoint" | "report" | "none" => {
+  const clickMode = useMemo(():
+    | "candidate"
+    | "waypoint"
+    | "report"
+    | "none" => {
     if (pickingReportLocation) return "report";
     if (isRoutePanelOpen && activeTool === "routes") return "waypoint";
     if (selectedBusiness) return "candidate";
@@ -560,7 +564,7 @@ export function MapPage() {
         setViewportPlacesLoading(true);
         setViewportPlacesError(null);
 
-      // Restrict query to a maximum bbox span to avoid overloading Overpass
+        // Restrict query to a maximum bbox span to avoid overloading Overpass
         // on very low zoom levels. At zoom >= 13 the viewport is already bounded.
         const south = bounds.getSouth();
         const west = bounds.getWest();
@@ -1162,7 +1166,7 @@ export function MapPage() {
                   setSelectedReportCoords(
                     userLocation
                       ? { lat: userLocation.lat, lng: userLocation.lng }
-                      : { lat: center[0], lng: center[1] }
+                      : { lat: center[0], lng: center[1] },
                   );
                   setCreateReportModalOpen(true);
                 }}
@@ -1188,7 +1192,7 @@ export function MapPage() {
         )}
 
         {/* ── Top-right Floating Map Controls (Icons, Not Emoji - Bagian 3) ── */}
-        <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2 pointer-events-none">
+        <div className="absolute top-4 right-4 z-[400] flex flex-col items-end gap-2 pointer-events-none">
           {/* Basemap Switcher */}
           <div className="pointer-events-auto flex items-center bg-white/95 backdrop-blur-xs rounded-2xl border border-slate-200/80 shadow-md text-xs font-semibold overflow-hidden p-1">
             <button
@@ -1221,80 +1225,80 @@ export function MapPage() {
             </button>
           </div>
 
-          {/* Privacy-Aware Opt-in GPS Location Button (Section 6) */}
-          <button
-            type="button"
-            onClick={handleToggleOptInLocation}
-            title={
-              isLocationOptedIn
-                ? "Stop sharing live location (Click to disable)"
-                : "Share live location (Opt-in GPS)"
-            }
-            className={cn(
-              "pointer-events-auto p-3 backdrop-blur-xs rounded-2xl shadow-md transition-all flex items-center justify-center cursor-pointer active:scale-95",
-              isLocationOptedIn
-                ? "bg-blue-600 text-white border border-blue-500 shadow-blue-200"
-                : "bg-white/95 hover:bg-white text-primary border border-slate-200/80",
-            )}
-          >
-            <Navigation
-              size={18}
-              className={cn(isLocating && "animate-spin")}
-            />
-          </button>
+          <div className="flex flex-col items-end gap-2">
+            {/* Lokasi */}
+            <button
+              type="button"
+              onClick={handleToggleOptInLocation}
+              title={
+                isLocationOptedIn
+                  ? "Stop sharing live location (Click to disable)"
+                  : "Share live location (Opt-in GPS)"
+              }
+              className={cn(
+                "pointer-events-auto h-10 w-10 rounded-lg border shadow-md backdrop-blur-xs transition-all flex items-center justify-center cursor-pointer active:scale-95",
+                isLocationOptedIn
+                  ? "bg-blue-600 text-white border-blue-500 shadow-blue-200"
+                  : "bg-white/95 hover:bg-white text-primary border-slate-200/80",
+              )}
+            >
+              <Navigation
+                size={18}
+                className={cn(isLocating && "animate-spin")}
+              />
+            </button>
 
-          {/* Shared Public Routes Toggle */}
-          <button
-            type="button"
-            onClick={() => setShowPublicRoutes((v) => !v)}
-            title={
-              showPublicRoutes
-                ? "Hide community public routes"
-                : "Show community public routes"
-            }
-            className={cn(
-              "pointer-events-auto p-3 bg-white/95 backdrop-blur-xs border border-slate-200/80 rounded-2xl shadow-md transition-all flex items-center justify-center cursor-pointer active:scale-95",
-              showPublicRoutes
-                ? "text-emerald-600 border-emerald-200 bg-emerald-50/50"
-                : "text-muted hover:text-ink",
-            )}
-          >
-            <Footprints size={18} />
-          </button>
+            {/* Rute Publik */}
+            <button
+              type="button"
+              onClick={() => setShowPublicRoutes((v) => !v)}
+              title={
+                showPublicRoutes
+                  ? "Hide community public routes"
+                  : "Show community public routes"
+              }
+              className={cn(
+                "pointer-events-auto h-10 w-10 rounded-lg border shadow-md backdrop-blur-xs transition-all flex items-center justify-center cursor-pointer active:scale-95",
+                showPublicRoutes
+                  ? "text-emerald-600 border-emerald-200 bg-emerald-50/50"
+                  : "bg-white/95 border-slate-200/80 text-muted hover:text-ink",
+              )}
+            >
+              <Footprints size={18} />
+            </button>
 
-          {/* BPS Population Density Layer Toggle */}
-          <button
-            type="button"
-            onClick={() => setShowBpsLayer((v) => !v)}
-            title={
-              showBpsLayer
-                ? "Sembunyikan layer kepadatan penduduk BPS"
-                : "Tampilkan layer kepadatan penduduk BPS"
-            }
-            className={cn(
-              "pointer-events-auto p-3 bg-white/95 backdrop-blur-xs border border-slate-200/80 rounded-2xl shadow-md transition-all flex items-center justify-center cursor-pointer active:scale-95",
-              showBpsLayer
-                ? "text-indigo-600 border-indigo-200 bg-indigo-50/50"
-                : "text-muted hover:text-ink",
-            )}
-          >
-            <Users size={18} />
-          </button>
+            {/* BPS Population Density Layer Toggle */}
+            <button
+              type="button"
+              onClick={() => setShowBpsLayer((v) => !v)}
+              title={
+                showBpsLayer
+                  ? "Sembunyikan layer kepadatan penduduk BPS"
+                  : "Tampilkan layer kepadatan penduduk BPS"
+              }
+              className={cn(
+                "pointer-events-auto p-3 bg-white/95 backdrop-blur-xs border border-slate-200/80 rounded-2xl shadow-md transition-all flex items-center justify-center cursor-pointer active:scale-95",
+                showBpsLayer
+                  ? "text-indigo-600 border-indigo-200 bg-indigo-50/50"
+                  : "text-muted hover:text-ink",
+              )}
+            >
+              <Users size={18} />
+            </button>
 
-          {/* Quick Create Civic Report Floating Button */}
-          <button
-            type="button"
-            onClick={() => {
-              // Always enter location-picking mode first so user can tap the map
-              setSelectedReportCoords(null);
-              setPickingReportLocation(true);
-            }}
-            title="Lapor kondisi: klik peta untuk memilih lokasi"
-            className="pointer-events-auto flex items-center gap-1.5 px-3 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl shadow-md transition-all cursor-pointer active:scale-95 text-xs font-semibold"
-          >
-            <AlertTriangle size={15} />
-            <span className="hidden sm:inline">Lapor Kondisi</span>
-          </button>
+            {/* Lapor */}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedReportCoords(null);
+                setPickingReportLocation(true);
+              }}
+              title="Lapor kondisi: klik peta untuk memilih lokasi"
+              className="pointer-events-auto h-10 w-10 rounded-lg border border-rose-700 bg-rose-600 text-white shadow-md transition-all flex items-center justify-center cursor-pointer hover:bg-rose-700 active:scale-95"
+            >
+              <AlertTriangle size={18} />
+            </button>
+          </div>
         </div>
 
         {/* ── Leaflet Map Viewport ─────────────────────────────────────────── */}

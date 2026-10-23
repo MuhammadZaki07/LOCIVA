@@ -11,16 +11,17 @@ use App\Http\Requests\SaveCandidateLocationRequest;
 use App\Http\Resources\BusinessMapResource;
 use App\Http\Resources\BusinessResource;
 use App\Http\Resources\SimulationSessionResource;
+use App\Traits\UploadTrait;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class BusinessController extends Controller
 {
+    use UploadTrait;
     public function __construct(
         protected BusinessRepositoryInterface $businessRepository,
         protected SimulationServiceInterface $simulationService
-    ) {
-    }
+    ) {}
 
     /**
      * Get LOCIVA Internal businesses for the map layer.
@@ -87,7 +88,15 @@ class BusinessController extends Controller
             'latitude'         => 'required|numeric|between:-90,90',
             'longitude'        => 'required|numeric|between:-180,180',
             'address'          => 'nullable|string|max:500',
+            'image'            => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
+
+        if (isset($validated['image'])) {
+            $validated['image'] = $this->upload(
+                'businesses',
+                $validated['image']
+            );
+        }
 
         $validated['user_id'] = Auth::id();
 

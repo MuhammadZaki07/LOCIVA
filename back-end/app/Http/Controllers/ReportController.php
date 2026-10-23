@@ -11,6 +11,7 @@ use App\Traits\UploadTrait;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Events\ReportCreated;
 
 class ReportController extends Controller
 {
@@ -53,7 +54,7 @@ class ReportController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
+                    ->orWhere('description', 'like', "%{$search}%");
             });
         }
 
@@ -66,8 +67,8 @@ class ReportController extends Controller
                 '*, (6371000 * acos(LEAST(1.0, cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude))))) AS distance',
                 [$lat, $lng, $lat]
             )
-            ->having('distance', '<=', $radius)
-            ->orderBy('distance');
+                ->having('distance', '<=', $radius)
+                ->orderBy('distance');
         } else {
             $query->latest();
         }
@@ -139,6 +140,7 @@ class ReportController extends Controller
                     'file_size' => $file->getSize(),
                 ]);
             }
+            ReportCreated::dispatch($report);
 
             DB::commit();
 
@@ -282,5 +284,25 @@ class ReportController extends Controller
         $count = ReportConfirmation::where('report_id', $report->id)->count();
 
         return ApiResponse::success(['confirmations_count' => $count], 'Confirmation recorded');
+    }
+
+    public function dismiss(string $id)
+    {
+        $report = Report::find($id);
+
+        if (! $report) {
+            return ApiResponse::notFound('Report not found.');
+        }
+
+        $report->is_dismissed = true;
+        $report->save();
+
+        return ApiResponse::success(
+            [
+                'id' => (string) $report->id,
+                'is_dismissed' => true,
+            ],
+            'Notification dismissed successfully'
+        );
     }
 }
