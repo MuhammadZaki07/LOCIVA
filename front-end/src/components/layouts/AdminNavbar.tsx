@@ -11,10 +11,12 @@ import {
   CheckCircle2,
   PanelLeftClose,
   PanelLeftOpen,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getStorageUrl } from "@/context/userService";
 import api from "@/context/apiClient";
+import echo from "@/lib/echo";
 
 // Breadcrumb map: path segment -> readable label (sentence case)
 const BREADCRUMB_LABELS: Record<string, string> = {
@@ -37,9 +39,7 @@ function Breadcrumb() {
 
   if (segments.length <= 1) {
     return (
-      <span className="text-[12.5px] font-medium text-ink">
-        dashboard
-      </span>
+      <span className="text-[12.5px] font-medium text-ink">dashboard</span>
     );
   }
 
@@ -47,14 +47,19 @@ function Breadcrumb() {
     const path = "/" + segments.slice(0, i + 1).join("/");
     // If segment is UUID or numeric ID, display as "detail" or "id"
     const isId =
-      seg.length > 20 || /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(seg) || /^\d+$/.test(seg);
+      seg.length > 20 ||
+      /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(seg) ||
+      /^\d+$/.test(seg);
     const label = isId ? "detail" : (BREADCRUMB_LABELS[seg] ?? seg);
     const isLast = i === segments.length - 1;
     return { path, label, isLast };
   });
 
   return (
-    <nav className="flex items-center gap-1.5 text-[12px] text-muted overflow-x-auto" aria-label="Breadcrumb">
+    <nav
+      className="flex items-center gap-1.5 text-[12px] text-muted overflow-x-auto"
+      aria-label="Breadcrumb"
+    >
       {crumbs.map((crumb) => (
         <span key={crumb.path} className="flex items-center gap-1.5 shrink-0">
           {!crumb.isLast ? (
@@ -68,7 +73,9 @@ function Breadcrumb() {
               <ChevronRight size={11} className="text-muted/50" />
             </>
           ) : (
-            <span className="font-semibold text-ink lowercase">{crumb.label}</span>
+            <span className="font-semibold text-ink lowercase">
+              {crumb.label}
+            </span>
           )}
         </span>
       ))}
@@ -106,20 +113,79 @@ export default function AdminNavbar({
 
   useEffect(() => {
     api
-      .get("/reports", { params: { per_page: 8, status: "reported" } })
+      .get("/reports", {
+        params: {
+          per_page: 8,
+          status: "reported",
+        },
+      })
       .then((res) => {
         const raw = res.data?.data?.data ?? res.data?.data ?? [];
+
         setNotifications(
-          (raw as any[]).slice(0, 6).map((r: any) => ({
-            id: String(r.id),
-            title: r.title,
-            status: r.status,
-            created_at: r.created_at,
-          }))
+          (raw as any[])
+            .filter((report: any) => !report.is_dismissed)
+            .slice(0, 6)
+            .map((report: any) => ({
+              id: String(report.id),
+              title: report.title,
+              status: report.status,
+              created_at: report.created_at,
+            })),
         );
       })
-      .catch(() => {});
+      .catch((error) => {
+        console.error("Gagal memuat notifikasi:", error);
+      });
   }, []);
+
+  useEffect(() => {
+    if (!user || user.role !== "admin") return;
+
+    console.log("[Reverb] Memasang listener admin.reports");
+
+    const channel = echo.private("admin.reports");
+
+    channel.listen(".report.created", (event: RecentReport) => {
+      console.log("[Reverb] Laporan baru diterima:", event);
+
+      setNotifications((current) => {
+        // Hindari laporan ganda jika event terkirim lebih dari sekali.
+        if (current.some((item) => item.id === String(event.id))) {
+          return current;
+        }
+
+        return [
+          {
+            id: String(event.id),
+            title: event.title,
+            status: event.status,
+            created_at: event.created_at,
+          },
+          ...current,
+        ].slice(0, 6);
+      });
+    });
+
+    return () => {
+      echo.leave("admin.reports");
+    };
+  }, [user?.id, user?.role]);
+
+  const handleDeleteNotification = async (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    try {
+      await api.patch(`/reports/${id}/dismiss`);
+
+      setNotifications((current) =>
+        current.filter((notification) => notification.id !== id),
+      );
+    } catch (error) {
+      console.error("Gagal menyembunyikan notifikasi:", error);
+    }
+  };
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -127,7 +193,10 @@ export default function AdminNavbar({
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
         setNotifOpen(false);
       }
-      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+      if (
+        profileRef.current &&
+        !profileRef.current.contains(e.target as Node)
+      ) {
         setProfileOpen(false);
       }
     };
@@ -160,7 +229,11 @@ export default function AdminNavbar({
             className="p-1.5 rounded-[8px] text-muted hover:bg-slate-100 hover:text-ink cursor-pointer transition-colors shrink-0"
             title={collapsed ? "Perluas sidebar" : "Ciutkan sidebar"}
           >
-            {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+            {collapsed ? (
+              <PanelLeftOpen size={16} />
+            ) : (
+              <PanelLeftClose size={16} />
+            )}
           </button>
         )}
         <div className="min-w-0 flex-1">
@@ -225,27 +298,48 @@ export default function AdminNavbar({
                   </div>
                 ) : (
                   notifications.map((n) => (
-                    <Link
+                    <div
                       key={n.id}
-                      to="/admin/reports"
-                      onClick={() => setNotifOpen(false)}
-                      className="flex items-start gap-3 px-4 py-3 no-underline hover:bg-slate-50/70 transition-colors"
+                      className="flex items-start gap-2 px-4 py-3 hover:bg-slate-50/70"
                     >
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-amber-50 text-amber-600">
-                        <AlertTriangle size={13} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[12.5px] font-medium text-ink">{n.title}</p>
-                        <p className="text-[11px] text-muted mt-0.5">
-                          {new Date(n.created_at).toLocaleDateString("id-ID", {
-                            day: "numeric",
-                            month: "short",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                      </div>
-                    </Link>
+                      <Link
+                        to="/admin/reports"
+                        onClick={() => setNotifOpen(false)}
+                        className="flex min-w-0 flex-1 items-start gap-3 no-underline"
+                      >
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-amber-50 text-amber-600">
+                          <AlertTriangle size={13} />
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[12.5px] font-medium text-ink">
+                            {n.title}
+                          </p>
+
+                          <p className="mt-0.5 text-[11px] text-muted">
+                            {new Date(n.created_at).toLocaleDateString(
+                              "id-ID",
+                              {
+                                day: "numeric",
+                                month: "short",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              },
+                            )}
+                          </p>
+                        </div>
+                      </Link>
+
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteNotification(e, n.id)}
+                        aria-label={`Hapus notifikasi ${n.title}`}
+                        title="Hapus notifikasi"
+                        className="shrink-0 rounded-md p-1 text-muted hover:bg-red-50 hover:text-red-600"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
                   ))
                 )}
               </div>
@@ -275,7 +369,11 @@ export default function AdminNavbar({
             aria-label="Profil administrator"
           >
             {avatarSrc ? (
-              <img src={avatarSrc} alt="Avatar" className="h-full w-full object-cover" />
+              <img
+                src={avatarSrc}
+                alt="Avatar"
+                className="h-full w-full object-cover"
+              />
             ) : (
               <span>{(user?.name || "A")[0].toUpperCase()}</span>
             )}
@@ -284,7 +382,9 @@ export default function AdminNavbar({
           {profileOpen && (
             <div className="absolute right-0 top-10 z-50 w-56 rounded-[14px] border border-[#ececf6] bg-white p-1.5 shadow-xl text-left">
               <div className="border-b border-[#f0f0f8] px-3 py-2.5">
-                <p className="truncate text-[13px] font-medium text-ink">{user?.name || "Admin"}</p>
+                <p className="truncate text-[13px] font-medium text-ink">
+                  {user?.name || "Admin"}
+                </p>
                 <p className="truncate text-[11px] text-muted">{user?.email}</p>
                 <span className="mt-1 inline-block rounded-[5px] bg-primary-soft px-1.5 py-0.2 text-[10px] font-medium text-primary">
                   administrator

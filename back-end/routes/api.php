@@ -19,6 +19,7 @@ use App\Http\Controllers\VendorRouteController;
 | Auth Routes
 |--------------------------------------------------------------------------
 */
+
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
@@ -125,6 +126,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/business-types/{id}/weights', [BusinessTypeWeightController::class, 'syncByBusinessType']);
         Route::apiResource('users', UserController::class)->except('store');
         Route::patch('/reports/{id}/status', [ReportController::class, 'updateStatus']);
+        Route::patch('/reports/{id}/dismiss', [ReportController::class, 'dismiss',]);
         Route::post('/business-types', [BusinessTypeController::class, 'store']);
         Route::put('/business-types/{id}', [BusinessTypeController::class, 'update']);
         Route::delete('/business-types/{id}', [BusinessTypeController::class, 'destroy']);
@@ -143,4 +145,3 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/admin/data-sync-logs', [\App\Http\Controllers\AdminManagementController::class, 'dataSyncLogs']);
     });
 });
-

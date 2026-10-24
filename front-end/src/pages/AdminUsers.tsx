@@ -17,6 +17,8 @@ import {
   ExternalLink,
 } from "lucide-react";
 
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 import dayjs from "dayjs";
 
 import {

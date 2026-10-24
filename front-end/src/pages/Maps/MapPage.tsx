@@ -1266,7 +1266,7 @@ export function MapPage() {
         )}
 
         {/* ── Top-right Floating Map Controls (Icons, Not Emoji - Bagian 3) ── */}
-        <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2 pointer-events-none">
+        <div className="absolute top-4 right-4 z-[400] flex flex-col items-end gap-2 pointer-events-none">
           {/* Basemap Switcher */}
           <div className="pointer-events-auto flex items-center bg-white/95 backdrop-blur-xs rounded-2xl border border-slate-200/80 shadow-md text-xs font-semibold overflow-hidden p-1">
             <button
