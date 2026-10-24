@@ -19,7 +19,6 @@ use App\Http\Controllers\VendorRouteController;
 | Auth Routes
 |--------------------------------------------------------------------------
 */
-
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
@@ -56,6 +55,7 @@ Route::get('/pois', [PoiController::class, 'index']);
 
 // LOCIVA Internal Businesses for Map
 Route::get('/businesses/map', [BusinessController::class, 'mapIndex']);
+Route::get('/pois/bounds', [PoiController::class, 'bounds']);
 
 // Business Catalog (Katalog Usaha)
 Route::get('/business/types', [BusinessTypeController::class, 'index']);
