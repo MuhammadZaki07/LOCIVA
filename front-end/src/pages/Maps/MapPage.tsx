@@ -12,7 +12,11 @@ import {
   MapZoomControl,
   MapMarkerClusterGroup,
 } from "@/components/ui/shadcn-ui/map";
-import { distanceMeters, fetchPlacesInBounds, type Place } from "@/lib/Osm";
+import {
+  distanceMeters,
+  fetchPlacesInBounds,
+  type Place,
+} from "@/lib/LocalOsm";
 import { useToast } from "@/components/ui/Toast";
 import api from "@/context/apiClient";
 
@@ -51,6 +55,7 @@ import type { BusinessType } from "@/lib/umkmCatalog";
 import type { AnalysisResult } from "@/lib/analysisEngine";
 import type { RouteWaypoint, RouteCalculationResult } from "@/lib/routing";
 import { useLocationAnalysis } from "@/hooks/useLocationAnalysis";
+import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import L from "leaflet";
 import { useMapEvents } from "react-leaflet";
@@ -312,7 +317,7 @@ export function MapPage() {
   const [layerCategory, setLayerCategory] = useState<FilterCategory>("all");
   const [showPublicRoutes, setShowPublicRoutes] = useState(true);
 
-  // ── Viewport-based Places & Businesses State (Bagian 1 & 2) ────────────────
+  // ── Viewport-based Places & Businesses State ──────────────────────────────
   const [viewportPlaces, setViewportPlaces] = useState<Place[]>([]);
   const [viewportPlacesLoading, setViewportPlacesLoading] = useState(false);
   const [viewportPlacesError, setViewportPlacesError] = useState<string | null>(
@@ -414,48 +419,12 @@ export function MapPage() {
     C: null,
   });
 
-  const {
-    analyze,
-    isCandidateAnalyzing,
-    getCandidateError,
-  } = useLocationAnalysis();
+  const { analyze, isAnalyzing, error: analysisError } = useLocationAnalysis();
 
   const activeCandidate = candidates[activeCandidateId];
-
-  // Isolated debounced candidate state (500ms debounce per candidate position/radius change)
-  const [debouncedCandidates, setDebouncedCandidates] = useState<
-    Record<CandidateId, CandidateData | null>
-  >({
-    A: null,
-    B: null,
-    C: null,
-  });
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedCandidates(candidates);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [candidates]);
-
-  // Track parameters of the last completed analysis per candidate to avoid duplicate fetches
-  const lastAnalyzedParamsRef = useRef<
-    Record<
-      CandidateId,
-      { lat: number; lng: number; radius: number; businessTypeId: string } | null
-    >
-  >({
-    A: null,
-    B: null,
-    C: null,
-  });
-
-  // Track request sequence per candidate to ignore stale out-of-order responses
-  const candidateReqSeqRef = useRef<Record<CandidateId, number>>({
-    A: 0,
-    B: 0,
-    C: 0,
-  });
+  const debouncedLat = useDebounce(activeCandidate?.lat, 600);
+  const debouncedLng = useDebounce(activeCandidate?.lng, 600);
+  const debouncedRadius = useDebounce(activeCandidate?.radius, 600);
 
   // ── Mobile Vendor Routes ──────────────────────────────────────────────────
   const [activeWaypoints, setActiveWaypoints] = useState<RouteWaypoint[]>([]);
@@ -569,11 +538,22 @@ export function MapPage() {
     [],
   );
 
-  // ── Viewport-based Places Loader (Bagian 1, 2, & 7) ────────────────────────
+  // ── Viewport-based POI Loader (LOCIVA backend / own database) ──────────────
   const viewportAbortRef = useRef<AbortController | null>(null);
   const viewportDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
+  const viewportCountRef = useRef(0);
+
+  // Cancel pending work when leaving the page
+  useEffect(() => {
+    return () => {
+      if (viewportDebounceTimer.current) {
+        clearTimeout(viewportDebounceTimer.current);
+      }
+      viewportAbortRef.current?.abort();
+    };
+  }, []);
 
   const loadViewportData = useCallback(
     (
@@ -583,69 +563,52 @@ export function MapPage() {
       zoom: number,
       bounds: L.LatLngBounds,
     ) => {
-      // Clear pending timer
       if (viewportDebounceTimer.current) {
         clearTimeout(viewportDebounceTimer.current);
       }
 
-      // Debounce viewport query to prevent spamming while panning
+      // Debounce so panning doesn't hit the backend on every frame
       viewportDebounceTimer.current = setTimeout(async () => {
-        // 1. Always load LOCIVA businesses for the visible area
+        // 1. LOCIVA businesses for the visible area
         fetchLocivaData(centerLat, centerLng, radiusMeters, bounds);
 
-        // 2. Fetch OSM POIs if zoom level is detailed enough (zoom >= 13)
-        // Guard against querying massive global areas that overload Overpass
-        if (zoom < 13) {
-          // If zoomed out, skip Overpass call to prevent 429/timeout
-          return;
-        }
+        // 2. POIs from our own database. Below zoom 13 the viewport is wider
+        //    than the backend accepts, so skip.
+        if (zoom < 13) return;
 
-        // Cancel any in-flight request BEFORE creating a new AbortController.
-        // This prevents stale responses from overwriting fresh viewport results
-        // (race condition when user pans quickly).
+        // Cancel the previous request before starting a new one so a slow
+        // old response can't overwrite fresh results.
         viewportAbortRef.current?.abort();
         viewportAbortRef.current = new AbortController();
-        // Capture the signal for THIS specific request.
-        // If another pan fires before this completes, the ref is replaced and
-        // our local `currentSignal` will be aborted by the next call.
         const currentSignal = viewportAbortRef.current.signal;
 
         setViewportPlacesLoading(true);
         setViewportPlacesError(null);
 
-        // Restrict query to a maximum bbox span to avoid overloading Overpass
-        // on very low zoom levels. At zoom >= 13 the viewport is already bounded.
-        const south = bounds.getSouth();
-        const west = bounds.getWest();
-        const north = bounds.getNorth();
-        const east = bounds.getEast();
-
         try {
           const places = await fetchPlacesInBounds(
-            south,
-            west,
-            north,
-            east,
+            bounds.getSouth(),
+            bounds.getWest(),
+            bounds.getNorth(),
+            bounds.getEast(),
             currentSignal,
           );
+          viewportCountRef.current = places.length;
           setViewportPlaces(places);
           setIsPlacesStale(places.some((p) => p.isStale));
         } catch (err: any) {
           if (err?.name === "AbortError") return;
           console.warn("Failed to load viewport places:", err);
-          setViewportPlacesError(
-            "Unable to reach OpenStreetMap Overpass servers",
-          );
-          // If we already have places, preserve them and flag as stale (Bagian 7)
-          if (viewportPlaces.length > 0) {
-            setIsPlacesStale(true);
-          }
+          setViewportPlacesError("Unable to load places from the LOCIVA server");
+          // Keep what is already on the map and flag it as stale
+          if (viewportCountRef.current > 0) setIsPlacesStale(true);
         } finally {
-          setViewportPlacesLoading(false);
+          // Don't clear the spinner if a newer request has taken over
+          if (!currentSignal.aborted) setViewportPlacesLoading(false);
         }
       }, 550);
     },
-    [fetchLocivaData, viewportPlaces.length],
+    [fetchLocivaData],
   );
 
   // Initial load: use a ~4km bounding box around the default center
@@ -662,7 +625,10 @@ export function MapPage() {
       center[1] + halfSpan,
       controller.signal,
     )
-      .then((places) => setViewportPlaces(places))
+      .then((places) => {
+        viewportCountRef.current = places.length;
+        setViewportPlaces(places);
+      })
       .catch(() => { });
     return () => controller.abort();
   }, [fetchLocivaData, center]);
@@ -727,49 +693,33 @@ export function MapPage() {
     [toast],
   );
 
-  // ── Run isolated analysis per candidate whenever its debounced parameters change ──
+  // ── Run analysis when candidate debounced position changes ────────────────
   useEffect(() => {
-    if (!selectedBusiness) return;
-
-    (["A", "B", "C"] as CandidateId[]).forEach((id) => {
-      const cand = debouncedCandidates[id];
-      if (!cand) {
-        // Candidate has no coordinates on the map, do not analyze
-        return;
-      }
-
-      const last = lastAnalyzedParamsRef.current[id];
-      const isParamIdentical =
-        last !== null &&
-        last.lat === cand.lat &&
-        last.lng === cand.lng &&
-        last.radius === cand.radius &&
-        last.businessTypeId === selectedBusiness.id;
-
-      // Skip if already analyzed with identical parameters and valid result exists
-      if (isParamIdentical && analysisResults[id] !== null) {
-        return;
-      }
-
-      // Mark these parameters as current
-      lastAnalyzedParamsRef.current[id] = {
-        lat: cand.lat,
-        lng: cand.lng,
-        radius: cand.radius,
-        businessTypeId: selectedBusiness.id,
-      };
-
-      const thisSeq = ++candidateReqSeqRef.current[id];
-
-      analyze(id, cand.lat, cand.lng, cand.radius, selectedBusiness).then((res) => {
-        // Strict guard: ensure response matches this candidate and is the latest sequence
-        if (res && res.candidateId === id && thisSeq === candidateReqSeqRef.current[id]) {
-          setAnalysisResults((prev) => ({ ...prev, [id]: res }));
-          fetchLocivaData(cand.lat, cand.lng, cand.radius * 1.5);
+    if (selectedBusiness && debouncedLat && debouncedLng && debouncedRadius) {
+      const runAnalysis = async () => {
+        const res = await analyze(
+          activeCandidateId,
+          debouncedLat,
+          debouncedLng,
+          debouncedRadius,
+          selectedBusiness,
+        );
+        if (res) {
+          setAnalysisResults((prev) => ({ ...prev, [activeCandidateId]: res }));
+          fetchLocivaData(debouncedLat, debouncedLng, debouncedRadius * 1.5);
         }
-      });
-    });
-  }, [debouncedCandidates, selectedBusiness, analyze, fetchLocivaData, analysisResults]);
+      };
+      runAnalysis();
+    }
+  }, [
+    debouncedLat,
+    debouncedLng,
+    debouncedRadius,
+    selectedBusiness,
+    activeCandidateId,
+    analyze,
+    fetchLocivaData,
+  ]);
 
   // ── Event Handlers ─────────────────────────────────────────────────────────
   const handleSearchSelect = (lat: number, lng: number, name: string) => {
@@ -782,10 +732,7 @@ export function MapPage() {
     setSelectedBusiness(business);
     setIsPersistedInDb(false);
     setCandidates({ A: null, B: null, C: null });
-    setDebouncedCandidates({ A: null, B: null, C: null });
     setAnalysisResults({ A: null, B: null, C: null });
-    lastAnalyzedParamsRef.current = { A: null, B: null, C: null };
-    candidateReqSeqRef.current = { A: 0, B: 0, C: 0 };
     setActiveCandidateId("A");
     setActiveTool("analysis");
     if (window.innerWidth < 768) setActiveTool(null);
@@ -824,8 +771,6 @@ export function MapPage() {
           ...prev,
           [activeCandidateId]: newCandidate,
         }));
-        // Invalidate previous result for this candidate slot
-        setAnalysisResults((prev) => ({ ...prev, [activeCandidateId]: null }));
         setIsPersistedInDb(false);
         if (activeTool !== "analysis") setActiveTool("analysis");
       } else if (clickMode === "waypoint") {
@@ -864,8 +809,6 @@ export function MapPage() {
         if (!existing) return prev;
         return { ...prev, [id]: { ...existing, lat, lng } };
       });
-      // Invalidate existing result immediately on coordinate change
-      setAnalysisResults((prev) => ({ ...prev, [id]: null }));
       setActiveCandidateId(id);
       setIsPersistedInDb(false);
     },
@@ -879,8 +822,6 @@ export function MapPage() {
         if (!existing) return prev;
         return { ...prev, [activeCandidateId]: { ...existing, radius } };
       });
-      // Invalidate existing result immediately on radius change
-      setAnalysisResults((prev) => ({ ...prev, [activeCandidateId]: null }));
     },
     [activeCandidateId],
   );
@@ -969,12 +910,20 @@ export function MapPage() {
     });
   }, [locivaBusinesses, showLocivaData, layerCategory]);
 
-  // Deduplication check between internal and external places
+  // Deduplication check between internal and external places.
+  // Cheap degree-box pre-check (~90 m) skips almost all pairs before the
+  // trigonometric distance is computed.
   const { duplicateExternalIds, duplicateInternalIds } = useMemo(() => {
     const dupExt = new Set<string>();
     const dupInt = new Set<string>();
     filteredExternalPlaces.forEach((ext) => {
       filteredLocivaBusinesses.forEach((loc) => {
+        if (
+          Math.abs(ext.lat - loc.latitude) > 0.0008 ||
+          Math.abs(ext.lng - loc.longitude) > 0.0008
+        ) {
+          return;
+        }
         if (
           distanceMeters(ext.lat, ext.lng, loc.latitude, loc.longitude) <= 65
         ) {
@@ -997,7 +946,7 @@ export function MapPage() {
 
   return (
     <div className="flex h-screen w-full overflow-hidden relative bg-canvas">
-      {/* ── Global Search Modal (Bagian 1) ─────────────────────────────────── */}
+      {/* ── Global Search Modal ────────────────────────────────────────────── */}
       <SearchModal
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
@@ -1048,8 +997,8 @@ export function MapPage() {
                 showMapsData={showMapsData}
                 onToggleMapsData={setShowMapsData}
                 mapsCount={filteredExternalPlaces.length}
-                mapsLoading={viewportPlacesLoading || isCandidateAnalyzing(activeCandidateId)}
-                mapsError={viewportPlacesError || getCandidateError(activeCandidateId)}
+                mapsLoading={viewportPlacesLoading || isAnalyzing}
+                mapsError={viewportPlacesError || analysisError}
                 onRetryMaps={() => {
                   if (activeCandidate && selectedBusiness) {
                     analyze(
@@ -1141,8 +1090,8 @@ export function MapPage() {
                     <AnalysisPanel
                       business={selectedBusiness}
                       result={analysisResults[activeCandidateId]}
-                      isAnalyzing={isCandidateAnalyzing(activeCandidateId)}
-                      error={getCandidateError(activeCandidateId)}
+                      isAnalyzing={isAnalyzing}
+                      error={analysisError}
                       radius={
                         candidates[activeCandidateId]?.radius ||
                         selectedBusiness.defaultRadius
@@ -1265,8 +1214,8 @@ export function MapPage() {
           </div>
         )}
 
-        {/* ── Top-right Floating Map Controls (Icons, Not Emoji - Bagian 3) ── */}
-        <div className="absolute top-4 right-4 z-[400] flex flex-col items-end gap-2 pointer-events-none">
+        {/* ── Top-right Floating Map Controls ───────────────────────────────── */}
+        <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2 pointer-events-none">
           {/* Basemap Switcher */}
           <div className="pointer-events-auto flex items-center bg-white/95 backdrop-blur-xs rounded-2xl border border-slate-200/80 shadow-md text-xs font-semibold overflow-hidden p-1">
             <button
@@ -1595,11 +1544,11 @@ export function MapPage() {
             </div>
           )}
 
-          {/* Stale Cache Notice Banner (Bagian 7) */}
+          {/* Stale Cache Notice Banner */}
           {isPlacesStale && (
             <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[380] bg-amber-500/90 text-white px-4 py-1.5 rounded-full text-[11px] font-medium shadow-md flex items-center gap-1.5 border border-amber-300/60">
               <AlertCircle size={13} />
-              <span>Network limited: displaying cached spatial places</span>
+              <span>Server unreachable: showing previously loaded places</span>
             </div>
           )}
         </div>
