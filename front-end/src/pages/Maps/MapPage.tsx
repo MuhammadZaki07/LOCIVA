@@ -117,65 +117,42 @@ const MapEventHandler: React.FC<{
   ) => void;
   mode: "candidate" | "waypoint" | "report" | "none";
 }> = ({ onMapClick, onViewportChange, mode }) => {
+  const emitViewport = useCallback(
+    (m: L.Map) => {
+      try {
+        const c = m.getCenter();
+        const b = m.getBounds();
+        const ne = b.getNorthEast();
+        onViewportChange(c.lat, c.lng, distanceMeters(c.lat, c.lng, ne.lat, ne.lng), m.getZoom(), b);
+      } catch (err) {
+        console.warn("[MapEventHandler] map not ready yet", err);
+      }
+    },
+    [onViewportChange],
+  );
+
   const map = useMapEvents({
     click(e) {
-      if (mode !== "none") {
-        onMapClick(e.latlng.lat, e.latlng.lng);
-      }
+      if (mode !== "none") onMapClick(e.latlng.lat, e.latlng.lng);
     },
     moveend() {
-      try {
-        const center = map.getCenter();
-        const bounds = map.getBounds();
-        const corner = bounds.getNorthEast();
-        const radius = distanceMeters(
-          center.lat,
-          center.lng,
-          corner.lat,
-          corner.lng,
-        );
-        const zoom = map.getZoom();
-        onViewportChange(center.lat, center.lng, radius, zoom, bounds);
-      } catch (err) {
-        console.warn("[MapEventHandler] moveend: map not ready yet", err);
-      }
-    },
-    zoomend() {
-      try {
-        const center = map.getCenter();
-        const bounds = map.getBounds();
-        const corner = bounds.getNorthEast();
-        const radius = distanceMeters(
-          center.lat,
-          center.lng,
-          corner.lat,
-          corner.lng,
-        );
-        const zoom = map.getZoom();
-        onViewportChange(center.lat, center.lng, radius, zoom, bounds);
-      } catch (err) {
-        console.warn("[MapEventHandler] zoomend: map not ready yet", err);
-      }
+      emitViewport(map);
     },
   });
+
+  useEffect(() => {
+    emitViewport(map);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map]);
 
   useEffect(() => {
     try {
       const container = map.getContainer();
       if (!container) return;
-      const cursor =
-        mode === "candidate"
-          ? "crosshair"
-          : mode === "waypoint"
-            ? "cell"
-            : mode === "report"
-              ? "crosshair"
-              : "";
-      container.style.cursor = cursor;
+      container.style.cursor =
+        mode === "candidate" || mode === "report" ? "crosshair" : mode === "waypoint" ? "cell" : "";
       return () => {
-        try {
-          container.style.cursor = "";
-        } catch { }
+        try { container.style.cursor = ""; } catch { /* noop */ }
       };
     } catch (err) {
       console.warn("[MapEventHandler] cursor effect: map not ready", err);
@@ -183,7 +160,7 @@ const MapEventHandler: React.FC<{
   }, [map, mode]);
 
   return null;
-};
+  };
 
 // ─── Main MapPage Component ───────────────────────────────────────────────────
 export function MapPage() {
@@ -574,7 +551,7 @@ export function MapPage() {
 
         // 2. POIs from our own database. Below zoom 13 the viewport is wider
         //    than the backend accepts, so skip.
-        if (zoom < 13) return;
+        if (zoom < 12) return;
 
         // Cancel the previous request before starting a new one so a slow
         // old response can't overwrite fresh results.
@@ -616,22 +593,22 @@ export function MapPage() {
     fetchLocivaData(center[0], center[1], 8000);
     fetchReports();
     const controller = new AbortController();
-    // ~0.018° lat/lng ≈ ~2km half-span per side
     const halfSpan = 0.018;
     fetchPlacesInBounds(
-      center[0] - halfSpan,
-      center[1] - halfSpan,
-      center[0] + halfSpan,
-      center[1] + halfSpan,
+      center[0] - halfSpan, center[1] - halfSpan,
+      center[0] + halfSpan, center[1] + halfSpan,
       controller.signal,
     )
       .then((places) => {
         viewportCountRef.current = places.length;
-        setViewportPlaces(places);
+        setViewportPlaces((prev) => (prev.length > 0 ? prev : places));
       })
-      .catch(() => { });
+      .catch((err) => {
+        if (err?.name !== "AbortError") console.error("[POI initial]", err);
+      });
     return () => controller.abort();
-  }, [fetchLocivaData, center]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Fetch public shared routes ────────────────────────────────────────────
   const fetchPublicRoutes = useCallback(async () => {

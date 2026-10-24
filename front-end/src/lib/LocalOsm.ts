@@ -81,7 +81,7 @@ export interface GeocodeResult {
 interface DbPoi {
   id: string;
   external_id: string | null;
-  name: string;
+  name: string | null;
   category: string | null; // e.g. "amenity:restaurant" (OSM import) or free text (manual)
   address: string | null;
   latitude: number | string;
@@ -297,42 +297,225 @@ export function classify(tags: Record<string, string>): CategoryId | null {
   return null;
 }
 
+// ─── DB category -> CategoryId (tolerant) ─────────────────────────────────────
+
 /**
- * Convert the DB `category` column into a LOCIVA CategoryId.
- *  - "amenity:restaurant"  (OSM import)  -> classified through OSM tag rules
- *  - "food" / "restaurant" (manual POIs) -> matched directly
+ * Used when a row has a real category that no specific rule recognises.
+ * Showing the POI under a generic category is better than hiding it.
  */
-function categoryFromDb(raw: string | null): CategoryId | null {
-  if (!raw) return null;
-  const value = raw.trim();
+const UNKNOWN_FALLBACK: CategoryId = "service";
+
+/** OSM key -> generic category, used when the exact value is not in classify(). */
+const FALLBACK_BY_KEY: Record<string, CategoryId> = {
+  amenity: "service",
+  shop: "retail",
+  craft: "service",
+  healthcare: "service",
+  tourism: "tourism",
+  historic: "tourism",
+  leisure: "tourism",
+  office: "office",
+  public_transport: "transit",
+  railway: "transit",
+};
+
+/** Pure map furniture: these are never useful as business POIs. */
+const IGNORED_VALUES = new Set([
+  "parking",
+  "parking_space",
+  "parking_entrance",
+  "bicycle_parking",
+  "motorcycle_parking",
+  "bench",
+  "waste_basket",
+  "waste_disposal",
+  "shelter",
+  "drinking_water",
+  "toilets",
+  "recycling",
+  "bicycle_rental",
+  "post_box",
+  "yes",
+  "no",
+  "residential",
+  "house",
+  "roof",
+  "service",
+  "garage",
+  "garages",
+]);
+
+/** Free-text aliases (English + Indonesian). */
+const ALIASES: Record<string, CategoryId> = {
+  // direct aliases
+  food: "food",
+  restaurant: "food",
+  restoran: "food",
+  warung: "food",
+  rumah_makan: "food",
+  fast_food: "food",
+  food_court: "food",
+  bakery: "food",
+  cafe: "cafe",
+  kafe: "cafe",
+  coffee: "cafe",
+  coffee_shop: "cafe",
+  kopi: "cafe",
+  warkop: "cafe",
+  school: "school",
+  sekolah: "school",
+  kindergarten: "school",
+  university: "campus",
+  college: "campus",
+  campus: "campus",
+  kampus: "campus",
+  universitas: "campus",
+  retail: "retail",
+  toko: "retail",
+  shop: "retail",
+  store: "retail",
+  convenience: "retail",
+  minimarket: "retail",
+  supermarket: "retail",
+  grocery: "retail",
+  kelontong: "retail",
+  service: "service",
+  services: "service",
+  laundry: "service",
+  barbershop: "service",
+  barber: "service",
+  hairdresser: "service",
+  salon: "service",
+  bank: "service",
+  atm: "service",
+  pharmacy: "service",
+  apotek: "service",
+  clinic: "service",
+  klinik: "service",
+  hospital: "service",
+  rumah_sakit: "service",
+  hotel: "service",
+  transit: "transit",
+  bus_station: "transit",
+  bus_stop: "transit",
+  terminal: "transit",
+  halte: "transit",
+  stasiun: "transit",
+  station: "transit",
+  fuel: "transit",
+  spbu: "transit",
+  market: "market",
+  marketplace: "market",
+  pasar: "market",
+  tourism: "tourism",
+  wisata: "tourism",
+  museum: "tourism",
+  attraction: "tourism",
+  office: "office",
+  kantor: "office",
+  place_of_worship: "office",
+  masjid: "office",
+  mosque: "office",
+  church: "office",
+  gereja: "office",
+  library: "office",
+  townhall: "office",
+};
+
+/** Substring heuristics for unusual free text, e.g. "Toko Kelontong 24 Jam". */
+const KEYWORDS: Array<[string[], CategoryId]> = [
+  [["kopi", "coffee", "cafe", "kafe"], "cafe"],
+  [["restaur", "restoran", "warung", "makan", "bakso", "food", "kuliner"], "food"],
+  [["univers", "kampus", "campus", "college"], "campus"],
+  [["sekolah", "school", "tk_", "sd_", "smp", "sma", "smk"], "school"],
+  [["pasar", "market"], "market"],
+  [["toko", "shop", "store", "mart", "kelontong"], "retail"],
+  [["bank", "atm", "apotek", "pharm", "klinik", "clinic", "hospital", "sakit", "laundry", "salon", "barber", "hotel", "bengkel"], "service"],
+  [["halte", "terminal", "stasiun", "station", "spbu", "fuel", "bus"], "transit"],
+  [["wisata", "museum", "tourism", "attraction", "park"], "tourism"],
+  [["kantor", "office", "masjid", "mosque", "church", "gereja", "worship", "library"], "office"],
+];
+
+function categoryFromSingle(part: string): CategoryId | null {
+  const value = part.trim().toLowerCase().replace(/\s+/g, "_");
   if (!value) return null;
 
-  const idx = value.indexOf(":");
-  if (idx > 0) {
-    return classify({ [value.slice(0, idx)]: value.slice(idx + 1) });
+  // key:value / key=value / key/value
+  const m = value.match(/^([a-z_]+)[:=/](.+)$/);
+  if (m) {
+    const key = m[1];
+    const val = m[2];
+
+    if (IGNORED_VALUES.has(val)) return null;
+
+    const fromTags = classify({ [key]: val });
+    if (fromTags) return fromTags;
+
+    const alias = ALIASES[val];
+    if (alias) return alias;
+
+    if (FALLBACK_BY_KEY[key]) return FALLBACK_BY_KEY[key];
+
+    // building/highway/etc. that we do not understand: not a business
+    return null;
   }
 
   if (value in CATEGORY_BY_ID) return value as CategoryId;
-  return mapCompetitorCategory(value.toLowerCase());
+  if (ALIASES[value]) return ALIASES[value];
+
+  for (const [words, cat] of KEYWORDS) {
+    if (words.some((w) => value.includes(w))) return cat;
+  }
+
+  if (IGNORED_VALUES.has(value)) return null;
+
+  // Real but unrecognised free text: keep it visible under a generic category.
+  return UNKNOWN_FALLBACK;
+}
+
+/**
+ * Convert the DB `category` column into a LOCIVA CategoryId.
+ * Accepts: "amenity:restaurant", "amenity=restaurant", "Restaurant",
+ * "food", "cafe;wifi" (first recognisable entry wins), Indonesian aliases.
+ * Rows with an empty category are kept under the generic fallback.
+ */
+function categoryFromDb(raw: string | null): CategoryId | null {
+  if (!raw || !raw.trim()) return UNKNOWN_FALLBACK;
+
+  const parts = raw.split(/[;,|]/);
+  let sawIgnored = false;
+  for (const part of parts) {
+    const cat = categoryFromSingle(part);
+    if (cat) return cat;
+    if (part.trim()) sawIgnored = true;
+  }
+  return sawIgnored ? null : UNKNOWN_FALLBACK;
+}
+
+/** Accept swapped lat/lng (common import bug): lat must be within +-90. */
+function normalizeCoords(a: number, b: number): { lat: number; lng: number } | null {
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  if (Math.abs(a) <= 90 && Math.abs(b) <= 180) return { lat: a, lng: b };
+  if (Math.abs(b) <= 90 && Math.abs(a) <= 180) return { lat: b, lng: a };
+  return null;
 }
 
 function dbPoiToPlace(p: DbPoi, fetchedAt: number): Place | null {
   const category = categoryFromDb(p.category);
   if (!category) return null;
 
-  const lat = Number(p.latitude);
-  const lng = Number(p.longitude);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const coords = normalizeCoords(Number(p.latitude), Number(p.longitude));
+  if (!coords) return null;
 
   const typeMatch = p.external_id?.match(/^(node|way|relation)\//);
 
   return {
-    id: p.external_id ?? p.id,
+    id: String(p.external_id ?? p.id),
     osmType: (typeMatch?.[1] as Place["osmType"]) ?? "node",
-    name: p.name,
+    name: p.name?.trim() || "Unnamed place",
     category,
-    lat,
-    lng,
+    lat: coords.lat,
+    lng: coords.lng,
     address: p.address ?? undefined,
     openingHours: p.opening_hours ?? undefined,
     website: p.website ?? undefined,
@@ -360,16 +543,6 @@ const CACHE_MS = 5 * 60 * 1000; // 5-minute region cache TTL
 const MAX_SPAN_DEG = 0.45;
 /** Rows requested per call (backend maximum is 1000). */
 const REQUEST_LIMIT = 800;
-
-interface InFlight {
-  promise: Promise<Place[]>;
-  signal?: AbortSignal;
-}
-const inFlightRequests = new Map<string, InFlight>();
-
-function quantizeCoord(coord: number, step = 0.005): number {
-  return Math.round(coord / step) * step;
-}
 
 function getPlacesInBoundsFromStore(
   south: number,
@@ -429,8 +602,9 @@ export async function fetchPlacesAround(
 
 /**
  * Fetch POIs within a bounding box (viewport) from the LOCIVA backend.
- * Includes region caching, in-flight de-duplication and a stale-data fallback
- * when the backend is unreachable.
+ * Includes region caching and a stale-data fallback when the backend is
+ * unreachable. Requests are NOT shared between callers: a shared promise
+ * would reject for everyone when its original caller aborts.
  */
 export async function fetchPlacesInBounds(
   south: number,
@@ -462,70 +636,71 @@ export async function fetchPlacesInBounds(
     return getPlacesInBoundsFromStore(minLat, minLng, maxLat, maxLng);
   }
 
-  // 2. Same area already being fetched? (ignore requests that were aborted)
-  const cacheKey = `bbox:${quantizeCoord(minLat).toFixed(3)},${quantizeCoord(minLng).toFixed(3)},${quantizeCoord(maxLat).toFixed(3)},${quantizeCoord(maxLng).toFixed(3)}`;
-  const pending = inFlightRequests.get(cacheKey);
-  if (pending && !pending.signal?.aborted) return pending.promise;
+  // 2. Ask our own backend
+  try {
+    const res = await api.get("/pois/bounds", {
+      params: {
+        south: minLat,
+        west: minLng,
+        north: maxLat,
+        east: maxLng,
+        limit: REQUEST_LIMIT,
+      },
+      signal,
+    });
 
-  // 3. Ask our own backend
-  const promise = (async (): Promise<Place[]> => {
-    try {
-      const res = await api.get("/pois/bounds", {
-        params: {
-          south: minLat,
-          west: minLng,
-          north: maxLat,
-          east: maxLng,
-          limit: REQUEST_LIMIT,
-        },
-        signal,
-      });
+    const rows: DbPoi[] = Array.isArray(res.data?.data) ? res.data.data : [];
+    const fetchedAt = Date.now();
 
-      const rows: DbPoi[] = Array.isArray(res.data?.data) ? res.data.data : [];
-      const fetchedAt = Date.now();
-
-      for (const row of rows) {
-        const place = dbPoiToPlace(row, fetchedAt);
-        if (place) globalPoiStore.set(place.id, place);
+    let kept = 0;
+    const dropped: Record<string, number> = {};
+    for (const row of rows) {
+      const place = dbPoiToPlace(row, fetchedAt);
+      if (place) {
+        globalPoiStore.set(place.id, place);
+        kept++;
+      } else {
+        const k = String(row.category);
+        dropped[k] = (dropped[k] ?? 0) + 1;
       }
-
-      // If the backend hit the row limit the area is only partially loaded:
-      // do NOT mark it as cached, so zooming in fetches the rest.
-      if (rows.length < REQUEST_LIMIT) {
-        cachedRegions.push({
-          south: minLat,
-          west: minLng,
-          north: maxLat,
-          east: maxLng,
-          at: fetchedAt,
-        });
-      }
-
-      return getPlacesInBoundsFromStore(minLat, minLng, maxLat, maxLng);
-    } catch (err: any) {
-      // MapPage relies on AbortError for cancelled requests
-      if (signal?.aborted) throw new DOMException("Request cancelled", "AbortError");
-
-      // 422 = area rejected by the backend: nothing to show
-      if (err?.response?.status === 422) return [];
-
-      // Backend unreachable / error: serve what we already have for this viewport
-      const stale = getPlacesInBoundsFromStore(minLat, minLng, maxLat, maxLng, true);
-      if (stale.length > 0) {
-        if (import.meta.env.DEV) {
-          console.info(`[LOCIVA POI] Backend unavailable. Serving ${stale.length} stale cached POIs.`);
-        }
-        return stale;
-      }
-      throw err;
-    } finally {
-      const current = inFlightRequests.get(cacheKey);
-      if (current && current.promise === promise) inFlightRequests.delete(cacheKey);
     }
-  })();
 
-  inFlightRequests.set(cacheKey, { promise, signal });
-  return promise;
+    if (import.meta.env.DEV) {
+      console.log("[POI] rows", rows.length, "kept", kept, "dropped by category", dropped);
+    }
+
+    // Cache only if something was kept and the backend did not hit its row
+    // limit (a partial area must be re-fetched when the user zooms in).
+    if (rows.length < REQUEST_LIMIT && kept > 0) {
+      cachedRegions.push({
+        south: minLat,
+        west: minLng,
+        north: maxLat,
+        east: maxLng,
+        at: fetchedAt,
+      });
+    }
+
+    return getPlacesInBoundsFromStore(minLat, minLng, maxLat, maxLng);
+  } catch (err: any) {
+    // MapPage relies on AbortError for cancelled requests
+    if (signal?.aborted || err?.name === "CanceledError" || err?.code === "ERR_CANCELED") {
+      throw new DOMException("Request cancelled", "AbortError");
+    }
+
+    // 422 = area rejected by the backend: nothing to show
+    if (err?.response?.status === 422) return [];
+
+    // Backend unreachable / error: serve what we already have for this viewport
+    const stale = getPlacesInBoundsFromStore(minLat, minLng, maxLat, maxLng, true);
+    if (stale.length > 0) {
+      if (import.meta.env.DEV) {
+        console.info(`[LOCIVA POI] Backend unavailable. Serving ${stale.length} stale cached POIs.`);
+      }
+      return stale;
+    }
+    throw err;
+  }
 }
 
 // ─── Search & geocoding (external, not POI data) ──────────────────────────────
@@ -614,32 +789,10 @@ export function formatDistance(m: number): string {
   return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
 }
 
+/** Kept for existing callers (analysis engine, competitor mapping). */
 export function mapCompetitorCategory(category: string): CategoryId | null {
-  const table: Record<string, CategoryId> = {
-    food: "food",
-    restaurant: "food",
-    fast_food: "food",
-    food_court: "food",
-    cafe: "cafe",
-    coffee: "cafe",
-    school: "school",
-    university: "campus",
-    college: "campus",
-    campus: "campus",
-    retail: "retail",
-    convenience: "retail",
-    supermarket: "retail",
-    grocery: "retail",
-    service: "service",
-    laundry: "service",
-    barbershop: "service",
-    hairdresser: "service",
-    transit: "transit",
-    bus_station: "transit",
-    market: "market",
-    marketplace: "market",
-  };
-  return table[category] ?? null;
+  const key = category.trim().toLowerCase().replace(/\s+/g, "_");
+  return ALIASES[key] ?? null;
 }
 
 // ─── Candidate validation ─────────────────────────────────────────────────────
