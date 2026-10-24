@@ -288,7 +288,7 @@ export const CandidateStatsModal: React.FC<CandidateStatsModalProps> = ({
                       <div className="p-3 bg-white rounded-lg border border-slate-100">
                         <span className="text-[11px] text-muted block">Wilayah Administratif</span>
                         <span className="text-sm font-semibold text-ink mt-0.5 block">
-                          {bpsData.regionName || 'Kota Bandung'}
+                          {bpsData.regionName || 'N/A'}
                         </span>
                         {bpsData.bpsCode && (
                           <span className="text-[10px] text-slate-400 font-mono">Kode: {bpsData.bpsCode}</span>
@@ -500,9 +500,21 @@ export const CandidateStatsModal: React.FC<CandidateStatsModalProps> = ({
                     <span className="font-semibold text-ink">{result.allPlaces?.length || 0} POI dimuat</span>
                   </div>
                   <div className="flex items-center justify-between py-1 border-b border-slate-200/60">
-                    <span>Database Internal LOCIVA (Verifikasi UMKM & Laporan)</span>
-                    <span className="font-semibold text-ink">{result.internalBusinessCount || 0} Usaha</span>
+                    <span>Database Usaha Terdaftar LOCIVA</span>
+                    <span className="font-semibold text-ink">
+                      {result.registeredBusinessCount !== null && result.registeredBusinessCount !== undefined
+                        ? `${result.registeredBusinessCount} Usaha`
+                        : result.internalBusinessCount !== null && result.internalBusinessCount !== undefined
+                        ? `${result.internalBusinessCount} Usaha`
+                        : 'Belum dimuat'}
+                    </span>
                   </div>
+                  {result.internalPoiCount !== null && result.internalPoiCount !== undefined && (
+                    <div className="flex items-center justify-between py-1 border-b border-slate-200/60">
+                      <span>POI Fasilitas Publik Internal</span>
+                      <span className="font-semibold text-ink">{result.internalPoiCount} POI</span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between py-1 border-b border-slate-200/60">
                     <span>Badan Pusat Statistik (BPS RI)</span>
                     <span className="font-semibold text-ink">Agregat Wilayah Administratif</span>

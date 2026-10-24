@@ -152,7 +152,7 @@ function NavGroupSection({
                 }
               >
                 <Icon size={15} />
-                <span>{item.label}</span>
+                <span className="capitalize">{item.label}</span>
               </NavLink>
             );
           })}

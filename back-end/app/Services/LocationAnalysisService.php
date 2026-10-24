@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\Business;
 use App\Models\BusinessType;
 use App\Models\Poi;
 use App\Models\Report;
+use Illuminate\Support\Facades\Log;
 
 class LocationAnalysisService
 {
@@ -51,6 +53,13 @@ class LocationAnalysisService
         'laundry'         => 'service',
         'barbershop'      => 'service',
         'hairdresser'     => 'service',
+        // Catalog slugs mapped to canonical categories
+        'kedai-kopi'      => 'cafe',
+        'warung-makan'    => 'food',
+        'gerobak-seblak'  => 'food',
+        'gerobak-bakso'   => 'food',
+        'toko-kelontong'  => 'retail',
+        'minimarket'      => 'retail',
     ];
 
     public function analyze(array $input): array
@@ -73,67 +82,118 @@ class LocationAnalysisService
         // Sea / offshore detection guard (Section 4 of Implementation Brief)
         if ($isWater) {
             return [
-                'candidate_id'         => $candidateId,
-                'lat'                  => $lat,
-                'lng'                  => $lng,
-                'radius'               => $radius,
-                'business_type'        => $slug,
-                'business_type_name'   => $businessType?->name,
-                'is_valid_location'    => false,
-                'is_water_or_offshore' => true,
-                'unsupported_reason'   => 'Lokasi berada di perairan/laut lepas atau area non-layanan. Skor kelayakan tidak dapat dihitung.',
-                'opportunity_score'    => null,
-                'competition_score'    => null,
-                'accessibility_score'  => null,
-                'data_confidence'      => 0,
-                'competitor_count'     => 0,
-                'nearest_competitor'   => null,
-                'relevant_poi'         => [],
-                'factors'              => [],
-                'data_warnings'        => [
+                'candidate_id'              => $candidateId,
+                'lat'                       => $lat,
+                'lng'                       => $lng,
+                'radius'                    => $radius,
+                'business_type'             => $slug,
+                'business_type_name'        => $businessType?->name,
+                'is_valid_location'         => false,
+                'is_water_or_offshore'      => true,
+                'unsupported_reason'        => 'Lokasi berada di perairan/laut lepas atau area non-layanan. Skor kelayakan tidak dapat dihitung.',
+                'opportunity_score'         => null,
+                'competition_score'         => null,
+                'accessibility_score'       => null,
+                'data_confidence'           => 0,
+                'competitor_count'          => 0,
+                'nearest_competitor'        => null,
+                'relevant_poi'              => [],
+                'factors'                   => [],
+                'data_warnings'             => [
                     'Koordinat terdeteksi di laut lepas atau perairan. Skor potensi dinonaktifkan untuk mencegah data palsu.',
                 ],
-                'sources'              => [],
-                'internal_poi_total'   => 0,
-                'external_poi_total'   => 0,
-                'poi_total'            => 0,
-                'report_count'         => 0,
-                'limitations'          => 'Area perairan/laut lepas tidak didukung untuk kelayakan tempat usaha UMKM.',
+                'sources'                   => [],
+                'internal_poi_total'        => 0,
+                'registered_business_total' => 0,
+                'internal_business_total'   => 0,
+                'external_poi_total'        => 0,
+                'poi_total'                 => 0,
+                'report_count'              => 0,
+                'limitations'               => 'Area perairan/laut lepas tidak didukung untuk kelayakan tempat usaha UMKM.',
             ];
         }
 
         $weights = $this->resolveWeights($businessType, $slug);
         $competitorCats = $this->resolveCompetitorCategories($businessType);
 
-        $internalPois = Poi::selectRaw(
-            '*, (6371000 * acos(LEAST(1.0, cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude))))) AS distance',
-            [$lat, $lng, $lat]
-        )
-            ->having('distance', '<=', $radius)
-            ->orderBy('distance')
-            ->limit(500)
-            ->get();
+        // 1. Query Registered Businesses in radius with exception isolation
+        $registeredBusinesses = collect();
+        $registeredQueryError = false;
+        try {
+            $registeredBusinesses = Business::with('businessType:id,name,slug,category')
+                ->selectRaw(
+                    '*, (6371000 * acos(LEAST(1.0, cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude))))) AS distance',
+                    [$lat, $lng, $lat]
+                )
+                ->having('distance', '<=', $radius)
+                ->orderBy('distance')
+                ->limit(200)
+                ->get();
+        } catch (\Throwable $e) {
+            Log::warning('Failed querying registered businesses in LocationAnalysisService: ' . $e->getMessage());
+            $registeredQueryError = true;
+        }
 
-        $reports = Report::selectRaw(
-            'id, title, status, severity, latitude, longitude,
-            (6371000 * acos(LEAST(1.0, cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude))))) AS distance',
-            [$lat, $lng, $lat]
-        )
-            ->having('distance', '<=', $radius)
-            ->limit(100)
-            ->get();
+        // 2. Query Internal POIs in radius with exception isolation
+        $internalPois = collect();
+        $internalPoiQueryError = false;
+        try {
+            $internalPois = Poi::selectRaw(
+                '*, (6371000 * acos(LEAST(1.0, cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude))))) AS distance',
+                [$lat, $lng, $lat]
+            )
+                ->having('distance', '<=', $radius)
+                ->orderBy('distance')
+                ->limit(500)
+                ->get();
+        } catch (\Throwable $e) {
+            Log::warning('Failed querying internal POIs in LocationAnalysisService: ' . $e->getMessage());
+            $internalPoiQueryError = true;
+        }
+
+        // 3. Query Civic Reports in radius
+        $reports = collect();
+        try {
+            $reports = Report::selectRaw(
+                'id, title, status, severity, latitude, longitude,
+                (6371000 * acos(LEAST(1.0, cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude))))) AS distance',
+                [$lat, $lng, $lat]
+            )
+                ->having('distance', '<=', $radius)
+                ->limit(100)
+                ->get();
+        } catch (\Throwable $e) {
+            Log::warning('Failed querying reports in LocationAnalysisService: ' . $e->getMessage());
+        }
 
         $normalized = [];
 
+        // Add registered businesses
+        foreach ($registeredBusinesses as $b) {
+            $bCategory = $b->businessType?->slug ?? 'retail';
+            $normalized[] = [
+                'name'     => $b->name,
+                'category' => $bCategory,
+                'distance' => (float) $b->distance,
+                'source'   => 'lociva_registered',
+                'lat'      => (float) $b->latitude,
+                'lng'      => (float) $b->longitude,
+            ];
+        }
+
+        // Add internal POIs
         foreach ($internalPois as $poi) {
             $normalized[] = [
                 'name'     => $poi->name,
                 'category' => $poi->category,
                 'distance' => (float) $poi->distance,
                 'source'   => 'lociva_internal',
+                'lat'      => (float) $poi->latitude,
+                'lng'      => (float) $poi->longitude,
             ];
         }
 
+        // Add external places with spatial & name deduplication against internal entities
         foreach ($external as $place) {
             $pLat = isset($place['lat']) ? (float) $place['lat'] : null;
             $pLng = isset($place['lng']) ? (float) $place['lng'] : null;
@@ -145,20 +205,49 @@ class LocationAnalysisService
                 continue;
             }
 
+            // Deduplication: prevent double counting if OSM place duplicates internal business or POI
+            $isDuplicate = false;
+            $placeName = strtolower(trim($place['name'] ?? ''));
+            if ($pLat !== null && $pLng !== null && $placeName !== '') {
+                foreach ($normalized as $existing) {
+                    if (isset($existing['lat'], $existing['lng'])) {
+                        $proxDist = $this->haversine($pLat, $pLng, (float) $existing['lat'], (float) $existing['lng']);
+                        if ($proxDist <= 50) {
+                            $existingName = strtolower(trim($existing['name']));
+                            if ($existingName === $placeName || str_contains($existingName, $placeName) || str_contains($placeName, $existingName)) {
+                                $isDuplicate = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if ($isDuplicate) {
+                continue;
+            }
+
             $normalized[] = [
                 'name'     => $place['name'],
                 'category' => $place['category'],
                 'distance' => $distance,
                 'source'   => $place['source'] ?? 'openstreetmap',
+                'lat'      => $pLat,
+                'lng'      => $pLng,
             ];
         }
 
-        $internalCount = $internalPois->count();
-        $externalCount = count($normalized) - $internalCount;
+        $registeredBusinessCount = $registeredBusinesses->count();
+        $internalPoiCount        = $internalPois->count();
+        $externalCount           = count($normalized) - $registeredBusinessCount - $internalPoiCount;
+        $poiTotal                = count($normalized);
 
         $opportunityScore = 40;
         $factors = [];
         $categoryCounts = [];
+
+        // Fetch BPS demographics early so density can influence scoring
+        $bpsDemographics = $this->bpsService->getDemographicsForLocation($lat, $lng);
 
         foreach ($normalized as $poi) {
             $mapped = self::CATEGORY_MAP[$poi['category']] ?? $poi['category'];
@@ -197,10 +286,61 @@ class LocationAnalysisService
 
         $opportunityScore = (int) max(0, min(100, $opportunityScore));
 
-        $competitors = array_values(array_filter($normalized, function ($poi) use ($competitorCats) {
+        // BPS density-based opportunity adjustment (applies only when data is available)
+        $bpsDensity = $bpsDemographics['density_per_km2'] ?? null;
+        $bpsStatus  = $bpsDemographics['status'] ?? '';
+        if ($bpsDensity !== null && $bpsStatus !== 'unsupported_region') {
+            if ($bpsDensity >= 5000) {
+                $densityBonus = 5;
+                $opportunityScore = (int) min(100, $opportunityScore + $densityBonus);
+                $factors[] = [
+                    'key'    => 'bps_density',
+                    'label'  => 'Kepadatan Penduduk BPS',
+                    'value'  => (int) $bpsDensity,
+                    'impact' => 'positive',
+                    'note'   => "Kepadatan penduduk tinggi ({$bpsDensity} jiwa/km²) mendukung permintaan pasar lokal (+{$densityBonus} poin).",
+                    'source' => 'bps_ri',
+                ];
+            } elseif ($bpsDensity < 500) {
+                $densityPenalty = 5;
+                $opportunityScore = (int) max(0, $opportunityScore - $densityPenalty);
+                $factors[] = [
+                    'key'    => 'bps_density',
+                    'label'  => 'Kepadatan Penduduk BPS',
+                    'value'  => (int) $bpsDensity,
+                    'impact' => 'negative',
+                    'note'   => "Kepadatan penduduk sangat rendah ({$bpsDensity} jiwa/km²) berpotensi memengaruhi volume pelanggan (-{$densityPenalty} poin).",
+                    'source' => 'bps_ri',
+                ];
+            } else {
+                $factors[] = [
+                    'key'    => 'bps_density',
+                    'label'  => 'Kepadatan Penduduk BPS',
+                    'value'  => (int) $bpsDensity,
+                    'impact' => 'neutral',
+                    'note'   => "Kepadatan penduduk moderat ({$bpsDensity} jiwa/km²); tidak ada penyesuaian skor tambahan.",
+                    'source' => 'bps_ri',
+                ];
+            }
+        }
+
+        // Competitor analysis: includes registered businesses & OSM competitors
+        $competitors = array_values(array_filter($normalized, function ($poi) use ($competitorCats, $slug) {
+            // Direct competitor if it is a registered business of the exact same business type
+            if ($poi['source'] === 'lociva_registered' && $poi['category'] === $slug) {
+                return true;
+            }
             $mapped = self::CATEGORY_MAP[$poi['category']] ?? $poi['category'];
-            return in_array($poi['category'], $competitorCats, true)
-                || in_array($mapped, $competitorCats, true);
+            if (in_array($poi['category'], $competitorCats, true) || in_array($mapped, $competitorCats, true)) {
+                return true;
+            }
+            foreach ($competitorCats as $compCat) {
+                $compMapped = self::CATEGORY_MAP[$compCat] ?? $compCat;
+                if ($compMapped === $mapped) {
+                    return true;
+                }
+            }
+            return false;
         }));
 
         $competitorCount = count($competitors);
@@ -231,7 +371,6 @@ class LocationAnalysisService
         $accessibilityScore += min((int) (count($normalized) / 5), 20);
         $accessibilityScore = (int) min(100, $accessibilityScore);
 
-        $poiTotal = count($normalized);
         $dataConfidence = match (true) {
             $poiTotal === 0  => 15,
             $poiTotal < 10   => 35,
@@ -261,8 +400,8 @@ class LocationAnalysisService
         }
 
         $dataWarnings = [];
-        if ($internalCount === 0) {
-            $dataWarnings[] = 'Tidak ada POI internal LOCIVA di radius ini. Skor mengandalkan OpenStreetMap (Overpass) jika tersedia.';
+        if ($registeredBusinessCount === 0 && $internalPoiCount === 0) {
+            $dataWarnings[] = 'Tidak ada usaha terdaftar maupun POI internal LOCIVA di radius ini. Skor mengandalkan OpenStreetMap (Overpass) jika tersedia.';
         }
         if ($externalCount === 0) {
             $dataWarnings[] = 'Tidak ada tempat eksternal yang dikirim. Cakupan OSM/Overpass mungkin gagal atau belum dimuat.';
@@ -274,33 +413,38 @@ class LocationAnalysisService
             $dataWarnings[] = 'Terdapat beberapa laporan infrastruktur aktif yang dapat memengaruhi aksesibilitas.';
         }
 
-        $bpsDemographics = $this->bpsService->getDemographicsForLocation($lat, $lng);
 
         return [
-            'candidate_id'        => $candidateId,
-            'lat'                 => $lat,
-            'lng'                 => $lng,
-            'radius'              => $radius,
-            'business_type'       => $slug,
-            'business_type_name'  => $businessType?->name,
-            'is_valid_location'   => true,
-            'is_water_or_offshore'=> false,
-            'opportunity_score'   => $opportunityScore,
-            'competition_score'   => $competitionScore,
-            'accessibility_score' => $accessibilityScore,
-            'data_confidence'     => $dataConfidence,
-            'competitor_count'    => $competitorCount,
-            'nearest_competitor'  => $nearestCompetitor,
-            'relevant_poi'        => $relevantPoi,
-            'factors'             => $factors,
-            'data_warnings'       => $dataWarnings,
-            'bps_demographics'    => $bpsDemographics,
-            'sources'             => [
+            'candidate_id'              => $candidateId,
+            'lat'                       => $lat,
+            'lng'                       => $lng,
+            'radius'                    => $radius,
+            'business_type'             => $slug,
+            'business_type_name'        => $businessType?->name,
+            'is_valid_location'         => true,
+            'is_water_or_offshore'      => false,
+            'opportunity_score'         => $opportunityScore,
+            'competition_score'         => $competitionScore,
+            'accessibility_score'       => $accessibilityScore,
+            'data_confidence'           => $dataConfidence,
+            'competitor_count'          => $competitorCount,
+            'nearest_competitor'        => $nearestCompetitor,
+            'relevant_poi'              => $relevantPoi,
+            'factors'                   => $factors,
+            'data_warnings'             => $dataWarnings,
+            'bps_demographics'          => $bpsDemographics,
+            'sources'                   => [
+                [
+                    'id'      => 'lociva_registered',
+                    'label'   => 'Usaha Terdaftar LOCIVA',
+                    'count'   => $registeredBusinessCount,
+                    'status'  => $registeredQueryError ? 'error' : ($registeredBusinessCount > 0 ? 'loaded' : 'empty'),
+                ],
                 [
                     'id'      => 'lociva_internal',
-                    'label'   => 'POI & laporan internal LOCIVA',
-                    'count'   => $internalCount,
-                    'status'  => $internalCount > 0 ? 'loaded' : 'empty',
+                    'label'   => 'POI Fasilitas Publik Internal LOCIVA',
+                    'count'   => $internalPoiCount,
+                    'status'  => $internalPoiQueryError ? 'error' : ($internalPoiCount > 0 ? 'loaded' : 'empty'),
                 ],
                 [
                     'id'      => 'openstreetmap',
@@ -313,16 +457,18 @@ class LocationAnalysisService
                     'label'   => ($bpsDemographics['status'] ?? '') === 'unsupported_region'
                         ? 'Badan Pusat Statistik (BPS - Wilayah Belum Didukung)'
                         : 'Badan Pusat Statistik (BPS WebAPI - ' . ($bpsDemographics['region_name'] ?? 'Wilayah Administratif') . ')',
-                    'count'   => $bpsDemographics['population'] ?? 0,
+                    'count'   => $bpsDemographics['population'] ?? null,
                     'status'  => ($bpsDemographics['status'] ?? '') === 'unsupported_region' ? 'unavailable' : 'loaded',
                     'year'    => $bpsDemographics['year'] ?? null,
                 ],
             ],
-            'internal_poi_total'  => $internalCount,
-            'external_poi_total'  => $externalCount,
-            'poi_total'           => $poiTotal,
-            'report_count'        => $reports->count(),
-            'limitations'         => 'Skor adalah indeks berbasis data yang tersedia, bukan prediksi omzet. Tidak ada data lalu lintas live. Cakupan OSM bergantung pada kontributor setempat. Data populasi BPS bersifat agregat wilayah resmi.',
+            'internal_poi_total'        => $internalPoiCount,
+            'registered_business_total' => $registeredBusinessCount,
+            'internal_business_total'   => $registeredBusinessCount,
+            'external_poi_total'        => $externalCount,
+            'poi_total'                 => $poiTotal,
+            'report_count'              => $reports->count(),
+            'limitations'               => 'Skor adalah indeks berbasis data yang tersedia, bukan prediksi omzet. Tidak ada data lalu lintas live. Cakupan OSM bergantung pada kontributor setempat. Data populasi BPS bersifat agregat wilayah resmi.',
         ];
     }
 

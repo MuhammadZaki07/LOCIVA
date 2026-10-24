@@ -51,7 +51,6 @@ import type { BusinessType } from "@/lib/umkmCatalog";
 import type { AnalysisResult } from "@/lib/analysisEngine";
 import type { RouteWaypoint, RouteCalculationResult } from "@/lib/routing";
 import { useLocationAnalysis } from "@/hooks/useLocationAnalysis";
-import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import L from "leaflet";
 import { useMapEvents } from "react-leaflet";
@@ -415,12 +414,48 @@ export function MapPage() {
     C: null,
   });
 
-  const { analyze, isAnalyzing, error: analysisError } = useLocationAnalysis();
+  const {
+    analyze,
+    isCandidateAnalyzing,
+    getCandidateError,
+  } = useLocationAnalysis();
 
   const activeCandidate = candidates[activeCandidateId];
-  const debouncedLat = useDebounce(activeCandidate?.lat, 600);
-  const debouncedLng = useDebounce(activeCandidate?.lng, 600);
-  const debouncedRadius = useDebounce(activeCandidate?.radius, 600);
+
+  // Isolated debounced candidate state (500ms debounce per candidate position/radius change)
+  const [debouncedCandidates, setDebouncedCandidates] = useState<
+    Record<CandidateId, CandidateData | null>
+  >({
+    A: null,
+    B: null,
+    C: null,
+  });
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedCandidates(candidates);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [candidates]);
+
+  // Track parameters of the last completed analysis per candidate to avoid duplicate fetches
+  const lastAnalyzedParamsRef = useRef<
+    Record<
+      CandidateId,
+      { lat: number; lng: number; radius: number; businessTypeId: string } | null
+    >
+  >({
+    A: null,
+    B: null,
+    C: null,
+  });
+
+  // Track request sequence per candidate to ignore stale out-of-order responses
+  const candidateReqSeqRef = useRef<Record<CandidateId, number>>({
+    A: 0,
+    B: 0,
+    C: 0,
+  });
 
   // ── Mobile Vendor Routes ──────────────────────────────────────────────────
   const [activeWaypoints, setActiveWaypoints] = useState<RouteWaypoint[]>([]);
@@ -692,33 +727,49 @@ export function MapPage() {
     [toast],
   );
 
-  // ── Run analysis when candidate debounced position changes ────────────────
+  // ── Run isolated analysis per candidate whenever its debounced parameters change ──
   useEffect(() => {
-    if (selectedBusiness && debouncedLat && debouncedLng && debouncedRadius) {
-      const runAnalysis = async () => {
-        const res = await analyze(
-          activeCandidateId,
-          debouncedLat,
-          debouncedLng,
-          debouncedRadius,
-          selectedBusiness,
-        );
-        if (res) {
-          setAnalysisResults((prev) => ({ ...prev, [activeCandidateId]: res }));
-          fetchLocivaData(debouncedLat, debouncedLng, debouncedRadius * 1.5);
-        }
+    if (!selectedBusiness) return;
+
+    (["A", "B", "C"] as CandidateId[]).forEach((id) => {
+      const cand = debouncedCandidates[id];
+      if (!cand) {
+        // Candidate has no coordinates on the map, do not analyze
+        return;
+      }
+
+      const last = lastAnalyzedParamsRef.current[id];
+      const isParamIdentical =
+        last !== null &&
+        last.lat === cand.lat &&
+        last.lng === cand.lng &&
+        last.radius === cand.radius &&
+        last.businessTypeId === selectedBusiness.id;
+
+      // Skip if already analyzed with identical parameters and valid result exists
+      if (isParamIdentical && analysisResults[id] !== null) {
+        return;
+      }
+
+      // Mark these parameters as current
+      lastAnalyzedParamsRef.current[id] = {
+        lat: cand.lat,
+        lng: cand.lng,
+        radius: cand.radius,
+        businessTypeId: selectedBusiness.id,
       };
-      runAnalysis();
-    }
-  }, [
-    debouncedLat,
-    debouncedLng,
-    debouncedRadius,
-    selectedBusiness,
-    activeCandidateId,
-    analyze,
-    fetchLocivaData,
-  ]);
+
+      const thisSeq = ++candidateReqSeqRef.current[id];
+
+      analyze(id, cand.lat, cand.lng, cand.radius, selectedBusiness).then((res) => {
+        // Strict guard: ensure response matches this candidate and is the latest sequence
+        if (res && res.candidateId === id && thisSeq === candidateReqSeqRef.current[id]) {
+          setAnalysisResults((prev) => ({ ...prev, [id]: res }));
+          fetchLocivaData(cand.lat, cand.lng, cand.radius * 1.5);
+        }
+      });
+    });
+  }, [debouncedCandidates, selectedBusiness, analyze, fetchLocivaData, analysisResults]);
 
   // ── Event Handlers ─────────────────────────────────────────────────────────
   const handleSearchSelect = (lat: number, lng: number, name: string) => {
@@ -731,7 +782,10 @@ export function MapPage() {
     setSelectedBusiness(business);
     setIsPersistedInDb(false);
     setCandidates({ A: null, B: null, C: null });
+    setDebouncedCandidates({ A: null, B: null, C: null });
     setAnalysisResults({ A: null, B: null, C: null });
+    lastAnalyzedParamsRef.current = { A: null, B: null, C: null };
+    candidateReqSeqRef.current = { A: 0, B: 0, C: 0 };
     setActiveCandidateId("A");
     setActiveTool("analysis");
     if (window.innerWidth < 768) setActiveTool(null);
@@ -770,6 +824,8 @@ export function MapPage() {
           ...prev,
           [activeCandidateId]: newCandidate,
         }));
+        // Invalidate previous result for this candidate slot
+        setAnalysisResults((prev) => ({ ...prev, [activeCandidateId]: null }));
         setIsPersistedInDb(false);
         if (activeTool !== "analysis") setActiveTool("analysis");
       } else if (clickMode === "waypoint") {
@@ -808,6 +864,8 @@ export function MapPage() {
         if (!existing) return prev;
         return { ...prev, [id]: { ...existing, lat, lng } };
       });
+      // Invalidate existing result immediately on coordinate change
+      setAnalysisResults((prev) => ({ ...prev, [id]: null }));
       setActiveCandidateId(id);
       setIsPersistedInDb(false);
     },
@@ -821,6 +879,8 @@ export function MapPage() {
         if (!existing) return prev;
         return { ...prev, [activeCandidateId]: { ...existing, radius } };
       });
+      // Invalidate existing result immediately on radius change
+      setAnalysisResults((prev) => ({ ...prev, [activeCandidateId]: null }));
     },
     [activeCandidateId],
   );
@@ -988,8 +1048,8 @@ export function MapPage() {
                 showMapsData={showMapsData}
                 onToggleMapsData={setShowMapsData}
                 mapsCount={filteredExternalPlaces.length}
-                mapsLoading={viewportPlacesLoading || isAnalyzing}
-                mapsError={viewportPlacesError || analysisError}
+                mapsLoading={viewportPlacesLoading || isCandidateAnalyzing(activeCandidateId)}
+                mapsError={viewportPlacesError || getCandidateError(activeCandidateId)}
                 onRetryMaps={() => {
                   if (activeCandidate && selectedBusiness) {
                     analyze(
@@ -1081,8 +1141,8 @@ export function MapPage() {
                     <AnalysisPanel
                       business={selectedBusiness}
                       result={analysisResults[activeCandidateId]}
-                      isAnalyzing={isAnalyzing}
-                      error={analysisError}
+                      isAnalyzing={isCandidateAnalyzing(activeCandidateId)}
+                      error={getCandidateError(activeCandidateId)}
                       radius={
                         candidates[activeCandidateId]?.radius ||
                         selectedBusiness.defaultRadius

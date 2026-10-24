@@ -174,12 +174,27 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               <div className="flex items-center justify-between text-xs">
                 <span className="flex items-center gap-1.5 text-muted">
                   <Database size={13} className="text-indigo-500" />
-                  LOCIVA Internal DB
+                  Usaha Terdaftar LOCIVA
                 </span>
                 <span className="font-semibold text-ink">
-                  {result.internalBusinessCount ?? 0} Businesses
+                  {result.registeredBusinessCount !== null && result.registeredBusinessCount !== undefined
+                    ? `${result.registeredBusinessCount} Usaha`
+                    : result.internalBusinessCount !== null && result.internalBusinessCount !== undefined
+                    ? `${result.internalBusinessCount} Usaha`
+                    : "Estimasi OSM"}
                 </span>
               </div>
+              {result.internalPoiCount !== null && result.internalPoiCount !== undefined && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1.5 text-muted">
+                    <Database size={13} className="text-emerald-600" />
+                    POI Internal LOCIVA
+                  </span>
+                  <span className="font-semibold text-ink">
+                    {`${result.internalPoiCount} POI`}
+                  </span>
+                </div>
+              )}
               <p className="text-[10.5px] text-slate-400 pt-1.5 border-t border-slate-200/60 leading-relaxed">
                 Analysis reflects real sampled spatial data and does not guarantee commercial outcomes. OpenStreetMap coverage varies across regions.
               </p>
@@ -244,6 +259,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         onClose={() => setIsStatsModalOpen(false)}
         result={result}
         business={business}
+        bpsData={result?.bpsData}
       />
     </div>
   );

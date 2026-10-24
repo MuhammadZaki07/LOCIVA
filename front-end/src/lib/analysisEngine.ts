@@ -36,7 +36,20 @@ export interface AnalysisResult {
   factors: AnalysisFactor[];
   dataWarnings: string[];
   updatedAt: number;
-  internalBusinessCount?: number;
+  internalBusinessCount?: number | null;
+  internalPoiCount?: number | null;
+  registeredBusinessCount?: number | null;
+  reportCount?: number | null;
+  bpsData?: {
+    regionName?: string;
+    bpsCode?: string;
+    population?: number;
+    densityPerKm2?: number;
+    year?: string | number;
+    source?: string;
+    sourceUrl?: string;
+    status?: string;
+  } | null;
   sources?: { id: string; label: string; count: number; status: string }[];
   limitations?: string;
   isValidLocation?: boolean;

@@ -965,7 +965,7 @@ export default function AdminUsers() {
 
         {/* Date range filter */}
         <div className="w-full sm:w-50">
-          <DatePicker
+          {/* <DatePicker
             selectsRange
             startDate={fromDate ? dayjs(fromDate).toDate() : null}
             endDate={toDate ? dayjs(toDate).toDate() : null}
@@ -983,7 +983,7 @@ export default function AdminUsers() {
             calendarClassName="lociva-calendar"
             wrapperClassName="w-full"
             className="w-full rounded-[10px] border border-[#e5e5f0] bg-white px-3 py-2 text-[12px] text-ink outline-none focus:border-primary"
-          />
+          /> */}
         </div>
 
         {/* Reset filters */}
