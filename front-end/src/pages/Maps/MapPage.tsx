@@ -1,3 +1,4 @@
+// MapPage
 import React, {
   useState,
   useRef,
@@ -14,9 +15,10 @@ import {
 } from "@/components/ui/shadcn-ui/map";
 import {
   distanceMeters,
-  fetchPlacesInBounds,
+  fetchPlacesInBounds as fetchLocalPlacesInBounds,
   type Place,
 } from "@/lib/LocalOsm";
+import { fetchPlacesInBounds as fetchExternalPlacesInBounds } from "@/lib/Osm";
 import { useToast } from "@/components/ui/Toast";
 import api from "@/context/apiClient";
 
@@ -162,6 +164,15 @@ const MapEventHandler: React.FC<{
   return null;
   };
 
+// ─── Category filter helper (shared by Internal and External POI layers) ──────
+const filterPlacesByCategory = (places: Place[], cat: FilterCategory): Place[] => {
+  if (cat === "all") return places;
+  if (cat === "school_campus") {
+    return places.filter((p) => p.category === "school" || p.category === "campus");
+  }
+  return places.filter((p) => p.category === cat);
+};
+
 // ─── Main MapPage Component ───────────────────────────────────────────────────
 export function MapPage() {
   const [center, setCenter] = useState<[number, number]>([-7.9797, 112.6304]); // Default to Malang coordinates
@@ -289,18 +300,25 @@ export function MapPage() {
   const [isPersistedInDb, setIsPersistedInDb] = useState(false);
 
   // ── Layer toggles & Category filter ───────────────────────────────────────
-  const [showMapsData, setShowMapsData] = useState(true);
+  const [showLocalPoiData, setShowLocalPoiData] = useState(true);
+  const [showMapsData, setShowMapsData] = useState(false); // External OSM (Overpass), opt-in
   const [showLocivaData, setShowLocivaData] = useState(true);
   const [layerCategory, setLayerCategory] = useState<FilterCategory>("all");
   const [showPublicRoutes, setShowPublicRoutes] = useState(true);
 
   // ── Viewport-based Places & Businesses State ──────────────────────────────
+  // viewportPlaces = Internal (LocalOSM) layer
   const [viewportPlaces, setViewportPlaces] = useState<Place[]>([]);
   const [viewportPlacesLoading, setViewportPlacesLoading] = useState(false);
   const [viewportPlacesError, setViewportPlacesError] = useState<string | null>(
     null,
   );
   const [isPlacesStale, setIsPlacesStale] = useState(false);
+
+  // External (OSM / Overpass) layer
+  const [externalPlaces, setExternalPlaces] = useState<Place[]>([]);
+  const [externalLoading, setExternalLoading] = useState(false);
+  const [externalError, setExternalError] = useState<string | null>(null);
 
   const [locivaBusinesses, setLocivaBusinesses] = useState<LocivaBusiness[]>(
     [],
@@ -522,6 +540,52 @@ export function MapPage() {
   );
   const viewportCountRef = useRef(0);
 
+  // ── External OSM (Overpass) loader ─────────────────────────────────────────
+  const externalAbortRef = useRef<AbortController | null>(null);
+  const showMapsDataRef = useRef(showMapsData);
+  useEffect(() => {
+    showMapsDataRef.current = showMapsData;
+  }, [showMapsData]);
+
+  const loadExternalPlaces = useCallback(
+    async (zoom: number, bounds: L.LatLngBounds) => {
+      if (zoom < 14) return; // keep Overpass queries small
+      externalAbortRef.current?.abort();
+      const controller = new AbortController();
+      externalAbortRef.current = controller;
+      setExternalLoading(true);
+      setExternalError(null);
+      try {
+        const places = await fetchExternalPlacesInBounds(
+          bounds.getSouth(),
+          bounds.getWest(),
+          bounds.getNorth(),
+          bounds.getEast(),
+          controller.signal,
+        );
+        setExternalPlaces(places);
+      } catch (err: any) {
+        if (err?.name === "AbortError") return;
+        console.warn("Failed to load external OSM places:", err);
+        setExternalError("Unable to load places from Overpass");
+      } finally {
+        if (!controller.signal.aborted) setExternalLoading(false);
+      }
+    },
+    [],
+  );
+
+  // Load when the layer is switched on, cancel when switched off
+  useEffect(() => {
+    if (!showMapsData) {
+      externalAbortRef.current?.abort();
+      setExternalLoading(false);
+      return;
+    }
+    const map = mapRef.current;
+    if (map) loadExternalPlaces(map.getZoom(), map.getBounds());
+  }, [showMapsData, loadExternalPlaces]);
+
   // Cancel pending work when leaving the page
   useEffect(() => {
     return () => {
@@ -529,6 +593,7 @@ export function MapPage() {
         clearTimeout(viewportDebounceTimer.current);
       }
       viewportAbortRef.current?.abort();
+      externalAbortRef.current?.abort();
     };
   }, []);
 
@@ -548,6 +613,7 @@ export function MapPage() {
       viewportDebounceTimer.current = setTimeout(async () => {
         // 1. LOCIVA businesses for the visible area
         fetchLocivaData(centerLat, centerLng, radiusMeters, bounds);
+        if (showMapsDataRef.current) loadExternalPlaces(zoom, bounds);
 
         // 2. POIs from our own database. Below zoom 13 the viewport is wider
         //    than the backend accepts, so skip.
@@ -563,7 +629,7 @@ export function MapPage() {
         setViewportPlacesError(null);
 
         try {
-          const places = await fetchPlacesInBounds(
+          const places = await fetchLocalPlacesInBounds(
             bounds.getSouth(),
             bounds.getWest(),
             bounds.getNorth(),
@@ -585,7 +651,7 @@ export function MapPage() {
         }
       }, 550);
     },
-    [fetchLocivaData],
+    [fetchLocivaData, loadExternalPlaces],
   );
 
   // Initial load: use a ~4km bounding box around the default center
@@ -594,7 +660,7 @@ export function MapPage() {
     fetchReports();
     const controller = new AbortController();
     const halfSpan = 0.018;
-    fetchPlacesInBounds(
+    fetchLocalPlacesInBounds(
       center[0] - halfSpan, center[1] - halfSpan,
       center[0] + halfSpan, center[1] + halfSpan,
       controller.signal,
@@ -833,29 +899,39 @@ export function MapPage() {
     [currentResult],
   );
 
-  // Merge viewport places and candidate analysis places without duplicates
-  const allExternalPlaces: Place[] = useMemo(() => {
+  // Internal (LocalOSM) places: viewport + candidate analysis results, no duplicates
+  const allLocalPlaces: Place[] = useMemo(() => {
     const mapById = new Map<string, Place>();
-    for (const p of viewportPlaces) {
-      mapById.set(p.id, p);
-    }
-    for (const p of candidatePlaces) {
-      mapById.set(p.id, p);
-    }
+    for (const p of viewportPlaces) mapById.set(p.id, p);
+    for (const p of candidatePlaces) mapById.set(p.id, p);
     return Array.from(mapById.values());
   }, [viewportPlaces, candidatePlaces]);
 
-  // Category filtering
+  const filteredLocalPlaces = useMemo(
+    () =>
+      showLocalPoiData
+        ? filterPlacesByCategory(allLocalPlaces, layerCategory)
+        : [],
+    [allLocalPlaces, showLocalPoiData, layerCategory],
+  );
+
+  // External (Overpass) places; skip ones already shown by the internal layer
   const filteredExternalPlaces = useMemo(() => {
     if (!showMapsData) return [];
-    if (layerCategory === "all") return allExternalPlaces;
-    if (layerCategory === "school_campus") {
-      return allExternalPlaces.filter(
-        (p) => p.category === "school" || p.category === "campus",
-      );
-    }
-    return allExternalPlaces.filter((p) => p.category === layerCategory);
-  }, [allExternalPlaces, showMapsData, layerCategory]);
+    const localIds = showLocalPoiData
+      ? new Set(allLocalPlaces.map((p) => p.id))
+      : null;
+    const list = localIds
+      ? externalPlaces.filter((p) => !localIds.has(p.id))
+      : externalPlaces;
+    return filterPlacesByCategory(list, layerCategory);
+  }, [
+    externalPlaces,
+    allLocalPlaces,
+    showMapsData,
+    showLocalPoiData,
+    layerCategory,
+  ]);
 
   const filteredLocivaBusinesses = useMemo(() => {
     if (!showLocivaData) return [];
@@ -893,7 +969,7 @@ export function MapPage() {
   const { duplicateExternalIds, duplicateInternalIds } = useMemo(() => {
     const dupExt = new Set<string>();
     const dupInt = new Set<string>();
-    filteredExternalPlaces.forEach((ext) => {
+    [...filteredLocalPlaces, ...filteredExternalPlaces].forEach((ext) => {
       filteredLocivaBusinesses.forEach((loc) => {
         if (
           Math.abs(ext.lat - loc.latitude) > 0.0008 ||
@@ -910,7 +986,7 @@ export function MapPage() {
       });
     });
     return { duplicateExternalIds: dupExt, duplicateInternalIds: dupInt };
-  }, [filteredExternalPlaces, filteredLocivaBusinesses]);
+  }, [filteredLocalPlaces, filteredExternalPlaces, filteredLocivaBusinesses]);
 
   const candidateTabsData = (["A", "B", "C"] as CandidateId[]).map((id) => ({
     id,
@@ -971,12 +1047,12 @@ export function MapPage() {
 
             {activeTool === "layers" && (
               <DataSourceControl
-                showMapsData={showMapsData}
-                onToggleMapsData={setShowMapsData}
-                mapsCount={filteredExternalPlaces.length}
-                mapsLoading={viewportPlacesLoading || isAnalyzing}
-                mapsError={viewportPlacesError || analysisError}
-                onRetryMaps={() => {
+                showLocalPoiData={showLocalPoiData}
+                onToggleLocalPoiData={setShowLocalPoiData}
+                localPoiCount={filteredLocalPlaces.length}
+                localPoiLoading={viewportPlacesLoading || isAnalyzing}
+                localPoiError={viewportPlacesError || analysisError}
+                onRetryLocalPoi={() => {
                   if (activeCandidate && selectedBusiness) {
                     analyze(
                       activeCandidate.id,
@@ -998,6 +1074,15 @@ export function MapPage() {
                     );
                     loadViewportData(c.lat, c.lng, r, map.getZoom(), b);
                   }
+                }}
+                showMapsData={showMapsData}
+                onToggleMapsData={setShowMapsData}
+                mapsCount={filteredExternalPlaces.length}
+                mapsLoading={externalLoading}
+                mapsError={externalError}
+                onRetryMaps={() => {
+                  const map = mapRef.current;
+                  if (map) loadExternalPlaces(map.getZoom(), map.getBounds());
                 }}
                 showLocivaData={showLocivaData}
                 onToggleLocivaData={setShowLocivaData}
@@ -1442,24 +1527,43 @@ export function MapPage() {
               spiderfyOnMaxZoom={true}
               showCoverageOnHover={false}
             >
-              {showMapsData &&
-                filteredExternalPlaces.map((place) => (
-                  <PoiMarker
-                    key={`poi-${place.id}`}
-                    place={place}
-                    distanceFromCandidate={
-                      activeCandidate
-                        ? distanceMeters(
-                          activeCandidate.lat,
-                          activeCandidate.lng,
-                          place.lat,
-                          place.lng,
-                        )
-                        : undefined
-                    }
-                    isDuplicateWithInternal={duplicateExternalIds.has(place.id)}
-                  />
-                ))}
+              {/* Internal Map POIs (LocalOSM) */}
+              {filteredLocalPlaces.map((place) => (
+                <PoiMarker
+                  key={`poi-${place.id}`}
+                  place={place}
+                  distanceFromCandidate={
+                    activeCandidate
+                      ? distanceMeters(
+                        activeCandidate.lat,
+                        activeCandidate.lng,
+                        place.lat,
+                        place.lng,
+                      )
+                      : undefined
+                  }
+                  isDuplicateWithInternal={duplicateExternalIds.has(place.id)}
+                />
+              ))}
+
+              {/* External Map POIs (OSM / Overpass) */}
+              {filteredExternalPlaces.map((place) => (
+                <PoiMarker
+                  key={`ext-poi-${place.id}`}
+                  place={place}
+                  distanceFromCandidate={
+                    activeCandidate
+                      ? distanceMeters(
+                        activeCandidate.lat,
+                        activeCandidate.lng,
+                        place.lat,
+                        place.lng,
+                      )
+                      : undefined
+                  }
+                  isDuplicateWithInternal={duplicateExternalIds.has(place.id)}
+                />
+              ))}
 
               {showLocivaData &&
                 filteredLocivaBusinesses.map((biz) => (
@@ -1533,10 +1637,10 @@ export function MapPage() {
 
       {/* ── Dynamic Map Legend ─────────────────────────────────────────────── */}
       <MapLegend
-        showMapsData={showMapsData}
+        showMapsData={showLocalPoiData || showMapsData}
         showLocivaData={showLocivaData}
         showReportsData={showReportsLayer}
-        mapsCount={filteredExternalPlaces.length}
+        mapsCount={filteredLocalPlaces.length + filteredExternalPlaces.length}
         locivaCount={filteredLocivaBusinesses.length}
         reportsCount={reports.length}
         activeCandidateCount={activeCount}
