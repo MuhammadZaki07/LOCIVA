@@ -17,7 +17,21 @@ class VendorRouteController extends Controller
     {
         $query = VendorRoute::with(['business:id,name,latitude,longitude'])
             ->where('is_shared', true)
-            ->select('id', 'user_id', 'business_id', 'name', 'waypoints', 'start_location_name', 'end_location_name', 'distance', 'estimated_duration', 'status', 'notes', 'created_at');
+            ->select(
+                'id',
+                'user_id',
+                'business_id',
+                'name',
+                'waypoints',
+                'route_coordinates',
+                'start_location_name',
+                'end_location_name',
+                'distance',
+                'estimated_duration',
+                'status',
+                'notes',
+                'created_at'
+            );
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -25,7 +39,10 @@ class VendorRouteController extends Controller
 
         $routes = $query->latest()->limit(50)->get();
 
-        return ApiResponse::success($routes, 'Public vendor routes retrieved successfully');
+        return ApiResponse::success(
+            $routes,
+            'Public vendor routes retrieved successfully'
+        );
     }
 
     /**
@@ -48,33 +65,40 @@ class VendorRouteController extends Controller
     /**
      * Store a newly created vendor route plan.
      */
+
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name'                => 'required|string|max:150',
-            'business_id'         => 'nullable|exists:businesses,id',
-            'waypoints'           => 'required|array|min:2',
-            'waypoints.*.lat'     => 'required|numeric|between:-90,90',
-            'waypoints.*.lng'     => 'required|numeric|between:-180,180',
-            'waypoints.*.name'    => 'nullable|string|max:200',
+            'name'                      => 'required|string|max:150',
+            'business_id'               => 'nullable|exists:businesses,id',
+            'waypoints'                 => 'required|array|min:2',
+            'waypoints.*.lat'           => 'required|numeric|between:-90,90',
+            'waypoints.*.lng'           => 'required|numeric|between:-180,180',
+            'waypoints.*.name'          => 'nullable|string|max:200',
             'waypoints.*.stop_duration' => 'nullable|integer|min:0|max:1440',
-            'start_location_name' => 'nullable|string|max:200',
-            'end_location_name'   => 'nullable|string|max:200',
-            'distance'            => 'nullable|numeric|min:0|max:1000',
-            'estimated_duration'  => 'nullable|integer|min:0|max:10000',
-            'status'              => 'nullable|string|in:planned,active,completed',
-            'is_shared'           => 'boolean',
-            'notes'               => 'nullable|string|max:1000',
-            'route_coordinates'   => 'nullable|array',
-            'route_coordinates.*' => 'array',
+            'start_location_name'       => 'nullable|string|max:200',
+            'end_location_name'         => 'nullable|string|max:200',
+            'distance'                  => 'nullable|numeric|min:0|max:1000',
+            'estimated_duration'        => 'nullable|integer|min:0|max:10000',
+            'status'                    => 'nullable|in:active,inactive',
+            'is_shared'                 => 'sometimes|boolean',
+            'notes'                     => 'nullable|string|max:1000',
+            'route_coordinates'         => 'nullable|array',
+            'route_coordinates.*'       => 'required|array|size:2',
+            'route_coordinates.*.0'     => 'required|numeric|between:-90,90',
+            'route_coordinates.*.1'     => 'required|numeric|between:-180,180',
         ]);
 
         $validated['user_id'] = Auth::id();
-        $validated['status'] = $validated['status'] ?? 'planned';
+        $validated['status'] = $validated['status'] ?? 'active';
 
         $route = VendorRoute::create($validated);
 
-        return ApiResponse::success($route, 'Rute usaha keliling berhasil disimpan', 201);
+        return ApiResponse::success(
+            $route,
+            'Rute usaha keliling berhasil disimpan',
+            201
+        );
     }
 
     /**
@@ -176,11 +200,11 @@ class VendorRouteController extends Controller
             (6371000 * acos(LEAST(1.0, cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + sin(radians(?)) * sin(radians(latitude))))) AS distance',
             [$lat, $lng, $lat]
         )
-        ->whereIn('category', ['university', 'transit_station', 'school', 'market', 'commercial'])
-        ->having('distance', '<=', $radius)
-        ->orderBy('distance')
-        ->limit(10)
-        ->get();
+            ->whereIn('category', ['university', 'transit_station', 'school', 'market', 'commercial'])
+            ->having('distance', '<=', $radius)
+            ->orderBy('distance')
+            ->limit(10)
+            ->get();
 
         $recommendations = $pois->map(function ($poi) {
             $footfallScore = match ($poi->category) {

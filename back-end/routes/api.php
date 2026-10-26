@@ -116,6 +116,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Mobile Vendor Routes CRUD (per-user)
     Route::get('/vendor-routes', [VendorRouteController::class, 'index']);
     Route::post('/vendor-routes', [VendorRouteController::class, 'store']);
+    Route::patch('/vendor-routes/{id}', [VendorRouteController::class, 'update']);
     Route::get('/vendor-routes/{id}', [VendorRouteController::class, 'show']);
     Route::put('/vendor-routes/{id}', [VendorRouteController::class, 'update']);
     Route::delete('/vendor-routes/{id}', [VendorRouteController::class, 'destroy']);

@@ -38,7 +38,7 @@ export interface RouteCalculationResult {
  */
 export async function calculateRoute(
   waypoints: RouteWaypoint[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<RouteCalculationResult> {
   if (waypoints.length < 2) {
     throw new Error("Dibutuhkan minimal 2 titik untuk menghitung rute.");
@@ -58,13 +58,17 @@ export async function calculateRoute(
         coordinates: coordsForBackend,
         profile: "driving",
       },
-      { signal }
+      { signal },
     );
 
-    if (res.data?.success && res.data?.data?.coordinates) {
+    if (
+      res.data?.success &&
+      Array.isArray(res.data?.data?.coordinates) &&
+      res.data.data.coordinates.length > waypoints.length
+    ) {
       const data = res.data.data;
       const leafletCoords: [number, number][] = data.coordinates.map(
-        (c: [number, number]) => [c[1], c[0]]
+        (c: [number, number]) => [c[1], c[0]],
       );
 
       const legs = (data.legs || []).map((leg: any) => ({
@@ -78,12 +82,16 @@ export async function calculateRoute(
         distanceKm: data.distance_km,
         durationMinutes: data.duration_minutes,
         provider: data.provider || "osrm",
-        summary: legs.length > 0 ? `${legs.length} segmen perjalanan` : undefined,
+        summary:
+          legs.length > 0 ? `${legs.length} segmen perjalanan` : undefined,
         legs,
       };
     }
   } catch (backendErr: any) {
-    if (backendErr?.name === "AbortError" || backendErr?.name === "CanceledError") {
+    if (
+      backendErr?.name === "AbortError" ||
+      backendErr?.name === "CanceledError"
+    ) {
       throw backendErr;
     }
     // Fallback to direct client-side OSRM if backend is unreachable
@@ -109,7 +117,7 @@ export async function calculateRoute(
 
     const route = data.routes[0];
     const leafletCoords: [number, number][] = route.geometry.coordinates.map(
-      (c: [number, number]) => [c[1], c[0]]
+      (c: [number, number]) => [c[1], c[0]],
     );
 
     const distanceKm = Number((route.distance / 1000).toFixed(2));
@@ -125,6 +133,8 @@ export async function calculateRoute(
   } catch (err: unknown) {
     if (err instanceof DOMException && err.name === "AbortError") throw err;
     if (err instanceof Error) throw err;
-    throw new Error("Rute jalan tidak dapat dihitung. Server routing tidak tersedia.");
+    throw new Error(
+      "Rute jalan tidak dapat dihitung. Server routing tidak tersedia.",
+    );
   }
 }

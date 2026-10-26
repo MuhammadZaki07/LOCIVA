@@ -50,7 +50,11 @@ import {
 } from "@/components/maps/ReportMarker";
 import { CivicReportsMapPanel } from "@/components/maps/CivicReportsMapPanel";
 import { CreateReportModal } from "@/components/maps/CreateReportModal";
-import { BpsLayer, BpsLegend, BpsLayerStatus } from "@/components/maps/BpsLayer";
+import {
+  BpsLayer,
+  BpsLegend,
+  BpsLayerStatus,
+} from "@/components/maps/BpsLayer";
 import type { BpsLegendEntry } from "@/components/maps/BpsLayer";
 
 import type { BusinessType } from "@/lib/umkmCatalog";
@@ -331,12 +335,20 @@ export function MapPage() {
   const [reportsLoading, setReportsLoading] = useState(false);
   const [showReportsLayer, setShowReportsLayer] = useState(true);
   const [showBpsLayer, setShowBpsLayer] = useState(false);
-  const [bpsLayerLevel, setBpsLayerLevel] = useState<"regency" | "district">("regency");
-  const [bpsRegionName, setBpsRegionName] = useState<string>("Provinsi Jawa Timur");
+  const [bpsLayerLevel, setBpsLayerLevel] = useState<"regency" | "district">(
+    "regency",
+  );
+  const [bpsRegionName, setBpsRegionName] = useState<string>(
+    "Provinsi Jawa Timur",
+  );
   const [bpsLoading, setBpsLoading] = useState(false);
   const [bpsError, setBpsError] = useState<string | null>(null);
-  const [bpsLegendEntries, setBpsLegendEntries] = useState<BpsLegendEntry[]>([]);
-  const [bpsLegendYear, setBpsLegendYear] = useState<number>(new Date().getFullYear());
+  const [bpsLegendEntries, setBpsLegendEntries] = useState<BpsLegendEntry[]>(
+    [],
+  );
+  const [bpsLegendYear, setBpsLegendYear] = useState<number>(
+    new Date().getFullYear(),
+  );
   const [createReportModalOpen, setCreateReportModalOpen] = useState(false);
   const [selectedReportCoords, setSelectedReportCoords] = useState<{
     lat: number;
@@ -712,11 +724,11 @@ export function MapPage() {
           location_name: `Candidate Point ${candidate.id}`,
           scores: analysis
             ? {
-              opportunity_score: analysis.opportunityScore,
-              competition_score: analysis.competitionScore,
-              accessibility_score: analysis.accessibilityScore,
-              data_confidence: analysis.dataConfidence,
-            }
+                opportunity_score: analysis.opportunityScore,
+                competition_score: analysis.competitionScore,
+                accessibility_score: analysis.accessibilityScore,
+                data_confidence: analysis.dataConfidence,
+              }
             : undefined,
         });
         setIsPersistedInDb(true);
@@ -1514,14 +1526,12 @@ export function MapPage() {
               );
             })}
 
-
             <RouteLayer
               activeWaypoints={activeWaypoints}
               currentCalculation={routeCalculation}
               publicRoutes={showPublicRoutes ? publicRoutes : []}
               showPublicRoutes={showPublicRoutes}
             />
-
 
             <MapMarkerClusterGroup
               spiderfyOnMaxZoom={true}
@@ -1573,11 +1583,11 @@ export function MapPage() {
                     distanceFromCandidate={
                       activeCandidate
                         ? distanceMeters(
-                          activeCandidate.lat,
-                          activeCandidate.lng,
-                          biz.latitude,
-                          biz.longitude,
-                        )
+                            activeCandidate.lat,
+                            activeCandidate.lng,
+                            biz.latitude,
+                            biz.longitude,
+                          )
                         : undefined
                     }
                     isDuplicateWithExternal={duplicateInternalIds.has(biz.id)}

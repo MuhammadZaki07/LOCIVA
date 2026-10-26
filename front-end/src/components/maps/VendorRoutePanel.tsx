@@ -16,13 +16,18 @@ import {
   X,
 } from "lucide-react";
 import api from "@/context/apiClient";
-import { calculateRoute, type RouteWaypoint, type RouteCalculationResult } from "@/lib/routing";
+import {
+  calculateRoute,
+  type RouteWaypoint,
+  type RouteCalculationResult,
+} from "@/lib/routing";
 import { useToast } from "@/components/ui/Toast";
 
 export interface SavedRouteItem {
   id: string;
   name: string;
   waypoints: RouteWaypoint[];
+  route_coordinates?: [number, number][];
   start_location_name?: string;
   end_location_name?: string;
   distance?: number;
@@ -31,6 +36,14 @@ export interface SavedRouteItem {
   is_shared: boolean;
   notes?: string;
   created_at?: string;
+}
+interface UserBusinessOption {
+  id: number | string;
+  name: string;
+  latitude?: number | string;
+  longitude?: number | string;
+  lat?: number | string;
+  lng?: number | string;
 }
 
 interface VendorRoutePanelProps {
@@ -55,11 +68,19 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
   userLocation,
 }) => {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<"planner" | "saved" | "recommendations">("planner");
+  const [activeTab, setActiveTab] = useState<
+    "planner" | "saved" | "recommendations"
+  >("planner");
   const [routeName, setRouteName] = useState("Rute Keliling Harian");
   const [routeNotes, setRouteNotes] = useState("");
+  const [routeStatus, setRouteStatus] = useState<"active" | "planned">(
+    "active",
+  );
   const [isShared, setIsShared] = useState(false);
   const [isRoundtrip, setIsRoundtrip] = useState(false);
+  const [businesses, setBusinesses] = useState<UserBusinessOption[]>([]);
+  const [selectedBusinessId, setSelectedBusinessId] = useState<string>("");
+  const [loadingBusinesses, setLoadingBusinesses] = useState(false);
 
   // Loading states
   const [isCalculating, setIsCalculating] = useState(false);
@@ -106,6 +127,34 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
       setLoadingSaved(false);
     }
   }, []);
+
+  const fetchBusinesses = useCallback(async () => {
+    setLoadingBusinesses(true);
+
+    try {
+      const res = await api.get("/businesses/user");
+
+      const data = res.data?.data;
+      const items = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.Data)
+          ? data.Data
+          : Array.isArray(data?.data)
+            ? data.data
+            : [];
+
+      setBusinesses(items);
+    } catch (error) {
+      console.error("Gagal mengambil bisnis pengguna:", error);
+      setBusinesses([]);
+    } finally {
+      setLoadingBusinesses(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBusinesses();
+  }, [fetchBusinesses]);
 
   // Fetch recommendations from API
   const fetchRecommendations = useCallback(async () => {
@@ -213,7 +262,9 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
 
     setIsCalculating(true);
     try {
-      const calculationPoints = isRoundtrip ? [...activeWaypoints, activeWaypoints[0]] : activeWaypoints;
+      const calculationPoints = isRoundtrip
+        ? [...activeWaypoints, activeWaypoints[0]]
+        : activeWaypoints;
 
       const result = await calculateRoute(calculationPoints);
       onRouteCalculated(result);
@@ -226,7 +277,8 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
     } catch (err: any) {
       toast({
         title: "Gagal Menghitung Rute",
-        description: err.message || "Pastikan titik berada di jaringan jalan yang valid.",
+        description:
+          err.message || "Pastikan titik berada di jaringan jalan yang valid.",
         variant: "error",
       });
     } finally {
@@ -258,13 +310,16 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
     setIsSaving(true);
     try {
       const payload = {
+        business_id: selectedBusinessId || null,
         name: routeName.trim() || "Rute Usaha Keliling",
         start_location_name: activeWaypoints[0].name || "Titik Awal",
-        end_location_name: activeWaypoints[activeWaypoints.length - 1].name || "Titik Akhir",
+        end_location_name:
+          activeWaypoints[activeWaypoints.length - 1].name || "Titik Akhir",
         waypoints: activeWaypoints,
-        distance: currentCalculation ? currentCalculation.distanceKm : 0,
-        estimated_duration: currentCalculation ? currentCalculation.durationMinutes : 0,
-        status: "planned",
+        route_coordinates: currentCalculation?.coordinates ?? [],
+        distance: currentCalculation?.distanceKm ?? 0,
+        estimated_duration: currentCalculation?.durationMinutes ?? 0,
+        status: routeStatus,
         is_shared: isShared,
         notes: routeNotes.trim() || null,
       };
@@ -281,7 +336,9 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
     } catch (err: any) {
       toast({
         title: "Gagal Menyimpan Rute",
-        description: err.response?.data?.message || "Terjadi kesalahan saat menyimpan rute.",
+        description:
+          err.response?.data?.message ||
+          "Terjadi kesalahan saat menyimpan rute.",
         variant: "error",
       });
     } finally {
@@ -334,6 +391,43 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
     }
   };
 
+  const handleUpdateRouteStatus = async (
+    routeId: string,
+    status: "active" | "planned",
+  ) => {
+    const is_shared = status === "active";
+
+    try {
+      await api.patch(`/vendor-routes/${routeId}`, {
+        status,
+        is_shared,
+      });
+
+      setSavedRoutes((prev) =>
+        prev.map((route) =>
+          route.id === routeId ? { ...route, status, is_shared } : route,
+        ),
+      );
+
+      toast({
+        title: "Status Berhasil Diubah",
+        description: `Status rute sekarang ${
+          status === "active"
+            ? "Aktif dan dibagikan"
+            : "Tidak Aktif dan tidak dibagikan"
+        }.`,
+        variant: "success",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Gagal Mengubah Status",
+        description:
+          error.response?.data?.message ?? "Status rute gagal diperbarui.",
+        variant: "error",
+      });
+    }
+  };
+
   // Delete saved route
   const handleDeleteRoute = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -357,7 +451,7 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
   return (
     <div
       className={cn(
-        "fixed md:static inset-y-0 left-0 z-[500] w-full bg-surface border-r border-slate-200 flex flex-col transition-transform duration-300 shadow-xl md:shadow-none",
+        "fixed md:static inset-y-0 left-0 z-[500] w-full h-full min-h-0 bg-surface border-r border-slate-200 flex flex-col overflow-hidden transition-transform duration-300 shadow-xl md:shadow-none",
         !isOpen && "-translate-x-full md:translate-x-0 md:hidden",
       )}
     >
@@ -369,11 +463,19 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
               <Route size={18} />
             </div>
             <div>
-              <h2 className="text-lg font-display font-bold text-ink">Rute Usaha Keliling</h2>
-              <p className="text-[11px] text-muted">Perencana jalur jualan gerobak & usaha mobile</p>
+              <h2 className="text-lg font-display font-bold text-ink">
+                Rute Usaha Keliling
+              </h2>
+              <p className="text-[11px] text-muted">
+                Perencana jalur jualan gerobak & usaha mobile
+              </p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-muted">
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-muted"
+          >
             <X size={16} />
           </button>
         </div>
@@ -385,7 +487,9 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
             onClick={() => setActiveTab("planner")}
             className={cn(
               "py-1.5 rounded-lg transition-all text-center cursor-pointer",
-              activeTab === "planner" ? "bg-white text-ink shadow-xs" : "text-muted hover:text-ink",
+              activeTab === "planner"
+                ? "bg-white text-ink shadow-xs"
+                : "text-muted hover:text-ink",
             )}
           >
             Perencana
@@ -395,7 +499,9 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
             onClick={() => setActiveTab("recommendations")}
             className={cn(
               "py-1.5 rounded-lg transition-all text-center cursor-pointer flex items-center justify-center gap-1",
-              activeTab === "recommendations" ? "bg-white text-ink shadow-xs" : "text-muted hover:text-ink",
+              activeTab === "recommendations"
+                ? "bg-white text-ink shadow-xs"
+                : "text-muted hover:text-ink",
             )}
           >
             <Sparkles size={11} className="text-amber-500" />
@@ -406,7 +512,9 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
             onClick={() => setActiveTab("saved")}
             className={cn(
               "py-1.5 rounded-lg transition-all text-center cursor-pointer",
-              activeTab === "saved" ? "bg-white text-ink shadow-xs" : "text-muted hover:text-ink",
+              activeTab === "saved"
+                ? "bg-white text-ink shadow-xs"
+                : "text-muted hover:text-ink",
             )}
           >
             Rute Saya
@@ -415,12 +523,14 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
       </div>
 
       {/* Main Tab Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-4">
         {/* TAB 1: PLANNER */}
         {activeTab === "planner" && (
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-muted mb-1">Nama Rute:</label>
+              <label className="block text-xs font-semibold text-muted mb-1">
+                Nama Rute:
+              </label>
               <input
                 type="text"
                 value={routeName}
@@ -431,7 +541,34 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-muted mb-1">Catatan Rute (Opsional):</label>
+              <label className="block text-xs font-semibold text-muted mb-1">
+                Bisnis Terkait:
+              </label>
+
+              <select
+                value={selectedBusinessId}
+                onChange={(e) => setSelectedBusinessId(e.target.value)}
+                disabled={loadingBusinesses}
+                className="w-full px-3 py-2 bg-slate-100 rounded-xl text-xs border border-slate-200"
+              >
+                <option value="">
+                  {loadingBusinesses
+                    ? "Memuat bisnis..."
+                    : "Pilih bisnis (opsional)"}
+                </option>
+
+                {businesses.map((business) => (
+                  <option key={business.id} value={String(business.id)}>
+                    {business.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-muted mb-1">
+                Catatan Rute:
+              </label>
               <input
                 type="text"
                 value={routeNotes}
@@ -442,9 +579,11 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
             </div>
 
             {/* Waypoints List */}
-            <div className="max-h-[56vh] overflow-y-auto overflow-x-hidden overscroll-contain space-y-2 pr-2">
+            <div className="max-h-[28vh] overflow-y-auto overflow-x-hidden overscroll-contain space-y-2 pr-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-ink">Titik Singgah ({activeWaypoints.length} titik)</span>
+                <span className="text-xs font-bold text-ink">
+                  Titik Singgah ({activeWaypoints.length} titik)
+                </span>
                 <button
                   type="button"
                   onClick={handleAddStop}
@@ -461,13 +600,20 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
                   const isLast = idx === activeWaypoints.length - 1;
 
                   return (
-                    <div key={idx} className="p-3 bg-white rounded-xl border border-slate-200/90 shadow-xs space-y-2">
+                    <div
+                      key={idx}
+                      className="p-3 bg-white rounded-xl border border-slate-200/90 shadow-xs space-y-2"
+                    >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <span
                             className={cn(
                               "size-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0",
-                              isFirst ? "bg-emerald-600" : isLast ? "bg-indigo-600" : "bg-slate-700",
+                              isFirst
+                                ? "bg-emerald-600"
+                                : isLast
+                                  ? "bg-indigo-600"
+                                  : "bg-slate-700",
                             )}
                           >
                             {idx + 1}
@@ -475,7 +621,9 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
                           <input
                             type="text"
                             value={wp.name || ""}
-                            onChange={(e) => handleUpdateStop(idx, { name: e.target.value })}
+                            onChange={(e) =>
+                              handleUpdateStop(idx, { name: e.target.value })
+                            }
                             className="text-xs font-semibold text-ink bg-transparent border-b border-transparent hover:border-slate-300 focus:border-primary focus:outline-none px-1"
                           />
                         </div>
@@ -533,7 +681,9 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
             {/* Roundtrip & Share options */}
             <div className="p-3 bg-slate-50 rounded-xl space-y-2 border border-slate-100 text-xs">
               <label className="flex items-center justify-between cursor-pointer">
-                <span className="text-ink font-medium">Kembali ke Titik Awal (Roundtrip)</span>
+                <span className="text-ink font-medium">
+                  Kembali ke Titik Awal (Roundtrip)
+                </span>
                 <input
                   type="checkbox"
                   checked={isRoundtrip}
@@ -568,11 +718,14 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
                     Total Jarak: <b>{currentCalculation.distanceKm} km</b>
                   </span>
                   <span>
-                    Est. Waktu Jalan: <b>{currentCalculation.durationMinutes} menit</b>
+                    Est. Waktu Jalan:{" "}
+                    <b>{currentCalculation.durationMinutes} menit</b>
                   </span>
                 </div>
                 {currentCalculation.summary && (
-                  <p className="text-[10px] text-emerald-700 pt-0.5">{currentCalculation.summary}</p>
+                  <p className="text-[10px] text-emerald-700 pt-0.5">
+                    {currentCalculation.summary}
+                  </p>
                 )}
               </div>
             )}
@@ -606,7 +759,10 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
               >
                 {isSaving ? (
                   <>
-                    <RefreshCw size={14} className="animate-spin text-primary" />
+                    <RefreshCw
+                      size={14}
+                      className="animate-spin text-primary"
+                    />
                     Menyimpan ke Database...
                   </>
                 ) : (
@@ -629,39 +785,51 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
                 Rekomendasi Titik Mangkal Berpotensi
               </h4>
               <p className="text-[11px] text-amber-800 leading-relaxed">
-                Dihitung dari kepadatan fasilitas umum pejalan kaki tinggi (kampus, sekolah, pasar, sentral transit) di
-                sekitar rute Anda.
+                Dihitung dari kepadatan fasilitas umum pejalan kaki tinggi
+                (kampus, sekolah, pasar, sentral transit) di sekitar rute Anda.
               </p>
             </div>
 
             {loadingRecs ? (
               <div className="py-12 text-center space-y-2">
                 <RefreshCw className="size-5 text-primary animate-spin mx-auto" />
-                <p className="text-xs text-muted">Menganalisis titik ramai di sekitar...</p>
+                <p className="text-xs text-muted">
+                  Menganalisis titik ramai di sekitar...
+                </p>
               </div>
             ) : recommendations.length === 0 ? (
               <div className="text-center py-12 text-muted text-xs">
-                Tidak ada rekomendasi di radius ini. Coba geser pusat peta ke kawasan kota.
+                Tidak ada rekomendasi di radius ini. Coba geser pusat peta ke
+                kawasan kota.
               </div>
             ) : (
               recommendations.map((rec) => (
-                <div key={rec.id} className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-xs space-y-2">
+                <div
+                  key={rec.id}
+                  className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-xs space-y-2"
+                >
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <span className="text-[10px] uppercase font-bold text-primary bg-primary-soft px-1.5 py-0.5 rounded">
                         {rec.category}
                       </span>
-                      <h4 className="font-bold text-ink text-xs mt-1">{rec.name}</h4>
+                      <h4 className="font-bold text-ink text-xs mt-1">
+                        {rec.name}
+                      </h4>
                     </div>
                     <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full shrink-0">
                       Skor Ramai: {rec.footfall_score}
                     </span>
                   </div>
 
-                  <p className="text-[11px] text-muted leading-relaxed">{rec.reason}</p>
+                  <p className="text-[11px] text-muted leading-relaxed">
+                    {rec.reason}
+                  </p>
 
                   <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-                    <span className="text-[10.5px] text-muted">~{rec.distance_meters}m dari titik acuan</span>
+                    <span className="text-[10.5px] text-muted">
+                      ~{rec.distance_meters}m dari titik acuan
+                    </span>
                     <button
                       type="button"
                       onClick={() => handleAddRecommendationToRoute(rec)}
@@ -682,13 +850,19 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
             {loadingSaved ? (
               <div className="py-12 text-center space-y-2">
                 <RefreshCw className="size-5 text-primary animate-spin mx-auto" />
-                <p className="text-xs text-muted">Memuat rute tersimpan dari database...</p>
+                <p className="text-xs text-muted">
+                  Memuat rute tersimpan dari database...
+                </p>
               </div>
             ) : savedRoutes.length === 0 ? (
               <div className="text-center py-12 text-muted text-xs space-y-1">
                 <Route size={24} className="mx-auto text-slate-300 mb-1" />
-                <p className="font-semibold text-ink">Belum ada rute tersimpan</p>
-                <p>Gunakan tab "Perencana" untuk membuat dan menyimpan rute Anda.</p>
+                <p className="font-semibold text-ink">
+                  Belum ada rute tersimpan
+                </p>
+                <p>
+                  Gunakan tab "Perencana" untuk membuat dan menyimpan rute Anda.
+                </p>
               </div>
             ) : (
               savedRoutes.map((route) => (
@@ -701,10 +875,13 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
                     <div>
                       <div className="flex items-center gap-1.5">
                         <span className="size-2 rounded-full bg-emerald-500" />
-                        <h4 className="font-bold text-ink text-xs">{route.name}</h4>
+                        <h4 className="font-bold text-ink text-xs">
+                          {route.name}
+                        </h4>
                       </div>
                       <p className="text-[11px] text-muted mt-0.5">
-                        {route.start_location_name || "Awal"} &rarr; {route.end_location_name || "Akhir"}
+                        {route.start_location_name || "Awal"} &rarr;{" "}
+                        {route.end_location_name || "Akhir"}
                       </p>
                     </div>
 
@@ -726,7 +903,45 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
 
                   <div className="flex items-center justify-between text-[11px] text-muted pt-1 border-t border-slate-100">
                     <span>{route.waypoints?.length || 0} titik singgah</span>
-                    <span>{route.distance ? `${route.distance} km` : "Estimasi jarak"}</span>
+                    <span>
+                      {route.distance
+                        ? `${route.distance} km`
+                        : "Estimasi jarak"}
+                    </span>
+                  </div>
+
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="pt-2 border-t border-slate-100"
+                  >
+                    <label className="block text-xs font-semibold text-muted mb-2">
+                      Status Rute:
+                    </label>
+
+                    <div className="flex items-center gap-2">
+                      {(["active", "planned"] as const).map((status) => {
+                        const isCurrent = route.status === status;
+
+                        return (
+                          <button
+                            key={status}
+                            type="button"
+                            onClick={() =>
+                              handleUpdateRouteStatus(route.id, status)
+                            }
+                            className={`clay-press flex-1 rounded-[8px] px-3 py-2 text-xs font-medium transition-all cursor-pointer ${
+                              isCurrent
+                                ? "clay-primary text-white shadow-xs"
+                                : "bg-white text-muted hover:text-ink border border-slate-200"
+                            }`}
+                          >
+                            {status === "active"
+                              ? "Active (Aktif)"
+                              : "Inactive (Tidak Aktif)"}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               ))
