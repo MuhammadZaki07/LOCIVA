@@ -44,7 +44,11 @@ import {
 } from "@/components/maps/ReportMarker";
 import { CivicReportsMapPanel } from "@/components/maps/CivicReportsMapPanel";
 import { CreateReportModal } from "@/components/maps/CreateReportModal";
-import { BpsLayer, BpsLegend, BpsLayerStatus } from "@/components/maps/BpsLayer";
+import {
+  BpsLayer,
+  BpsLegend,
+  BpsLayerStatus,
+} from "@/components/maps/BpsLayer";
 import type { BpsLegendEntry } from "@/components/maps/BpsLayer";
 
 import type { BusinessType } from "@/lib/umkmCatalog";
@@ -170,7 +174,7 @@ const MapEventHandler: React.FC<{
       return () => {
         try {
           container.style.cursor = "";
-        } catch { }
+        } catch {}
       };
     } catch (err) {
       console.warn("[MapEventHandler] cursor effect: map not ready", err);
@@ -331,12 +335,20 @@ export function MapPage() {
   const [reportsLoading, setReportsLoading] = useState(false);
   const [showReportsLayer, setShowReportsLayer] = useState(true);
   const [showBpsLayer, setShowBpsLayer] = useState(false);
-  const [bpsLayerLevel, setBpsLayerLevel] = useState<"regency" | "district">("regency");
-  const [bpsRegionName, setBpsRegionName] = useState<string>("Provinsi Jawa Timur");
+  const [bpsLayerLevel, setBpsLayerLevel] = useState<"regency" | "district">(
+    "regency",
+  );
+  const [bpsRegionName, setBpsRegionName] = useState<string>(
+    "Provinsi Jawa Timur",
+  );
   const [bpsLoading, setBpsLoading] = useState(false);
   const [bpsError, setBpsError] = useState<string | null>(null);
-  const [bpsLegendEntries, setBpsLegendEntries] = useState<BpsLegendEntry[]>([]);
-  const [bpsLegendYear, setBpsLegendYear] = useState<number>(new Date().getFullYear());
+  const [bpsLegendEntries, setBpsLegendEntries] = useState<BpsLegendEntry[]>(
+    [],
+  );
+  const [bpsLegendYear, setBpsLegendYear] = useState<number>(
+    new Date().getFullYear(),
+  );
   const [createReportModalOpen, setCreateReportModalOpen] = useState(false);
   const [selectedReportCoords, setSelectedReportCoords] = useState<{
     lat: number;
@@ -414,11 +426,8 @@ export function MapPage() {
     C: null,
   });
 
-  const {
-    analyze,
-    isCandidateAnalyzing,
-    getCandidateError,
-  } = useLocationAnalysis();
+  const { analyze, isCandidateAnalyzing, getCandidateError } =
+    useLocationAnalysis();
 
   const activeCandidate = candidates[activeCandidateId];
 
@@ -442,7 +451,12 @@ export function MapPage() {
   const lastAnalyzedParamsRef = useRef<
     Record<
       CandidateId,
-      { lat: number; lng: number; radius: number; businessTypeId: string } | null
+      {
+        lat: number;
+        lng: number;
+        radius: number;
+        businessTypeId: string;
+      } | null
     >
   >({
     A: null,
@@ -663,7 +677,7 @@ export function MapPage() {
       controller.signal,
     )
       .then((places) => setViewportPlaces(places))
-      .catch(() => { });
+      .catch(() => {});
     return () => controller.abort();
   }, [fetchLocivaData, center]);
 
@@ -703,11 +717,11 @@ export function MapPage() {
           location_name: `Candidate Point ${candidate.id}`,
           scores: analysis
             ? {
-              opportunity_score: analysis.opportunityScore,
-              competition_score: analysis.competitionScore,
-              accessibility_score: analysis.accessibilityScore,
-              data_confidence: analysis.dataConfidence,
-            }
+                opportunity_score: analysis.opportunityScore,
+                competition_score: analysis.competitionScore,
+                accessibility_score: analysis.accessibilityScore,
+                data_confidence: analysis.dataConfidence,
+              }
             : undefined,
         });
         setIsPersistedInDb(true);
@@ -761,15 +775,27 @@ export function MapPage() {
 
       const thisSeq = ++candidateReqSeqRef.current[id];
 
-      analyze(id, cand.lat, cand.lng, cand.radius, selectedBusiness).then((res) => {
-        // Strict guard: ensure response matches this candidate and is the latest sequence
-        if (res && res.candidateId === id && thisSeq === candidateReqSeqRef.current[id]) {
-          setAnalysisResults((prev) => ({ ...prev, [id]: res }));
-          fetchLocivaData(cand.lat, cand.lng, cand.radius * 1.5);
-        }
-      });
+      analyze(id, cand.lat, cand.lng, cand.radius, selectedBusiness).then(
+        (res) => {
+          // Strict guard: ensure response matches this candidate and is the latest sequence
+          if (
+            res &&
+            res.candidateId === id &&
+            thisSeq === candidateReqSeqRef.current[id]
+          ) {
+            setAnalysisResults((prev) => ({ ...prev, [id]: res }));
+            fetchLocivaData(cand.lat, cand.lng, cand.radius * 1.5);
+          }
+        },
+      );
     });
-  }, [debouncedCandidates, selectedBusiness, analyze, fetchLocivaData, analysisResults]);
+  }, [
+    debouncedCandidates,
+    selectedBusiness,
+    analyze,
+    fetchLocivaData,
+    analysisResults,
+  ]);
 
   // ── Event Handlers ─────────────────────────────────────────────────────────
   const handleSearchSelect = (lat: number, lng: number, name: string) => {
@@ -1048,8 +1074,13 @@ export function MapPage() {
                 showMapsData={showMapsData}
                 onToggleMapsData={setShowMapsData}
                 mapsCount={filteredExternalPlaces.length}
-                mapsLoading={viewportPlacesLoading || isCandidateAnalyzing(activeCandidateId)}
-                mapsError={viewportPlacesError || getCandidateError(activeCandidateId)}
+                mapsLoading={
+                  viewportPlacesLoading ||
+                  isCandidateAnalyzing(activeCandidateId)
+                }
+                mapsError={
+                  viewportPlacesError || getCandidateError(activeCandidateId)
+                }
                 onRetryMaps={() => {
                   if (activeCandidate && selectedBusiness) {
                     analyze(
@@ -1503,14 +1534,12 @@ export function MapPage() {
               );
             })}
 
-
             <RouteLayer
               activeWaypoints={activeWaypoints}
               currentCalculation={routeCalculation}
               publicRoutes={showPublicRoutes ? publicRoutes : []}
               showPublicRoutes={showPublicRoutes}
             />
-
 
             <MapMarkerClusterGroup
               spiderfyOnMaxZoom={true}
@@ -1524,11 +1553,11 @@ export function MapPage() {
                     distanceFromCandidate={
                       activeCandidate
                         ? distanceMeters(
-                          activeCandidate.lat,
-                          activeCandidate.lng,
-                          place.lat,
-                          place.lng,
-                        )
+                            activeCandidate.lat,
+                            activeCandidate.lng,
+                            place.lat,
+                            place.lng,
+                          )
                         : undefined
                     }
                     isDuplicateWithInternal={duplicateExternalIds.has(place.id)}
@@ -1543,11 +1572,11 @@ export function MapPage() {
                     distanceFromCandidate={
                       activeCandidate
                         ? distanceMeters(
-                          activeCandidate.lat,
-                          activeCandidate.lng,
-                          biz.latitude,
-                          biz.longitude,
-                        )
+                            activeCandidate.lat,
+                            activeCandidate.lng,
+                            biz.latitude,
+                            biz.longitude,
+                          )
                         : undefined
                     }
                     isDuplicateWithExternal={duplicateInternalIds.has(biz.id)}
