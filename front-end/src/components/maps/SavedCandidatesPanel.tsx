@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import api, { classifyApiError } from "@/context/apiClient";
 import { useToast } from "@/components/ui/Toast";
+import { useDebounce } from "@/hooks/useDebounce";
 import {
   Bookmark,
   Trash2,
@@ -12,6 +13,7 @@ import {
   X,
   Target,
   HelpCircle,
+  Search,
 } from "lucide-react";
 
 export interface SavedCandidateItem {
@@ -52,6 +54,54 @@ interface SavedCandidatesPanelProps {
   onSelectCandidate: (candidate: SavedCandidateItem) => void;
 }
 
+interface PaginationMeta {
+  current_page?: number;
+  last_page?: number;
+  total?: number;
+}
+
+interface SessionPage {
+  sessions: SavedSimulationSession[];
+  meta: PaginationMeta | null;
+}
+
+/**
+ * Mendukung beberapa kemungkinan bentuk response ApiResponse
+ * dan Laravel ResourceCollection dengan pagination.
+ */
+const parseSessionPage = (response: any): SessionPage => {
+  const candidates = [
+    {
+      data: response?.data?.data,
+      meta: response?.data?.meta,
+    },
+    {
+      data: response?.data?.data?.data,
+      meta: response?.data?.data?.meta,
+    },
+    {
+      data: response?.data?.data?.data?.data,
+      meta: response?.data?.data?.data?.meta,
+    },
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate.data)) {
+      return {
+        sessions: candidate.data,
+        meta: candidate.meta ?? null,
+      };
+    }
+  }
+
+  return {
+    sessions: [],
+    meta: null,
+  };
+};
+
+const ITEMS_PER_PAGE = 10;
+
 export const SavedCandidatesPanel: React.FC<SavedCandidatesPanelProps> = ({
   isOpen,
   onClose,
@@ -59,59 +109,225 @@ export const SavedCandidatesPanel: React.FC<SavedCandidatesPanelProps> = ({
 }) => {
   const [sessions, setSessions] = useState<SavedSimulationSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const loadingMoreRef = useRef(false);
+  const requestIdRef = useRef(0);
+
   const { toast } = useToast();
 
+  /**
+   * Mengambil halaman pertama.
+   * Dipanggil ketika panel dibuka atau pencarian berubah.
+   */
   const fetchSavedSessions = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     const token = localStorage.getItem("token");
+
+    loadingMoreRef.current = false;
+    setIsLoadingMore(false);
+    setIsLoading(true);
+    setError(null);
+    setSessions([]);
+    setCurrentPage(1);
+    setHasMore(false);
+
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+
     if (!token) {
       setError("Please sign in to view your saved candidate locations.");
-      setSessions([]);
+      setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
-    setError(null);
     try {
-      const res = await api.get("/simulations/sessions");
-      if (res.data?.success && Array.isArray(res.data?.data)) {
-        setSessions(res.data.data);
-      } else {
-        setSessions([]);
+      const res = await api.get("/simulations/sessions", {
+        params: {
+          search: debouncedSearchQuery.trim(),
+          per_page: ITEMS_PER_PAGE,
+          page: 1,
+        },
+      });
+
+      // Abaikan response lama jika pencarian sudah berubah.
+      if (requestId !== requestIdRef.current) return;
+
+      if (res.data?.success === false) {
+        throw new Error(
+          res.data?.message || "Failed to load saved candidate sessions.",
+        );
       }
-    } catch (err: any) {
+
+      const { sessions: items, meta } = parseSessionPage(res);
+
+      setSessions(items);
+      setCurrentPage(Number(meta?.current_page ?? 1));
+
+      setHasMore(
+        meta?.last_page != null
+          ? Number(meta.current_page ?? 1) < Number(meta.last_page)
+          : items.length === ITEMS_PER_PAGE,
+      );
+    } catch (err: unknown) {
+      if (requestId !== requestIdRef.current) return;
+
       const classified = classifyApiError(err);
-      setError(classified.message || "Failed to load saved candidate sessions.");
+
+      setError(
+        classified.message || "Failed to load saved candidate sessions.",
+      );
     } finally {
-      setIsLoading(false);
+      if (requestId === requestIdRef.current) {
+        setIsLoading(false);
+      }
     }
-  }, []);
+  }, [debouncedSearchQuery]);
 
   useEffect(() => {
-    if (isOpen) {
-      fetchSavedSessions();
+    if (!isOpen) {
+      // Batalkan efek response dari request yang sudah tidak relevan.
+      requestIdRef.current += 1;
+      loadingMoreRef.current = false;
+      setIsLoading(false);
+      setIsLoadingMore(false);
+      return;
     }
+
+    void fetchSavedSessions();
+
+    return () => {
+      requestIdRef.current += 1;
+    };
   }, [isOpen, fetchSavedSessions]);
+
+  /**
+   * Memuat halaman berikutnya secara otomatis saat pengguna scroll.
+   */
+  const loadMoreSessions = useCallback(async () => {
+    if (!isOpen || isLoading || loadingMoreRef.current || !hasMore) {
+      return;
+    }
+
+    const requestId = requestIdRef.current;
+    const nextPage = currentPage + 1;
+
+    loadingMoreRef.current = true;
+    setIsLoadingMore(true);
+
+    try {
+      const res = await api.get("/simulations/sessions", {
+        params: {
+          search: debouncedSearchQuery.trim(),
+          per_page: ITEMS_PER_PAGE,
+          page: nextPage,
+        },
+      });
+
+      // Jangan gabungkan hasil dari pencarian sebelumnya.
+      if (requestId !== requestIdRef.current) return;
+
+      if (res.data?.success === false) {
+        throw new Error(
+          res.data?.message || "Failed to load more saved sessions.",
+        );
+      }
+
+      const { sessions: items, meta } = parseSessionPage(res);
+
+      // Hindari sesi duplikat jika response memiliki data berulang.
+      setSessions((previous) => {
+        const existingIds = new Set(previous.map((session) => session.id));
+
+        const newSessions = items.filter(
+          (session) => !existingIds.has(session.id),
+        );
+
+        return [...previous, ...newSessions];
+      });
+
+      const resolvedPage = Number(meta?.current_page ?? nextPage);
+
+      setCurrentPage(resolvedPage);
+
+      setHasMore(
+        meta?.last_page != null
+          ? resolvedPage < Number(meta.last_page)
+          : items.length === ITEMS_PER_PAGE,
+      );
+    } catch (err: unknown) {
+      if (requestId === requestIdRef.current) {
+        const classified = classifyApiError(err);
+
+        toast({
+          title: "Gagal Memuat Data",
+          description:
+            classified.message || "Could not load more saved sessions.",
+          variant: "error",
+        });
+      }
+    } finally {
+      if (requestId === requestIdRef.current) {
+        loadingMoreRef.current = false;
+        setIsLoadingMore(false);
+      }
+    }
+  }, [isOpen, isLoading, hasMore, currentPage, debouncedSearchQuery, toast]);
+
+  const handleCandidateScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const element = event.currentTarget;
+
+    const nearBottom =
+      element.scrollTop + element.clientHeight >= element.scrollHeight - 120;
+
+    if (nearBottom) {
+      void loadMoreSessions();
+    }
+  };
+
+  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(event.target.value);
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery("");
+  };
 
   const handleDeleteSession = async (sessionId: string) => {
     setDeletingId(sessionId);
+
     try {
       const res = await api.delete(`/simulations/sessions/${sessionId}`);
+
       if (res.data?.success) {
         toast({
           title: "Candidate Removed",
           description: "Saved simulation session was deleted successfully.",
           variant: "success",
         });
-        setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+
+        setSessions((previous) =>
+          previous.filter((session) => session.id !== sessionId),
+        );
+
         setConfirmDeleteId(null);
       }
     } catch (err: any) {
       toast({
         title: "Delete Failed",
-        description: err.response?.data?.message || "Could not delete simulation session.",
+        description:
+          err.response?.data?.message || "Could not delete simulation session.",
         variant: "error",
       });
     } finally {
@@ -119,28 +335,39 @@ export const SavedCandidatesPanel: React.FC<SavedCandidatesPanelProps> = ({
     }
   };
 
-  if (!isOpen) return null;
+  /**
+   * Flatten kandidat dari sesi yang sudah berhasil dimuat.
+   * Pencarian tidak lagi dilakukan di frontend.
+   */
+  const candidateList: {
+    session: SavedSimulationSession;
+    candidate: SavedCandidateItem;
+  }[] = [];
 
-  // Flatten candidates across sessions with session reference
-  const candidateList: { session: SavedSimulationSession; candidate: SavedCandidateItem }[] = [];
   sessions.forEach((session) => {
     (session.simulations || []).forEach((candidate) => {
       candidateList.push({ session, candidate });
     });
   });
 
+  if (!isOpen) return null;
+
   return (
-    <div className="flex flex-col h-full w-full bg-surface text-ink text-left">
+    <div className="flex h-full w-full flex-col bg-surface text-left text-ink">
       {/* Header */}
-      <div className="p-4 border-b border-slate-200/80 flex items-center justify-between shrink-0 bg-white/95 backdrop-blur-xs">
+      <div className="flex shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/95 p-4 backdrop-blur-xs">
         <div className="flex items-center gap-2.5">
-          <div className="size-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold">
+          <div className="flex size-8 items-center justify-center rounded-xl bg-primary/10 font-bold text-primary">
             <Bookmark size={18} />
           </div>
+
           <div>
-            <h3 className="font-display font-bold text-base text-ink">Saved Candidates</h3>
+            <h3 className="font-display text-base font-bold text-ink">
+              Saved Candidates
+            </h3>
+
             <p className="text-xs text-muted">
-              {candidateList.length} saved location {candidateList.length === 1 ? "point" : "points"}
+              {candidateList.length} kandidat dimuat
             </p>
           </div>
         </div>
@@ -148,46 +375,118 @@ export const SavedCandidatesPanel: React.FC<SavedCandidatesPanelProps> = ({
         <button
           type="button"
           onClick={onClose}
-          className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors cursor-pointer"
+          className="cursor-pointer rounded-xl p-1.5 text-slate-500 transition-colors hover:bg-slate-100"
           title="Close saved candidates"
+          aria-label="Close saved candidates"
         >
           <X size={18} />
         </button>
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-16 space-y-3">
-            <div className="size-8 border-3 border-primary border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs text-muted font-medium">Loading saved candidates...</p>
-          </div>
-        ) : error ? (
-          <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200/80 space-y-3">
-            <div className="flex items-start gap-2 text-amber-800 text-xs font-semibold">
-              <AlertCircle size={16} className="shrink-0 mt-0.5" />
-              <span>{error}</span>
-            </div>
+      {/* Backend Search */}
+      <div className="shrink-0 border-b border-slate-200/80 bg-white px-4 py-3">
+        <div className="relative">
+          <Search
+            size={15}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+          />
+
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={handleSearchChange}
+            placeholder="Cari kandidat, usaha, alamat..."
+            aria-label="Cari kandidat tersimpan"
+            className="clay-press w-full rounded-[10px] border border-slate-200 bg-slate-50 py-2 pl-9 pr-9 text-xs text-ink outline-none transition-all placeholder:text-muted focus:border-primary/50 focus:bg-white"
+          />
+
+          {searchQuery && (
             <button
               type="button"
-              onClick={fetchSavedSessions}
-              className="px-3 py-1.5 rounded-xl bg-amber-600 text-white font-bold text-xs flex items-center gap-1.5 hover:bg-amber-700 transition-colors cursor-pointer"
+              onClick={handleClearSearch}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer rounded-md p-1 text-muted transition-colors hover:bg-slate-200 hover:text-ink"
+              title="Clear search"
+              aria-label="Clear search"
+            >
+              <X size={13} />
+            </button>
+          )}
+        </div>
+
+        <div className="mt-2 flex items-center justify-between text-[10px] text-muted">
+          <span>
+            {debouncedSearchQuery.trim()
+              ? "Hasil pencarian backend"
+              : "Kandidat tersimpan"}
+          </span>
+
+          <span>{candidateList.length} kandidat dimuat</span>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleCandidateScroll}
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4"
+      >
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center space-y-3 py-16">
+            <div className="size-8 animate-spin rounded-full border-3 border-primary border-t-transparent" />
+
+            <p className="text-xs font-medium text-muted">
+              Loading saved candidates...
+            </p>
+          </div>
+        ) : error ? (
+          <div className="space-y-3 rounded-2xl border border-amber-200/80 bg-amber-50/80 p-4">
+            <div className="flex items-start gap-2 text-xs font-semibold text-amber-800">
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <span>{error}</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void fetchSavedSessions()}
+              className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-amber-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-amber-700"
             >
               <RefreshCw size={13} />
               Retry Loading
             </button>
           </div>
         ) : candidateList.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 px-4 text-center space-y-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50">
-            <div className="size-12 rounded-2xl bg-indigo-50 text-primary flex items-center justify-center">
-              <Target size={24} />
+          <div className="flex flex-col items-center justify-center space-y-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 px-4 py-12 text-center">
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-indigo-50 text-primary">
+              {debouncedSearchQuery.trim() ? (
+                <Search size={24} />
+              ) : (
+                <Target size={24} />
+              )}
             </div>
+
             <div>
-              <h4 className="font-bold text-sm text-ink">No Saved Candidates Yet</h4>
-              <p className="text-xs text-muted mt-1 max-w-xs leading-relaxed">
-                Select a business type in the Catalog, place Candidate A, B, or C on the map, and click "Save Candidate" to pin it here.
+              <h4 className="text-sm font-bold text-ink">
+                {debouncedSearchQuery.trim()
+                  ? "Kandidat Tidak Ditemukan"
+                  : "No Saved Candidates Yet"}
+              </h4>
+
+              <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted">
+                {debouncedSearchQuery.trim()
+                  ? "Tidak ada kandidat yang cocok dengan pencarian. Coba kata kunci lain."
+                  : 'Select a business type in the Catalog, place Candidate A, B, or C on the map, and click "Save Candidate" to pin it here.'}
               </p>
             </div>
+
+            {debouncedSearchQuery.trim() && (
+              <button
+                type="button"
+                onClick={handleClearSearch}
+                className="clay-press cursor-pointer rounded-[10px] bg-primary px-3 py-2 text-xs font-semibold text-white"
+              >
+                Hapus Pencarian
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
@@ -206,36 +505,43 @@ export const SavedCandidatesPanel: React.FC<SavedCandidatesPanelProps> = ({
               return (
                 <div
                   key={`${session.id}-${candidate.id}`}
-                  className="p-3.5 rounded-2xl bg-white border border-slate-200/90 shadow-xs hover:border-primary/40 transition-all space-y-2.5 relative group"
+                  className="group relative space-y-2.5 rounded-2xl border border-slate-200/90 bg-white p-3.5 shadow-xs transition-all hover:border-primary/40"
                 >
                   {/* Card Header */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <span className="size-6 rounded-lg bg-primary/10 text-primary font-bold text-xs flex items-center justify-center">
+                      <span className="flex size-6 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary">
                         {candidate.candidate_id || "A"}
                       </span>
+
                       <div>
-                        <h4 className="font-bold text-xs text-ink leading-tight">
-                          {candidate.business_type?.name || session.name || "Candidate Location"}
+                        <h4 className="text-xs font-bold leading-tight text-ink">
+                          {candidate.business_type?.name ||
+                            session.name ||
+                            "Candidate Location"}
                         </h4>
-                        <div className="flex items-center gap-2 text-[10px] text-muted mt-0.5">
+
+                        <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted">
                           <span className="flex items-center gap-0.5">
                             <Calendar size={10} />
                             {dateStr}
                           </span>
+
                           <span>·</span>
+
                           <span>Radius {candidate.radius_m || 500}m</span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Delete confirmation trigger */}
+                    {/* Delete Confirmation */}
                     {!isConfirming ? (
                       <button
                         type="button"
                         onClick={() => setConfirmDeleteId(session.id)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                        title="Delete candidate"
+                        className="cursor-pointer rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                        title="Delete candidate session"
+                        aria-label="Delete candidate session"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -244,15 +550,17 @@ export const SavedCandidatesPanel: React.FC<SavedCandidatesPanelProps> = ({
                         <button
                           type="button"
                           disabled={isDeleting}
-                          onClick={() => handleDeleteSession(session.id)}
-                          className="px-2 py-1 rounded-lg bg-red-600 text-white font-bold text-[10px] hover:bg-red-700 transition-colors cursor-pointer"
+                          onClick={() => void handleDeleteSession(session.id)}
+                          className="cursor-pointer rounded-lg bg-red-600 px-2 py-1 text-[10px] font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {isDeleting ? "Deleting..." : "Confirm"}
                         </button>
+
                         <button
                           type="button"
+                          disabled={isDeleting}
                           onClick={() => setConfirmDeleteId(null)}
-                          className="px-1.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] hover:bg-slate-200 transition-colors cursor-pointer"
+                          className="cursor-pointer rounded-lg bg-slate-100 px-1.5 py-1 text-[10px] text-slate-600 transition-colors hover:bg-slate-200 disabled:opacity-50"
                         >
                           Cancel
                         </button>
@@ -262,45 +570,63 @@ export const SavedCandidatesPanel: React.FC<SavedCandidatesPanelProps> = ({
 
                   {/* Coordinates & Location */}
                   <div className="flex items-start gap-1 text-[11px] text-slate-600">
-                    <MapPin size={12} className="shrink-0 mt-0.5 text-slate-400" />
-                    <span className="truncate">
+                    <MapPin
+                      size={12}
+                      className="mt-0.5 shrink-0 text-slate-400"
+                    />
+
+                    <span className="break-words">
                       {candidate.location?.address ||
                         candidate.location?.name ||
-                        (Number.isFinite(Number(candidate.latitude)) && Number.isFinite(Number(candidate.longitude))
+                        (Number.isFinite(Number(candidate.latitude)) &&
+                        Number.isFinite(Number(candidate.longitude))
                           ? `${Number(candidate.latitude).toFixed(5)}, ${Number(candidate.longitude).toFixed(5)}`
                           : "Koordinat tersimpan")}
                     </span>
                   </div>
 
-                  {/* Feasibility Scores Badge */}
+                  {/* Feasibility Scores */}
                   {candidate.score && (
-                    <div className="grid grid-cols-3 gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-100 text-center">
+                    <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-slate-100 bg-slate-50 p-2 text-center">
                       <div>
-                        <div className="text-[10px] text-muted">Opportunity</div>
-                        <div className="font-bold text-xs text-primary">
-                          {Math.round(candidate.score.total_score || candidate.score.target_market_score || 0)}
+                        <div className="text-[10px] text-muted">
+                          Opportunity
+                        </div>
+
+                        <div className="text-xs font-bold text-primary">
+                          {Math.round(
+                            candidate.score.total_score ||
+                              candidate.score.target_market_score ||
+                              0,
+                          )}
                         </div>
                       </div>
+
                       <div>
-                        <div className="text-[10px] text-muted">Competition</div>
-                        <div className="font-bold text-xs text-amber-600">
+                        <div className="text-[10px] text-muted">
+                          Competition
+                        </div>
+
+                        <div className="text-xs font-bold text-amber-600">
                           {Math.round(candidate.score.competition_score || 0)}
                         </div>
                       </div>
+
                       <div>
                         <div className="text-[10px] text-muted">Access</div>
-                        <div className="font-bold text-xs text-emerald-600">
+
+                        <div className="text-xs font-bold text-emerald-600">
                           {Math.round(candidate.score.accessibility_score || 0)}
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* Action buttons */}
+                  {/* Action Button */}
                   <button
                     type="button"
                     onClick={() => onSelectCandidate(candidate)}
-                    className="w-full py-1.5 rounded-xl bg-slate-100 hover:bg-primary hover:text-white text-ink text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl bg-slate-100 py-1.5 text-xs font-bold text-ink transition-all hover:bg-primary hover:text-white"
                   >
                     <ExternalLink size={13} />
                     View & Analyze on Map
@@ -308,14 +634,31 @@ export const SavedCandidatesPanel: React.FC<SavedCandidatesPanelProps> = ({
                 </div>
               );
             })}
+
+            {/* Infinite Scroll Loading Indicator */}
+            {isLoadingMore && (
+              <div className="flex items-center justify-center gap-2 py-4 text-[11px] text-muted">
+                <div className="size-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                <span>Memuat kandidat berikutnya...</span>
+              </div>
+            )}
+
+            {!hasMore && (
+              <p className="py-3 text-center text-[10px] text-muted">
+                Semua sesi yang cocok telah dimuat.
+              </p>
+            )}
           </div>
         )}
       </div>
 
       {/* Footer Info */}
-      <div className="p-3 border-t border-slate-100 bg-slate-50/60 text-[10.5px] text-muted flex items-start gap-1.5 shrink-0">
-        <HelpCircle size={13} className="shrink-0 mt-0.5 text-primary" />
-        <span>Saved candidate points are stored securely in your LOCIVA account.</span>
+      <div className="flex shrink-0 items-start gap-1.5 border-t border-slate-100 bg-slate-50/60 p-3 text-[10.5px] text-muted">
+        <HelpCircle size={13} className="mt-0.5 shrink-0 text-primary" />
+
+        <span>
+          Saved candidate points are stored securely in your LOCIVA account.
+        </span>
       </div>
     </div>
   );

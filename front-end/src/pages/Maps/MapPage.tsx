@@ -129,7 +129,13 @@ const MapEventHandler: React.FC<{
         const c = m.getCenter();
         const b = m.getBounds();
         const ne = b.getNorthEast();
-        onViewportChange(c.lat, c.lng, distanceMeters(c.lat, c.lng, ne.lat, ne.lng), m.getZoom(), b);
+        onViewportChange(
+          c.lat,
+          c.lng,
+          distanceMeters(c.lat, c.lng, ne.lat, ne.lng),
+          m.getZoom(),
+          b,
+        );
       } catch (err) {
         console.warn("[MapEventHandler] map not ready yet", err);
       }
@@ -156,9 +162,17 @@ const MapEventHandler: React.FC<{
       const container = map.getContainer();
       if (!container) return;
       container.style.cursor =
-        mode === "candidate" || mode === "report" ? "crosshair" : mode === "waypoint" ? "cell" : "";
+        mode === "candidate" || mode === "report"
+          ? "crosshair"
+          : mode === "waypoint"
+            ? "cell"
+            : "";
       return () => {
-        try { container.style.cursor = ""; } catch { /* noop */ }
+        try {
+          container.style.cursor = "";
+        } catch {
+          /* noop */
+        }
       };
     } catch (err) {
       console.warn("[MapEventHandler] cursor effect: map not ready", err);
@@ -166,13 +180,18 @@ const MapEventHandler: React.FC<{
   }, [map, mode]);
 
   return null;
-  };
+};
 
 // ─── Category filter helper (shared by Internal and External POI layers) ──────
-const filterPlacesByCategory = (places: Place[], cat: FilterCategory): Place[] => {
+const filterPlacesByCategory = (
+  places: Place[],
+  cat: FilterCategory,
+): Place[] => {
   if (cat === "all") return places;
   if (cat === "school_campus") {
-    return places.filter((p) => p.category === "school" || p.category === "campus");
+    return places.filter(
+      (p) => p.category === "school" || p.category === "campus",
+    );
   }
   return places.filter((p) => p.category === cat);
 };
@@ -290,6 +309,8 @@ export function MapPage() {
     "default",
   );
 
+  const [isSelectingWaypoint, setIsSelectingWaypoint] = useState(false);
+
   // ── User GPS Location ─────────────────────────────────────────────────────
   const [userLocation, setUserLocation] = useState<{
     lat: number;
@@ -349,6 +370,10 @@ export function MapPage() {
   const [bpsLegendYear, setBpsLegendYear] = useState<number>(
     new Date().getFullYear(),
   );
+  const [trackingLocation, setTrackingLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
   const [createReportModalOpen, setCreateReportModalOpen] = useState(false);
   const [selectedReportCoords, setSelectedReportCoords] = useState<{
     lat: number;
@@ -410,6 +435,17 @@ export function MapPage() {
     radius: number;
   }
 
+  // Fokuskan peta pada lokasi pengguna saat tracking diperbarui.
+  useEffect(() => {
+    if (!trackingLocation || !mapRef.current) return;
+
+    mapRef.current.setView(
+      [trackingLocation.lat, trackingLocation.lng],
+      Math.max(mapRef.current.getZoom(), 16),
+      { animate: true },
+    );
+  }, [trackingLocation]);
+
   const [candidates, setCandidates] = useState<
     Record<CandidateId, CandidateData | null>
   >({
@@ -428,6 +464,7 @@ export function MapPage() {
 
   const { analyze, isAnalyzing, error: analysisError } = useLocationAnalysis();
 
+  const [isSelectingStartPoint, setIsSelectingStartPoint] = useState(false);
   const activeCandidate = candidates[activeCandidateId];
   const debouncedLat = useDebounce(activeCandidate?.lat, 600);
   const debouncedLng = useDebounce(activeCandidate?.lng, 600);
@@ -438,6 +475,8 @@ export function MapPage() {
   const [routeCalculation, setRouteCalculation] =
     useState<RouteCalculationResult | null>(null);
 
+  const [isLoggedIn] = useState(() => Boolean(localStorage.getItem("token")));
+
   // ── Click mode: either placing candidate, waypoint, or report location ──────
   const clickMode = useMemo(():
     | "candidate"
@@ -445,10 +484,26 @@ export function MapPage() {
     | "report"
     | "none" => {
     if (pickingReportLocation) return "report";
-    if (isRoutePanelOpen && activeTool === "routes") return "waypoint";
+
+    if (
+      isLoggedIn &&
+      isRoutePanelOpen &&
+      (isSelectingStartPoint || isSelectingWaypoint)
+    ) {
+      return "waypoint";
+    }
+
     if (selectedBusiness) return "candidate";
+
     return "none";
-  }, [pickingReportLocation, isRoutePanelOpen, activeTool, selectedBusiness]);
+  }, [
+    pickingReportLocation,
+    isLoggedIn,
+    isRoutePanelOpen,
+    isSelectingStartPoint,
+    isSelectingWaypoint,
+    selectedBusiness,
+  ]);
 
   // ── Privacy-Aware Opt-in User GPS Location (Section 6) ───────────────────
   // Location sharing is strictly opt-in and disabled by default. No silent tracking.
@@ -654,7 +709,9 @@ export function MapPage() {
         } catch (err: any) {
           if (err?.name === "AbortError") return;
           console.warn("Failed to load viewport places:", err);
-          setViewportPlacesError("Unable to load places from the LOCIVA server");
+          setViewportPlacesError(
+            "Unable to load places from the LOCIVA server",
+          );
           // Keep what is already on the map and flag it as stale
           if (viewportCountRef.current > 0) setIsPlacesStale(true);
         } finally {
@@ -673,8 +730,10 @@ export function MapPage() {
     const controller = new AbortController();
     const halfSpan = 0.018;
     fetchLocalPlacesInBounds(
-      center[0] - halfSpan, center[1] - halfSpan,
-      center[0] + halfSpan, center[1] + halfSpan,
+      center[0] - halfSpan,
+      center[1] - halfSpan,
+      center[0] + halfSpan,
+      center[1] + halfSpan,
       controller.signal,
     )
       .then((places) => {
@@ -829,26 +888,54 @@ export function MapPage() {
         setIsPersistedInDb(false);
         if (activeTool !== "analysis") setActiveTool("analysis");
       } else if (clickMode === "waypoint") {
-        setActiveWaypoints((prev) => {
-          const newPoint: RouteWaypoint = {
-            lat,
-            lng,
-            name:
-              prev.length === 0 ? "Starting Point" : `Stop ${prev.length + 1}`,
-            stop_duration: prev.length === 0 ? 0 : 30,
-          };
-          return [...prev, newPoint];
-        });
-        setRouteCalculation(null);
-        toast({
-          title: "Waypoint Added",
-          description: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
-        });
+        if (isSelectingStartPoint) {
+          setActiveWaypoints([
+            {
+              lat,
+              lng,
+              name: "Titik Awal Rute",
+              stop_duration: 0,
+            },
+          ]);
+
+          setRouteCalculation(null);
+          setIsSelectingStartPoint(false);
+          setIsSelectingWaypoint(false);
+
+          toast({
+            title: "Titik Awal Dipilih",
+            description: `Koordinat ${lat.toFixed(4)}, ${lng.toFixed(4)} berhasil ditetapkan sebagai titik awal.`,
+            variant: "success",
+          });
+
+          return;
+        }
+
+        if (isSelectingWaypoint) {
+          setActiveWaypoints((prev) => [
+            ...prev,
+            {
+              lat,
+              lng,
+              name: `Pemberhentian ${prev.length}`,
+              stop_duration: 30,
+            },
+          ]);
+
+          setRouteCalculation(null);
+          setIsSelectingWaypoint(false);
+
+          toast({
+            title: "Titik Singgah Ditambahkan",
+            description: `Koordinat ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+          });
+        }
       }
     },
     [
       pickingReportLocation,
       clickMode,
+      isSelectingStartPoint,
       selectedBusiness,
       activeCandidateId,
       candidates,
@@ -1283,6 +1370,16 @@ export function MapPage() {
                 currentCalculation={routeCalculation}
                 mapCenter={center}
                 userLocation={userLocation}
+                // onSelectStartPoint={() => setIsSelectingStartPoint(true)}
+                onTrackingLocationChange={setTrackingLocation}
+                onSelectStartPoint={() => {
+                  setIsSelectingWaypoint(false);
+                  setIsSelectingStartPoint(true);
+                }}
+                onSelectWaypoint={() => {
+                  setIsSelectingStartPoint(false);
+                  setIsSelectingWaypoint(true);
+                }}
               />
             )}
           </div>
@@ -1545,11 +1642,11 @@ export function MapPage() {
                   distanceFromCandidate={
                     activeCandidate
                       ? distanceMeters(
-                        activeCandidate.lat,
-                        activeCandidate.lng,
-                        place.lat,
-                        place.lng,
-                      )
+                          activeCandidate.lat,
+                          activeCandidate.lng,
+                          place.lat,
+                          place.lng,
+                        )
                       : undefined
                   }
                   isDuplicateWithInternal={duplicateExternalIds.has(place.id)}
@@ -1564,11 +1661,11 @@ export function MapPage() {
                   distanceFromCandidate={
                     activeCandidate
                       ? distanceMeters(
-                        activeCandidate.lat,
-                        activeCandidate.lng,
-                        place.lat,
-                        place.lng,
-                      )
+                          activeCandidate.lat,
+                          activeCandidate.lng,
+                          place.lat,
+                          place.lng,
+                        )
                       : undefined
                   }
                   isDuplicateWithInternal={duplicateExternalIds.has(place.id)}
@@ -1614,12 +1711,18 @@ export function MapPage() {
           )}
 
           {/* Prompt: Waypoint placement mode */}
-          {clickMode === "waypoint" && (
-            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[400] bg-emerald-800/95 text-white px-5 py-2.5 rounded-full font-medium text-xs shadow-lg pointer-events-none flex items-center gap-2 border border-white/20">
-              <PenLine size={14} />
-              <span>Click on the map to add route stop waypoints</span>
-            </div>
-          )}
+          {isLoggedIn &&
+            clickMode === "waypoint" &&
+            (isSelectingStartPoint || isSelectingWaypoint) && (
+              <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[400] bg-emerald-800/95 text-white px-5 py-2.5 rounded-full font-medium text-xs shadow-lg pointer-events-none flex items-center gap-2 border border-white/20">
+                <PenLine size={14} />
+                <span>
+                  {isSelectingStartPoint
+                    ? "Klik peta untuk menentukan titik awal"
+                    : "Klik peta untuk menambahkan titik singgah"}
+                </span>
+              </div>
+            )}
 
           {/* Active Business Badge (Top Center) */}
           {selectedBusiness && (

@@ -4,6 +4,7 @@ namespace App\Contracts;
 
 use App\Models\SimulationSession;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 interface SimulationServiceInterface
 {
@@ -15,7 +16,11 @@ interface SimulationServiceInterface
     /**
      * Retrieve user's saved simulation sessions with their candidate simulations.
      */
-    public function getUserSimulationSessions(string $userId): Collection;
+    public function getUserSimulationSessions(
+        string $userId,
+        string $search = '',
+        int $perPage = 10
+    ): LengthAwarePaginator;
 
     /**
      * Delete user's simulation session and cascaded records.

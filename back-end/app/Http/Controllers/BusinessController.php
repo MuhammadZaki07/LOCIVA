@@ -203,9 +203,18 @@ class BusinessController extends Controller
     /**
      * Retrieve user's saved simulation sessions.
      */
-    public function getSimulationSessions()
+    public function getSimulationSessions(Request $request)
     {
-        $sessions = $this->simulationService->getUserSimulationSessions(Auth::id());
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $sessions = $this->simulationService->getUserSimulationSessions(
+            (string) Auth::id(),
+            $validated['search'] ?? '',
+            (int) ($validated['per_page'] ?? 10)
+        );
 
         return ApiResponse::success(
             SimulationSessionResource::collection($sessions),

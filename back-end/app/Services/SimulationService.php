@@ -10,6 +10,8 @@ use App\Models\SimulationScore;
 use App\Models\SimulationSession;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 
 class SimulationService implements SimulationServiceInterface
@@ -111,17 +113,69 @@ class SimulationService implements SimulationServiceInterface
         });
     }
 
-    public function getUserSimulationSessions(string $userId): Collection
-    {
-        return SimulationSession::with([
+
+    public function getUserSimulationSessions(
+        string $userId,
+        string $search = '',
+        int $perPage = 10
+    ): LengthAwarePaginator {
+        $query = SimulationSession::with([
             'simulations.businessType:id,name,slug',
             'simulations.location:id,name,address',
             'simulations.score',
         ])
-        ->where('user_id', $userId)
-        ->latest()
-        ->get();
+            ->where('user_id', $userId);
+
+        $search = trim($search);
+
+        if ($search !== '') {
+            $keyword = '%' . $search . '%';
+
+            $query->where(function (Builder $sessionQuery) use ($keyword) {
+                $sessionQuery
+                    ->where('name', 'like', $keyword)
+                    ->orWhere('description', 'like', $keyword)
+                    ->orWhereHas(
+                        'simulations',
+                        function (Builder $simulationQuery) use ($keyword) {
+                            $simulationQuery
+                                ->where('target_market', 'like', $keyword)
+                                ->orWhereRaw(
+                                    'CAST(latitude AS CHAR) LIKE ?',
+                                    [$keyword]
+                                )
+                                ->orWhereRaw(
+                                    'CAST(longitude AS CHAR) LIKE ?',
+                                    [$keyword]
+                                )
+                                ->orWhereHas(
+                                    'businessType',
+                                    function (Builder $typeQuery) use ($keyword) {
+                                        $typeQuery
+                                            ->where('name', 'like', $keyword)
+                                            ->orWhere('slug', 'like', $keyword);
+                                    }
+                                )
+                                ->orWhereHas(
+                                    'location',
+                                    function (Builder $locationQuery) use ($keyword) {
+                                        $locationQuery
+                                            ->where('name', 'like', $keyword)
+                                            ->orWhere('address', 'like', $keyword);
+                                    }
+                                );
+                        }
+                    );
+            });
+        }
+
+        $perPage = min(max($perPage, 1), 100);
+
+        return $query
+            ->latest()
+            ->paginate($perPage);
     }
+
 
     public function deleteSimulationSession(string $userId, string $sessionId): bool
     {
