@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import type { AnalysisResult } from "@/lib/analysisEngine";
 import type { CandidateId } from "./CandidateTabs";
 import { cn } from "@/lib/utils";
-import { Scale, CheckCircle2, AlertCircle, X, HelpCircle, Trophy } from "lucide-react";
+import { Scale, CheckCircle2, AlertCircle, X, HelpCircle, Trophy, Clock, FileWarning } from "lucide-react";
 
 interface CompareCandidatesPanelProps {
   isOpen: boolean;
@@ -153,26 +153,43 @@ export const CompareCandidatesPanel: React.FC<CompareCandidatesPanelProps> = ({
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="py-2.5 px-3 text-left font-bold text-slate-500">Metric</th>
-                    {comparedList.map((id) => (
-                      <th
-                        key={id}
-                        className={cn("py-2.5 px-2 text-center font-bold border-l border-slate-200", colorMap[id].text)}
-                      >
-                        <div className="flex items-center justify-center gap-1">
-                          <span>Point {id}</span>
-                          {bestId === id && (
-                            <span className="size-2 rounded-full bg-emerald-500" title="Recommended" />
-                          )}
-                        </div>
-                      </th>
-                    ))}
+                    <th className="py-2.5 px-3 text-left font-bold text-slate-500">Metrik</th>
+                    {comparedList.map((id) => {
+                      const res = results[id];
+                      const isStale = res?.isStaleOsm || res?.sources?.find(s => s.id === 'openstreetmap')?.status === 'stale';
+                      const isTruncated = res?.isTruncated;
+                      return (
+                        <th
+                          key={id}
+                          className={cn("py-2.5 px-2 text-center font-bold border-l border-slate-200", colorMap[id].text)}
+                        >
+                          <div className="flex flex-col items-center gap-0.5">
+                            <div className="flex items-center justify-center gap-1">
+                              <span>Poin {id}</span>
+                              {bestId === id && (
+                                <span className="size-2 rounded-full bg-emerald-500" title="Direkomendasikan" />
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 font-normal">
+                              {isStale && (
+                                <span className="inline-flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">
+                                  <Clock size={8} /> Stale
+                                </span>
+                              )}
+                              {isTruncated && (
+                                <span className="text-[9px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 font-bold">250+</span>
+                              )}
+                            </div>
+                          </div>
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {/* Market Opportunity */}
                   <tr>
-                    <td className="py-2.5 px-3 font-medium text-slate-700">Market Opportunity</td>
+                    <td className="py-2.5 px-3 font-medium text-slate-700">Peluang Pasar</td>
                     {comparedList.map((id) => {
                       const res = results[id];
                       return (
@@ -185,7 +202,7 @@ export const CompareCandidatesPanel: React.FC<CompareCandidatesPanelProps> = ({
 
                   {/* Competition */}
                   <tr>
-                    <td className="py-2.5 px-3 font-medium text-slate-700">Competition Level</td>
+                    <td className="py-2.5 px-3 font-medium text-slate-700">Tingkat Persaingan</td>
                     {comparedList.map((id) => {
                       const res = results[id];
                       return (
@@ -198,7 +215,7 @@ export const CompareCandidatesPanel: React.FC<CompareCandidatesPanelProps> = ({
 
                   {/* Accessibility */}
                   <tr>
-                    <td className="py-2.5 px-3 font-medium text-slate-700">Accessibility</td>
+                    <td className="py-2.5 px-3 font-medium text-slate-700">Aksesibilitas</td>
                     {comparedList.map((id) => {
                       const res = results[id];
                       return (
@@ -211,7 +228,7 @@ export const CompareCandidatesPanel: React.FC<CompareCandidatesPanelProps> = ({
 
                   {/* Competitor Count */}
                   <tr>
-                    <td className="py-2.5 px-3 font-medium text-slate-700">Competitors in Radius</td>
+                    <td className="py-2.5 px-3 font-medium text-slate-700">Kompetitor dalam Radius</td>
                     {comparedList.map((id) => {
                       const res = results[id];
                       return (
@@ -222,15 +239,39 @@ export const CompareCandidatesPanel: React.FC<CompareCandidatesPanelProps> = ({
                     })}
                   </tr>
 
+                  {/* Report Count / Civic Risk */}
+                  <tr>
+                    <td className="py-2.5 px-3 font-medium text-slate-700">
+                      <span className="flex items-center gap-1">
+                        <FileWarning size={12} className="text-rose-500" />
+                        Laporan Risiko
+                      </span>
+                    </td>
+                    {comparedList.map((id) => {
+                      const res = results[id];
+                      const count = res?.reportCount;
+                      return (
+                        <td key={id} className="py-2.5 px-2 text-center border-l border-slate-100">
+                          <span className={cn(
+                            "text-sm font-bold tabular-nums",
+                            typeof count === 'number' && count > 0 ? "text-rose-600" : "text-emerald-600"
+                          )}>
+                            {typeof count === 'number' ? count : '—'}
+                          </span>
+                        </td>
+                      );
+                    })}
+                  </tr>
+
                   {/* Nearest Competitor */}
                   <tr>
-                    <td className="py-2.5 px-3 font-medium text-slate-700">Nearest Competitor</td>
+                    <td className="py-2.5 px-3 font-medium text-slate-700">Kompetitor Terdekat</td>
                     {comparedList.map((id) => {
                       const res = results[id];
                       const comp = res?.nearestCompetitor;
                       return (
                         <td key={id} className="py-2.5 px-2 text-center border-l border-slate-100 text-[10.5px] text-muted">
-                          {comp ? `${comp.distance}m` : "None"}
+                          {comp ? `${comp.distance}m` : "Tidak Ada"}
                         </td>
                       );
                     })}
@@ -238,12 +279,12 @@ export const CompareCandidatesPanel: React.FC<CompareCandidatesPanelProps> = ({
 
                   {/* Data Confidence */}
                   <tr>
-                    <td className="py-2.5 px-3 font-medium text-slate-700">Data Confidence</td>
+                    <td className="py-2.5 px-3 font-medium text-slate-700">Kepercayaan Data</td>
                     {comparedList.map((id) => {
                       const res = results[id];
                       return (
                         <td key={id} className="py-2.5 px-2 text-center border-l border-slate-100 font-semibold text-slate-600">
-                          {res?.dataConfidence ? `${res.dataConfidence}%` : "Low"}
+                          {res?.dataConfidence ? `${res.dataConfidence}%` : "Rendah"}
                         </td>
                       );
                     })}

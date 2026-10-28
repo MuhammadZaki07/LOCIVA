@@ -29,7 +29,7 @@ class BpsController extends Controller
     public function domains(Request $request)
     {
         $type = $request->query('type', 'kabbyprov');
-        $prov = $request->query('prov', '3200');
+        $prov = $request->query('prov', '3500');
 
         $result = $this->bpsService->getDomains($type, $prov);
 

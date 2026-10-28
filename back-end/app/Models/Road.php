@@ -10,4 +10,11 @@ class Road extends Model
 {
     use HasUuids, SoftDeletes;
     protected $guarded = ['id'];
+
+    protected function casts(): array
+    {
+        return [
+            'metadata' => 'array',
+        ];
+    }
 }

@@ -5,25 +5,42 @@ import { formatDistance } from "@/lib/Osm";
 import {
   Coffee, Utensils, GraduationCap, School, ShoppingBag, MapPin,
   Bus, Landmark, Pill, Wrench, Dumbbell, Trees, Building2,
-  Clock, Globe, ExternalLink, Compass, Briefcase,
+  Clock, Globe, ExternalLink, Compass, Briefcase, Scissors, Shirt,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface PoiMarkerProps {
   place: Place;
   distanceFromCandidate?: number;
   isDuplicateWithInternal?: boolean;
+  candidateAssociations?: string[];
+  activeCandidateId?: string;
 }
+
+const CANDIDATE_BADGE_COLORS: Record<string, string> = {
+  A: "bg-[#5b5bd6] text-white",
+  B: "bg-[#2f9e6b] text-white",
+  C: "bg-[#c4922a] text-white",
+  D: "bg-[#e11d48] text-white",
+  E: "bg-[#8b5cf6] text-white",
+};
 
 export const PoiMarker: React.FC<PoiMarkerProps> = ({
   place,
   distanceFromCandidate,
   isDuplicateWithInternal = false,
+  candidateAssociations,
+  activeCandidateId,
 }) => {
   const cat = (CATEGORY_BY_ID as Record<string, { id: string; label: string; color: string }>)[place.category] || {
     id: place.category,
     label: place.category,
     color: "#6b7280",
   };
+
+  const isAssociatedWithActive = Boolean(
+    activeCandidateId && candidateAssociations?.includes(activeCandidateId)
+  );
 
   const getIcon = () => {
     switch (place.category as string) {
@@ -36,6 +53,9 @@ export const PoiMarker: React.FC<PoiMarkerProps> = ({
       case "government":   return <Landmark size={12} className="text-white" />;
       case "health":       return <Pill size={12} className="text-white" />;
       case "service":      return <Wrench size={12} className="text-white" />;
+      case "barbershop":
+      case "hairdresser":  return <Scissors size={12} className="text-white" />;
+      case "laundry":      return <Shirt size={12} className="text-white" />;
       case "sport":        return <Dumbbell size={12} className="text-white" />;
       case "park":         return <Trees size={12} className="text-white" />;
       case "commercial":   return <Building2 size={12} className="text-white" />;
@@ -49,15 +69,18 @@ export const PoiMarker: React.FC<PoiMarkerProps> = ({
     <div
       style={{
         backgroundColor: cat.color,
-        width: "24px",
-        height: "24px",
+        width: isAssociatedWithActive ? "26px" : "24px",
+        height: isAssociatedWithActive ? "26px" : "24px",
         borderRadius: "50%",
-        border: "2px solid white",
-        boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
+        border: isAssociatedWithActive ? "2.5px solid #1e1b4b" : "2px solid white",
+        boxShadow: isAssociatedWithActive
+          ? "0 0 0 2px rgba(91,91,214,0.6), 0 3px 8px rgba(0,0,0,0.3)"
+          : "0 2px 6px rgba(0,0,0,0.25)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         cursor: "pointer",
+        transition: "all 0.2s ease",
       }}
       title={`${place.name} (${cat.label})`}
     >
@@ -98,21 +121,21 @@ export const PoiMarker: React.FC<PoiMarkerProps> = ({
 
           {/* Opening Hours */}
           {place.openingHours && (
-            <p className="text-xs text-slate-600 flex items-start gap-1">
-              <Clock size={11} className="shrink-0 mt-0.5 text-slate-400" />
-              <span className="line-clamp-2">{place.openingHours}</span>
+            <p className="text-xs text-slate-500 flex items-center gap-1">
+              <Clock size={11} className="shrink-0 text-slate-400" />
+              <span>{place.openingHours}</span>
             </p>
           )}
 
           {/* Website */}
           {place.website && (
-            <p className="text-xs text-indigo-600 flex items-center gap-1">
-              <Globe size={11} className="shrink-0 text-indigo-500" />
+            <p className="text-xs flex items-center gap-1 truncate">
+              <Globe size={11} className="shrink-0 text-slate-400" />
               <a
-                href={place.website.startsWith("http") ? place.website : `https://${place.website}`}
+                href={place.website}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:underline truncate max-w-[220px]"
+                className="text-indigo-600 hover:underline truncate"
               >
                 {place.website.replace(/^https?:\/\//, "")}
               </a>
@@ -124,10 +147,32 @@ export const PoiMarker: React.FC<PoiMarkerProps> = ({
             {place.lat.toFixed(5)}, {place.lng.toFixed(5)}
           </div>
 
+          {/* Candidate Associations (Multi-candidate POI relevance) */}
+          {candidateAssociations && candidateAssociations.length > 0 && (
+            <div className="pt-1.5 border-t border-slate-100 flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] text-slate-500 font-medium">Kandidat:</span>
+              {candidateAssociations.map((candId) => {
+                const badgeColor = CANDIDATE_BADGE_COLORS[candId] || "bg-slate-700 text-white";
+                return (
+                  <span
+                    key={candId}
+                    className={cn(
+                      "px-1.5 py-0.5 rounded text-[10px] font-bold",
+                      badgeColor,
+                      candId === activeCandidateId && "ring-2 ring-primary ring-offset-1"
+                    )}
+                  >
+                    Kandidat {candId}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
           {/* Distance from candidate */}
           {distanceFromCandidate !== undefined && (
             <p className="text-xs font-semibold text-indigo-600">
-              {formatDistance(distanceFromCandidate)} from candidate
+              {formatDistance(distanceFromCandidate)} from active candidate
             </p>
           )}
 

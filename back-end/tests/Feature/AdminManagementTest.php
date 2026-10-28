@@ -206,4 +206,95 @@ class AdminManagementTest extends TestCase
             $seededAdmin->assignRole('admin');
         }
     }
+
+    /**
+     * Stage B.5: Test Admin Business Catalog competitor categories lifecycle:
+     * - Create business type with competitor_categories
+     * - Retrieve business type and verify persisted categories
+     * - Update business type with modified competitor_categories
+     * - Re-retrieve and verify preserved configuration
+     * - Verify location analysis engine uses the dynamic categories
+     */
+    public function test_admin_can_manage_business_type_competitor_categories_end_to_end(): void
+    {
+        $admin = $this->createAdmin();
+        Sanctum::actingAs($admin);
+
+        $slug = 'qa-dental-admin-' . uniqid();
+
+        // 1. Create Business Type with custom competitor_categories
+        $createRes = $this->postJson('/api/business-types', [
+            'name'                  => 'Klinik Gigi Admin QA',
+            'slug'                  => $slug,
+            'category'              => 'Kesehatan',
+            'scale'                 => 'ruko',
+            'default_radius_m'      => 500,
+            'is_active'             => true,
+            'competitor_categories' => ['amenity=dentist', 'dentist'],
+        ]);
+
+        $createRes->assertStatus(201)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.competitor_categories', ['amenity=dentist', 'dentist']);
+
+        $id = $createRes->json('data.id');
+
+        // 2. Public retrieval returns competitor_categories
+        $getRes = $this->getJson("/api/business-types/{$id}");
+        $getRes->assertStatus(200)
+            ->assertJsonPath('data.competitor_categories', ['amenity=dentist', 'dentist']);
+
+        // 3. Update business type with additional category
+        $updateRes = $this->putJson("/api/business-types/{$id}", [
+            'name'                  => 'Klinik Gigi Admin QA',
+            'competitor_categories' => ['amenity=dentist', 'dentist', 'healthcare:clinic'],
+        ]);
+
+        $updateRes->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.competitor_categories', ['amenity=dentist', 'dentist', 'healthcare:clinic']);
+
+        // 4. Verify reopening/retrieving preserves updated configuration
+        $reopenRes = $this->getJson("/api/business-types/{$id}");
+        $reopenRes->assertStatus(200)
+            ->assertJsonPath('data.competitor_categories', ['amenity=dentist', 'dentist', 'healthcare:clinic']);
+
+        // 5. Verify location analysis uses the dynamically updated category
+        $analysisRes = $this->postJson('/api/analysis/location', [
+            'lat'             => -7.581000,
+            'lng'             => 112.981000,
+            'radius'          => 500,
+            'business_type'   => $slug,
+            'candidate_id'    => 'A',
+            'external_places' => [
+                [
+                    'id'           => 'osm-clinic-match',
+                    'name'         => 'Klinik Pratama Rawat',
+                    'category'     => 'service',
+                    'raw_category' => 'healthcare:clinic',
+                    'lat'          => -7.581100,
+                    'lng'          => 112.981100,
+                    'source'       => 'openstreetmap',
+                ],
+                [
+                    'id'           => 'osm-unrelated-bank',
+                    'name'         => 'Bank Mandiri',
+                    'category'     => 'service',
+                    'raw_category' => 'amenity:bank',
+                    'lat'          => -7.581200,
+                    'lng'          => 112.981200,
+                    'source'       => 'openstreetmap',
+                ],
+            ],
+        ]);
+
+        $analysisRes->assertStatus(200);
+        $this->assertEquals(1, $analysisRes->json('data.competitor_count'));
+        $this->assertEquals('Klinik Pratama Rawat', $analysisRes->json('data.nearest_competitor.name'));
+
+        // Cleanup
+        $deleteRes = $this->deleteJson("/api/business-types/{$id}");
+        $deleteRes->assertStatus(200);
+        $admin->forceDelete();
+    }
 }

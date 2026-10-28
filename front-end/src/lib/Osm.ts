@@ -18,7 +18,10 @@ export type CategoryId =
   | "transit"
   | "market"
   | "tourism"
-  | "office";
+  | "office"
+  | "barbershop"
+  | "hairdresser"
+  | "laundry";
 
 export interface CategoryMeta {
   id: CategoryId;
@@ -37,6 +40,9 @@ export const CATEGORIES: readonly CategoryMeta[] = [
   { id: "market", label: "Traditional Markets", color: "#b45309" },
   { id: "tourism", label: "Tourism & Attractions", color: "#06b6d4" },
   { id: "office", label: "Offices & Public Facilities", color: "#64748b" },
+  { id: "barbershop", label: "Barbershop & Grooming", color: "#0891b2" },
+  { id: "hairdresser", label: "Hair Salon", color: "#db2777" },
+  { id: "laundry", label: "Laundry & Dry Cleaning", color: "#0284c7" },
 ] as const;
 
 export const CATEGORY_BY_ID: Record<CategoryId, CategoryMeta> = Object.fromEntries(
@@ -48,6 +54,7 @@ export interface Place {
   osmType: "node" | "way" | "relation";
   name: string;
   category: CategoryId;
+  rawCategory?: string;
   lat: number;
   lng: number;
   address?: string;
@@ -215,10 +222,23 @@ function classify(tags: Record<string, string>): CategoryId | null {
     return "retail";
   }
 
-  // Services, Finance, Healthcare & Personal Care
+  // Barbershop & Grooming — specific category for competitor matching
+  if (amenity === "barber" || shop === "barber") {
+    return "barbershop";
+  }
+
+  // Hairdresser / Hair Salon — specific category for competitor matching
+  if (shop === "hairdresser" || shop === "salon") {
+    return "hairdresser";
+  }
+
+  // Laundry & Dry Cleaning — specific category for competitor matching
+  if (amenity === "laundry" || shop === "laundry" || shop === "dry_cleaning") {
+    return "laundry";
+  }
+
+  // Generic Services, Finance, Healthcare & Personal Care
   if (
-    amenity === "laundry" ||
-    amenity === "barber" ||
     amenity === "bank" ||
     amenity === "atm" ||
     amenity === "pharmacy" ||
@@ -228,9 +248,6 @@ function classify(tags: Record<string, string>): CategoryId | null {
     amenity === "dentist" ||
     amenity === "post_office" ||
     amenity === "police" ||
-    shop === "hairdresser" ||
-    shop === "laundry" ||
-    shop === "dry_cleaning" ||
     shop === "tailor" ||
     shop === "chemist" ||
     shop === "optician" ||
@@ -350,8 +367,8 @@ export function aroundQuery(lat: number, lng: number, radius: number): string {
   const around = `(around:${Math.round(radius)},${lat.toFixed(5)},${lng.toFixed(5)})`;
   return `[out:json][timeout:25];
 (
-  nwr["amenity"~"^(restaurant|fast_food|food_court|cafe|bar|pub|ice_cream|canteen|bistro|school|kindergarten|childcare|university|college|marketplace|bus_station|ferry_terminal|fuel|laundry|bank|atm|pharmacy|clinic|hospital|post_office|place_of_worship|community_centre|townhall|library)$"]${around};
-  nwr["shop"~"^(convenience|supermarket|grocery|bakery|coffee|tea|kiosk|greengrocer|hairdresser|laundry|dry_cleaning|mall|department_store|general|meat|seafood|dairy|tailor|clothes|fashion|shoes|electronics|mobile_phone|hardware|stationery|books|beauty|cosmetics|chemist|optician|car_repair|motorcycle_repair)$"]${around};
+  nwr["amenity"~"^(restaurant|fast_food|food_court|cafe|bar|pub|ice_cream|canteen|bistro|school|kindergarten|childcare|university|college|marketplace|bus_station|ferry_terminal|fuel|barber|laundry|bank|atm|pharmacy|clinic|hospital|post_office|place_of_worship|community_centre|townhall|library)$"]${around};
+  nwr["shop"~"^(convenience|supermarket|grocery|bakery|coffee|tea|kiosk|greengrocer|barber|hairdresser|salon|laundry|dry_cleaning|mall|department_store|general|meat|seafood|dairy|tailor|clothes|fashion|shoes|electronics|mobile_phone|hardware|stationery|books|beauty|cosmetics|chemist|optician|car_repair|motorcycle_repair)$"]${around};
   nwr["highway"="bus_stop"]${around};
   nwr["public_transport"~"^(station|stop_position|platform)$"]${around};
   nwr["railway"~"^(station|halt|subway_entrance)$"]${around};
@@ -374,8 +391,8 @@ export function bboxQuery(south: number, west: number, north: number, east: numb
   const bbox = `${minLat.toFixed(5)},${minLon.toFixed(5)},${maxLat.toFixed(5)},${maxLon.toFixed(5)}`;
   return `[out:json][timeout:25];
 (
-  nwr["amenity"~"^(restaurant|fast_food|food_court|cafe|bar|pub|ice_cream|canteen|bistro|school|kindergarten|childcare|university|college|marketplace|bus_station|ferry_terminal|fuel|laundry|bank|atm|pharmacy|clinic|hospital|post_office|place_of_worship|community_centre|townhall|library)$"](${bbox});
-  nwr["shop"~"^(convenience|supermarket|grocery|bakery|coffee|tea|kiosk|greengrocer|hairdresser|laundry|dry_cleaning|mall|department_store|general|meat|seafood|dairy|tailor|clothes|fashion|shoes|electronics|mobile_phone|hardware|stationery|books|beauty|cosmetics|chemist|optician|car_repair|motorcycle_repair)$"](${bbox});
+  nwr["amenity"~"^(restaurant|fast_food|food_court|cafe|bar|pub|ice_cream|canteen|bistro|school|kindergarten|childcare|university|college|marketplace|bus_station|ferry_terminal|fuel|barber|laundry|bank|atm|pharmacy|clinic|hospital|post_office|place_of_worship|community_centre|townhall|library)$"](${bbox});
+  nwr["shop"~"^(convenience|supermarket|grocery|bakery|coffee|tea|kiosk|greengrocer|barber|hairdresser|salon|laundry|dry_cleaning|mall|department_store|general|meat|seafood|dairy|tailor|clothes|fashion|shoes|electronics|mobile_phone|hardware|stationery|books|beauty|cosmetics|chemist|optician|car_repair|motorcycle_repair)$"](${bbox});
   nwr["highway"="bus_stop"](${bbox});
   nwr["public_transport"~"^(station|stop_position|platform)$"](${bbox});
   nwr["railway"~"^(station|halt|subway_entrance)$"](${bbox});
@@ -692,11 +709,28 @@ function parseElements(elements: OverpassElement[]): Place[] {
     if (seen.has(id)) continue;
     seen.add(id);
 
+    const rawCategory = tags.amenity
+      ? `amenity:${tags.amenity}`
+      : tags.shop
+      ? `shop:${tags.shop}`
+      : tags.office
+      ? `office:${tags.office}`
+      : tags.leisure
+      ? `leisure:${tags.leisure}`
+      : tags.tourism
+      ? `tourism:${tags.tourism}`
+      : tags.healthcare
+      ? `healthcare:${tags.healthcare}`
+      : tags.highway === "bus_stop"
+      ? "highway:bus_stop"
+      : undefined;
+
     out.push({
       id,
       osmType: el.type,
       name,
       category,
+      rawCategory,
       lat,
       lng,
       address: buildAddress(tags),
@@ -815,9 +849,10 @@ export function mapCompetitorCategory(category: string): CategoryId | null {
     supermarket: "retail",
     grocery: "retail",
     service: "service",
-    laundry: "service",
-    barbershop: "service",
-    hairdresser: "service",
+    barbershop: "barbershop",
+    barber: "barbershop",
+    hairdresser: "hairdresser",
+    laundry: "laundry",
     transit: "transit",
     bus_station: "transit",
     market: "market",

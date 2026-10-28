@@ -14,8 +14,12 @@ class LocationAnalysisController extends Controller
 
     public function analyze(LocationAnalysisRequest $request)
     {
-        $result = $this->analysisService->analyze($request->validated());
+        try {
+            $result = $this->analysisService->analyze($request->validated());
 
-        return ApiResponse::success($result, 'Location analysis completed');
+            return ApiResponse::success($result, 'Location analysis completed');
+        } catch (\InvalidArgumentException $e) {
+            return ApiResponse::error($e->getMessage(), 422);
+        }
     }
 }

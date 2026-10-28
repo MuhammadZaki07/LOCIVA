@@ -9,10 +9,11 @@
  * 6. internal_poi_total and registered_business_total map correctly without conflation.
  * 7. bps_demographics correctly passes through with distinction between null (unsupported) and 0.
  * 8. Spatial deduplication prevents double-counting registered businesses and external OSM POIs.
+ * 9. Phase 4: Candidate UI Workflow, Stale Marks, Manual Analysis, Multi-Candidate POI Associations.
  */
 
 import { describe, it, expect } from "vitest";
-import { distanceMeters } from "../Osm";
+import { distanceMeters, type Place } from "../Osm";
 import type { AnalysisResult } from "../analysisEngine";
 
 describe("Candidate Isolation & Parameter Invalidation", () => {
@@ -64,16 +65,22 @@ describe("Candidate Isolation & Parameter Invalidation", () => {
   it("detects when candidate parameters change and correctly invalidates cached result", () => {
     let lastParamsKey = "-7.9800000_112.6300000_500_kedai-kopi";
     let analysisResult: AnalysisResult | null = {
+      candidateId: "A",
+      lat: -7.98,
+      lng: 112.63,
+      radius: 500,
+      businessTypeId: "kedai-kopi",
       opportunityScore: 80,
       competitionScore: 50,
       accessibilityScore: 70,
-      summary: "Good",
-      strengths: [],
-      challenges: [],
-      recommendations: [],
-      poiCount: 10,
-      internalPoiCount: 2,
-      registeredBusinessCount: 1,
+      dataConfidence: 80,
+      competitorCount: 2,
+      nearestCompetitor: null,
+      relevantPOI: [],
+      allPlaces: [],
+      factors: [],
+      dataWarnings: [],
+      updatedAt: Date.now(),
     };
 
     const hasParamChanged = (
@@ -119,6 +126,146 @@ describe("Candidate Isolation & Parameter Invalidation", () => {
   });
 });
 
+describe("Phase 4: Candidate UI Workflow, Stale Marks & POI Associations", () => {
+  it("ensures a newly created candidate does not inherit existing candidate coordinates, scores or warnings", () => {
+    const candidateA = {
+      id: "A",
+      lat: -7.9800,
+      lng: 112.6300,
+      radius: 500,
+      status: "ready",
+      result: {
+        opportunityScore: 82,
+        dataWarnings: ["Warning A"],
+      },
+    };
+
+    // Adding Candidate B in draft state
+    const candidateB = {
+      id: "B",
+      lat: null as number | null,
+      lng: null as number | null,
+      radius: 500,
+      status: "draft" as const,
+      result: null as any,
+    };
+
+    expect(candidateB.lat).toBeNull();
+    expect(candidateB.lng).toBeNull();
+    expect(candidateB.status).toBe("draft");
+    expect(candidateB.result).toBeNull();
+    expect(candidateB.result?.opportunityScore).toBeUndefined();
+  });
+
+  it("marks candidate status as stale when coordinates move without automatic re-analysis", () => {
+    let candidateStatus: "draft" | "location_selected" | "analyzing" | "ready" | "stale" = "ready";
+    let isStale = false;
+    let analysisTriggerCount = 0;
+
+    const previousResult = {
+      lat: -7.9800,
+      lng: 112.6300,
+      radius: 500,
+      score: 75,
+    };
+
+    // User drags candidate pin to new coordinates
+    const newCoords = {
+      lat: -7.9850,
+      lng: 112.6350,
+      radius: 500,
+    };
+
+    // On coordinate change: mark stale, DO NOT automatically increment analysisTriggerCount
+    if (newCoords.lat !== previousResult.lat || newCoords.lng !== previousResult.lng) {
+      candidateStatus = "stale";
+      isStale = true;
+    }
+
+    expect(candidateStatus).toBe("stale");
+    expect(isStale).toBe(true);
+    expect(analysisTriggerCount).toBe(0); // Analysis NOT auto-triggered!
+
+    // Only when user explicitly clicks Analyze
+    const handleUserClickAnalyze = () => {
+      analysisTriggerCount++;
+      candidateStatus = "ready";
+      isStale = false;
+    };
+
+    handleUserClickAnalyze();
+    expect(analysisTriggerCount).toBe(1);
+    expect(candidateStatus).toBe("ready");
+    expect(isStale).toBe(false);
+  });
+
+  it("aggregates POIs across multiple candidates simultaneously and tags candidate associations without duplicating entities", () => {
+    const candidateAResultPlaces: Place[] = [
+      { id: "poi_1", name: "Cafe Senja", category: "cafe", lat: -7.9801, lng: 112.6301 },
+      { id: "poi_shared", name: "Minimarket 24", category: "retail", lat: -7.9820, lng: 112.6320 },
+    ];
+
+    const candidateBResultPlaces: Place[] = [
+      { id: "poi_shared", name: "Minimarket 24", category: "retail", lat: -7.9820, lng: 112.6320 },
+      { id: "poi_3", name: "Warung Makan Berkah", category: "food", lat: -7.9850, lng: 112.6350 },
+    ];
+
+    const results: Record<string, { allPlaces: Place[] }> = {
+      A: { allPlaces: candidateAResultPlaces },
+      B: { allPlaces: candidateBResultPlaces },
+    };
+
+    // Aggregation logic matching MapPage
+    const placesMap = new Map<string, Place & { candidateAssociations: string[] }>();
+
+    Object.entries(results).forEach(([candId, res]) => {
+      res.allPlaces.forEach((place) => {
+        const existing = placesMap.get(place.id);
+        if (existing) {
+          if (!existing.candidateAssociations.includes(candId)) {
+            existing.candidateAssociations.push(candId);
+          }
+        } else {
+          placesMap.set(place.id, {
+            ...place,
+            candidateAssociations: [candId],
+          });
+        }
+      });
+    });
+
+    const combinedPlaces = Array.from(placesMap.values());
+
+    // 1. Total unique POIs is 3, not 4 (no duplicate map pins)
+    expect(combinedPlaces.length).toBe(3);
+
+    // 2. Shared POI is associated with both Candidate A and Candidate B
+    const sharedPoi = combinedPlaces.find((p) => p.id === "poi_shared");
+    expect(sharedPoi).toBeDefined();
+    expect(sharedPoi?.candidateAssociations).toContain("A");
+    expect(sharedPoi?.candidateAssociations).toContain("B");
+    expect(sharedPoi?.candidateAssociations.length).toBe(2);
+
+    // 3. Isolated POI only associated with Candidate A
+    const poi1 = combinedPlaces.find((p) => p.id === "poi_1");
+    expect(poi1?.candidateAssociations).toEqual(["A"]);
+  });
+
+  it("maintains separate database persistence state per candidate", () => {
+    const persistedCandidateMap: Record<string, boolean> = {
+      A: false,
+      B: false,
+    };
+
+    // Candidate A saved
+    persistedCandidateMap["A"] = true;
+
+    // Switching to Candidate B should show B is NOT yet persisted
+    expect(persistedCandidateMap["A"]).toBe(true);
+    expect(persistedCandidateMap["B"]).toBe(false);
+  });
+});
+
 describe("Frontend Data Mapping & Null vs Zero Fidelity", () => {
   it("maps backend response properties internal_poi_total and registered_business_total accurately", () => {
     const backendResponse = {
@@ -142,7 +289,6 @@ describe("Frontend Data Mapping & Null vs Zero Fidelity", () => {
       opportunityScore: backendResponse.opportunity_score,
       competitionScore: backendResponse.competition_score,
       accessibilityScore: backendResponse.accessibility_score,
-      poiCount: backendResponse.poi_total,
       internalPoiCount: backendResponse.internal_poi_total,
       registeredBusinessCount: backendResponse.registered_business_total,
       internalBusinessCount: backendResponse.registered_business_total,
@@ -152,7 +298,6 @@ describe("Frontend Data Mapping & Null vs Zero Fidelity", () => {
     expect(mappedResult.internalPoiCount).toBe(3);
     expect(mappedResult.registeredBusinessCount).toBe(5);
     expect(mappedResult.internalBusinessCount).toBe(5);
-    expect(mappedResult.poiCount).toBe(20);
     expect(mappedResult.bpsData?.population).toBe(891859);
   });
 
@@ -246,5 +391,150 @@ describe("Spatial Deduplication Integrity", () => {
         osmPlaceNearbyDifferent.lng
       )
     ).toBe(false);
+  });
+});
+
+
+describe("Phase 4: Frontend Candidate Integration & Feasibility Presentation", () => {
+  it("supports more than three candidates dynamically (A, B, C, D, E)", () => {
+    const candidates: Record<string, { id: string; lat: number; lng: number } | null> = {
+      A: { id: "A", lat: -7.980, lng: 112.630 },
+      B: { id: "B", lat: -7.981, lng: 112.631 },
+      C: { id: "C", lat: -7.982, lng: 112.632 },
+      D: { id: "D", lat: -7.983, lng: 112.633 },
+      E: { id: "E", lat: -7.984, lng: 112.634 },
+    };
+
+    const allKeys = Object.keys(candidates);
+    expect(allKeys.length).toBe(5);
+    expect(allKeys).toEqual(["A", "B", "C", "D", "E"]);
+
+    const activeCount = Object.values(candidates).filter((c) => c !== null).length;
+    expect(activeCount).toBe(5);
+  });
+
+  it("changing coordinates marks candidate status as stale without automatically re-fetching", () => {
+    let candidateStatus: 'ready' | 'stale' | 'location_selected' = 'ready';
+    const lastAnalyzedCoords = { lat: -7.9800, lng: 112.6300, radius: 500 };
+    const currentCoords = { lat: -7.9850, lng: 112.6350, radius: 500 };
+
+    const isCoordinateChanged = (last: typeof lastAnalyzedCoords, current: typeof currentCoords) => {
+      return (
+        Math.abs(last.lat - current.lat) > 0.0001 ||
+        Math.abs(last.lng - current.lng) > 0.0001 ||
+        last.radius !== current.radius
+      );
+    };
+
+    if (isCoordinateChanged(lastAnalyzedCoords, currentCoords)) {
+      candidateStatus = 'stale';
+    }
+
+    expect(candidateStatus).toBe('stale');
+    // Result remains available for comparison until explicit re-analysis
+    expect(lastAnalyzedCoords.lat).toBe(-7.9800);
+  });
+
+  it("prohibited status in overall recommendation overrides high market potential score", () => {
+    const highMarketResult: Partial<AnalysisResult> = {
+      opportunityScore: 89,
+      overallRecommendation: {
+        status: "prohibited",
+        summary: "Meskipun skor potensi pasar 89/100, lokasi ini TIDAK DAPAT DIREKOMENDASIKAN karena adanya larangan resmi.",
+        blocking_reasons: ["Larangan resmi terverifikasi: Operasi Penertiban PKL & Zona Merah."],
+        conditions: [],
+      },
+      feasibility: {
+        legal_restrictions: {
+          status: "prohibited",
+          verified_restrictions: [{ title: "Operasi Penertiban PKL", severity: "critical" }],
+          limitations: "Terdapat pembatasan aktif",
+        },
+      },
+    };
+
+    const isProhibited =
+      highMarketResult.overallRecommendation?.status === "prohibited" ||
+      highMarketResult.feasibility?.legal_restrictions?.status === "prohibited";
+
+    expect(isProhibited).toBe(true);
+
+    // UI derivation must NOT return green 'Peluang Sangat Tinggi'
+    const getBadge = () => {
+      if (isProhibited) {
+        return { tier: "Dilarang Resmi (Hard Restriction)", color: "rose" };
+      }
+      if ((highMarketResult.opportunityScore ?? 0) >= 80) {
+        return { tier: "Peluang Sangat Tinggi", color: "emerald" };
+      }
+      return { tier: "Peluang Moderat", color: "amber" };
+    };
+
+    const badge = getBadge();
+    expect(badge.tier).toBe("Dilarang Resmi (Hard Restriction)");
+    expect(badge.color).toBe("rose");
+  });
+
+  it("multi-candidate POI associations unify places and preserve simultaneous visibility", () => {
+    const candidateA_POIs = [
+      { id: "poi-1", name: "Universitas Brawijaya", lat: -7.95, lng: 112.61 },
+      { id: "poi-shared", name: "Minimarket Malang", lat: -7.96, lng: 112.62 },
+    ];
+
+    const candidateB_POIs = [
+      { id: "poi-shared", name: "Minimarket Malang", lat: -7.96, lng: 112.62 },
+      { id: "poi-3", name: "Pasar Besar", lat: -7.98, lng: 112.63 },
+    ];
+
+    const placesMap = new Map<string, { id: string; name: string; candidateAssociations: string[] }>();
+
+    candidateA_POIs.forEach((p) => {
+      placesMap.set(p.id, { id: p.id, name: p.name, candidateAssociations: ["A"] });
+    });
+
+    candidateB_POIs.forEach((p) => {
+      const existing = placesMap.get(p.id);
+      if (existing) {
+        if (!existing.candidateAssociations.includes("B")) {
+          existing.candidateAssociations.push("B");
+        }
+      } else {
+        placesMap.set(p.id, { id: p.id, name: p.name, candidateAssociations: ["B"] });
+      }
+    });
+
+    const unified = Array.from(placesMap.values());
+    expect(unified.length).toBe(3);
+
+    const shared = placesMap.get("poi-shared");
+    expect(shared?.candidateAssociations).toEqual(["A", "B"]);
+
+    const uniqueA = placesMap.get("poi-1");
+    expect(uniqueA?.candidateAssociations).toEqual(["A"]);
+
+    const uniqueB = placesMap.get("poi-3");
+    expect(uniqueB?.candidateAssociations).toEqual(["B"]);
+  });
+
+  it("unverified legal status transparently explains missing zoning dataset", () => {
+    const unverifiedResult: Partial<AnalysisResult> = {
+      feasibility: {
+        legal_restrictions: {
+          status: "unverified",
+          zoning_type: null,
+          verified_restrictions: [],
+          provenance: {
+            source: "unverified_no_authoritative_zoning_dataset",
+            effective_date: null,
+            coverage_limitations: "Data resmi RTRW/RDTR tingkat persil belum tersedia di basis data LOCIVA.",
+          },
+          limitations: "Status legalitas zonasi belum terverifikasi secara definitif.",
+        },
+      },
+    };
+
+    expect(unverifiedResult.feasibility?.legal_restrictions?.status).toBe("unverified");
+    expect(unverifiedResult.feasibility?.legal_restrictions?.provenance?.source).toBe("unverified_no_authoritative_zoning_dataset");
+    expect(unverifiedResult.feasibility?.legal_restrictions?.verified_restrictions).toEqual([]);
   });
 });

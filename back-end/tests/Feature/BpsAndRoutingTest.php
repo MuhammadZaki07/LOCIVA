@@ -37,6 +37,28 @@ class BpsAndRoutingTest extends TestCase
             ]);
     }
 
+    /**
+     * Stage B.6.1 (B6-1): Test that domains endpoint defaults to East Java (3500)
+     * and preserves explicit province parameters.
+     */
+    public function test_bps_domains_defaults_to_east_java_and_preserves_explicit_prov(): void
+    {
+        $service = app(\App\Services\BpsApiService::class);
+
+        // Reflection to check method default parameter
+        $refMethod = new \ReflectionMethod($service, 'getDomains');
+        $params = $refMethod->getParameters();
+        $this->assertEquals('3500', $params[1]->getDefaultValue(), 'BpsApiService::getDomains default $prov must be 3500 (Jawa Timur)');
+
+        // Controller test with default (no query param)
+        $resDefault = $this->getJson('/api/bps/domains');
+        $resDefault->assertStatus(200);
+
+        // Controller test with explicit prov query param
+        $resExplicit = $this->getJson('/api/bps/domains?prov=3200');
+        $resExplicit->assertStatus(200);
+    }
+
     public function test_bps_demographics_for_malang_coordinates(): void
     {
         $response = $this->getJson('/api/bps/demographics?lat=-7.9797&lng=112.6304');

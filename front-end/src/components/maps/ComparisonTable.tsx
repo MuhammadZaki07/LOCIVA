@@ -2,6 +2,7 @@ import React from 'react';
 import type { AnalysisResult } from '@/lib/analysisEngine';
 import type { CandidateId } from './CandidateTabs';
 import { cn } from '@/lib/utils';
+import { Clock, FileWarning } from 'lucide-react';
 
 interface ComparisonTableProps {
   results: Record<CandidateId, AnalysisResult | null>;
@@ -40,46 +41,90 @@ export const ComparisonTable: React.FC<ComparisonTableProps> = ({ results, activ
 
   return (
     <div className="fixed inset-x-0 bottom-0 md:bottom-6 md:left-1/2 md:-translate-x-1/2 z-[450] bg-surface p-4 rounded-t-xl md:rounded-xl shadow-[0_-4px_20px_rgba(0,0,0,0.1)] border border-slate-200 md:w-auto w-full overflow-x-auto">
-      <h3 className="font-bold text-ink mb-3 md:text-center text-left">Candidate Comparison</h3>
+      <h3 className="font-bold text-ink mb-3 md:text-center text-left">Perbandingan Kandidat</h3>
       <table className="w-full text-sm text-left">
         <thead>
           <tr>
-            <th className="pb-2 text-muted font-medium pr-4">Metric</th>
-            {validResults.map(({ id }) => (
-              <th key={id} className={cn("pb-2 px-4 text-center font-bold border-b-2", borderColors[id], colors[id].split(' ')[0])}>
-                Candidate {id}
-                {bestId === id && (
-                  <span className="ml-2 inline-flex bg-yellow-400 text-yellow-900 text-[10px] px-1.5 py-0.5 rounded-full uppercase tracking-wider align-middle font-bold">
-                    Recommended
-                  </span>
-                )}
-              </th>
-            ))}
+            <th className="pb-2 text-muted font-medium pr-4">Metrik</th>
+            {validResults.map(({ id, result }) => {
+              const isStale = result.isStaleOsm || result.sources?.find(s => s.id === 'openstreetmap')?.status === 'stale';
+              const isTruncated = result.isTruncated;
+              return (
+                <th key={id} className={cn("pb-2 px-4 text-center font-bold border-b-2", borderColors[id], colors[id].split(' ')[0])}>
+                  <div className="flex flex-col items-center gap-0.5">
+                    <div className="flex items-center gap-1">
+                      Kandidat {id}
+                      {bestId === id && (
+                        <span className="ml-1 inline-flex bg-yellow-400 text-yellow-900 text-[10px] px-1.5 py-0.5 rounded-full uppercase tracking-wider align-middle font-bold">
+                          Rekomendasi
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 font-normal">
+                      {isStale && (
+                        <span className="inline-flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">
+                          <Clock size={8} /> Stale
+                        </span>
+                      )}
+                      {isTruncated && (
+                        <span className="text-[9px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 font-bold">
+                          Terpotong
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           <tr>
-            <td className="py-2 text-ink">Market Opportunity</td>
+            <td className="py-2 text-ink">Peluang Pasar</td>
             {validResults.map(({ id, result }) => (
-              <td key={id} className="py-2 px-4 text-center font-bold text-potential">{result.opportunityScore}</td>
+              <td key={id} className="py-2 px-4 text-center font-bold text-potential">{result.opportunityScore ?? 'N/A'}</td>
             ))}
           </tr>
           <tr>
-            <td className="py-2 text-ink">Competition</td>
+            <td className="py-2 text-ink">Persaingan</td>
             {validResults.map(({ id, result }) => (
-              <td key={id} className="py-2 px-4 text-center font-bold text-warning">{result.competitionScore}</td>
+              <td key={id} className="py-2 px-4 text-center font-bold text-warning">{result.competitionScore ?? 'N/A'}</td>
             ))}
           </tr>
           <tr>
-            <td className="py-2 text-ink">Accessibility</td>
+            <td className="py-2 text-ink">Aksesibilitas</td>
             {validResults.map(({ id, result }) => (
-              <td key={id} className="py-2 px-4 text-center font-bold text-ink">{result.accessibilityScore}</td>
+              <td key={id} className="py-2 px-4 text-center font-bold text-ink">{result.accessibilityScore ?? 'N/A'}</td>
             ))}
           </tr>
           <tr>
-            <td className="py-2 text-ink">Competitors Count</td>
+            <td className="py-2 text-ink">Jumlah Kompetitor</td>
             {validResults.map(({ id, result }) => (
               <td key={id} className="py-2 px-4 text-center text-muted">{result.competitorCount}</td>
+            ))}
+          </tr>
+          <tr>
+            <td className="py-2 text-ink flex items-center gap-1">
+              <FileWarning size={12} className="text-rose-500" />
+              Laporan Risiko
+            </td>
+            {validResults.map(({ id, result }) => (
+              <td key={id} className="py-2 px-4 text-center">
+                <span className={cn(
+                  "text-sm font-bold tabular-nums",
+                  (result.reportCount ?? 0) > 0 ? "text-rose-600" : "text-emerald-600"
+                )}>
+                  {result.reportCount ?? '—'}
+                </span>
+              </td>
+            ))}
+          </tr>
+          <tr>
+            <td className="py-2 text-ink">Kepercayaan Data</td>
+            {validResults.map(({ id, result }) => (
+              <td key={id} className="py-2 px-4 text-center text-muted font-medium">
+                {result.dataConfidence ? `${result.dataConfidence}%` : 'Rendah'}
+              </td>
             ))}
           </tr>
         </tbody>

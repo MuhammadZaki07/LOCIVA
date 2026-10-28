@@ -25,7 +25,10 @@ export type CategoryId =
   | "transit"
   | "market"
   | "tourism"
-  | "office";
+  | "office"
+  | "barbershop"
+  | "hairdresser"
+  | "laundry";
 
 export interface CategoryMeta {
   id: CategoryId;
@@ -44,6 +47,9 @@ export const CATEGORIES: readonly CategoryMeta[] = [
   { id: "market", label: "Traditional Markets", color: "#b45309" },
   { id: "tourism", label: "Tourism & Attractions", color: "#06b6d4" },
   { id: "office", label: "Offices & Public Facilities", color: "#64748b" },
+  { id: "barbershop", label: "Barbershop & Grooming", color: "#0891b2" },
+  { id: "hairdresser", label: "Hair Salon", color: "#db2777" },
+  { id: "laundry", label: "Laundry & Dry Cleaning", color: "#0284c7" },
 ] as const;
 
 export const CATEGORY_BY_ID: Record<CategoryId, CategoryMeta> = Object.fromEntries(
@@ -57,6 +63,7 @@ export interface Place {
   osmType: "node" | "way" | "relation";
   name: string;
   category: CategoryId;
+  rawCategory?: string;
   lat: number;
   lng: number;
   address?: string;
@@ -217,10 +224,23 @@ export function classify(tags: Record<string, string>): CategoryId | null {
     return "retail";
   }
 
-  // Services, Finance, Healthcare & Personal Care
+  // Barbershop & Grooming — specific category for competitor matching
+  if (amenity === "barber" || shop === "barber") {
+    return "barbershop";
+  }
+
+  // Hairdresser / Hair Salon — specific category for competitor matching
+  if (shop === "hairdresser" || shop === "salon") {
+    return "hairdresser";
+  }
+
+  // Laundry & Dry Cleaning — specific category for competitor matching
+  if (amenity === "laundry" || shop === "laundry" || shop === "dry_cleaning") {
+    return "laundry";
+  }
+
+  // Generic Services, Finance, Healthcare & Personal Care
   if (
-    amenity === "laundry" ||
-    amenity === "barber" ||
     amenity === "bank" ||
     amenity === "atm" ||
     amenity === "pharmacy" ||
@@ -230,9 +250,6 @@ export function classify(tags: Record<string, string>): CategoryId | null {
     amenity === "dentist" ||
     amenity === "post_office" ||
     amenity === "police" ||
-    shop === "hairdresser" ||
-    shop === "laundry" ||
-    shop === "dry_cleaning" ||
     shop === "tailor" ||
     shop === "chemist" ||
     shop === "optician" ||
@@ -381,11 +398,15 @@ const ALIASES: Record<string, CategoryId> = {
   kelontong: "retail",
   service: "service",
   services: "service",
-  laundry: "service",
-  barbershop: "service",
-  barber: "service",
-  hairdresser: "service",
-  salon: "service",
+  laundry: "laundry",
+  binatu: "laundry",
+  dry_cleaning: "laundry",
+  barbershop: "barbershop",
+  barber: "barbershop",
+  cukur: "barbershop",
+  pangkas: "barbershop",
+  hairdresser: "hairdresser",
+  salon: "hairdresser",
   bank: "service",
   atm: "service",
   pharmacy: "service",
@@ -430,7 +451,10 @@ const KEYWORDS: Array<[string[], CategoryId]> = [
   [["sekolah", "school", "tk_", "sd_", "smp", "sma", "smk"], "school"],
   [["pasar", "market"], "market"],
   [["toko", "shop", "store", "mart", "kelontong"], "retail"],
-  [["bank", "atm", "apotek", "pharm", "klinik", "clinic", "hospital", "sakit", "laundry", "salon", "barber", "hotel", "bengkel"], "service"],
+  [["laundry", "binatu", "cuci kiloan", "dry clean"], "laundry"],
+  [["barber", "pangkas", "cukur", "barbershop", "grooming"], "barbershop"],
+  [["salon", "hairdresser", "hair", "kecantikan"], "hairdresser"],
+  [["bank", "atm", "apotek", "pharm", "klinik", "clinic", "hospital", "sakit", "hotel", "bengkel"], "service"],
   [["halte", "terminal", "stasiun", "station", "spbu", "fuel", "bus"], "transit"],
   [["wisata", "museum", "tourism", "attraction", "park"], "tourism"],
   [["kantor", "office", "masjid", "mosque", "church", "gereja", "worship", "library"], "office"],
@@ -514,6 +538,7 @@ function dbPoiToPlace(p: DbPoi, fetchedAt: number): Place | null {
     osmType: (typeMatch?.[1] as Place["osmType"]) ?? "node",
     name: p.name?.trim() || "Unnamed place",
     category,
+    rawCategory: p.category ?? undefined,
     lat: coords.lat,
     lng: coords.lng,
     address: p.address ?? undefined,

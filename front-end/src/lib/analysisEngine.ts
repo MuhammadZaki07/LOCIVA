@@ -21,7 +21,7 @@ export interface AnalysisResult {
   accessibilityScore: number | null;
   dataConfidence: number;
   competitorCount: number;
-  nearestCompetitor: { name: string; distance: number } | null;
+  nearestCompetitor: { name: string; distance: number; source?: string } | null;
   relevantPOI: {
     id?: string;
     name: string;
@@ -31,6 +31,7 @@ export interface AnalysisResult {
     lng: number;
     address?: string;
     relevance: 'high' | 'medium' | 'low';
+    source?: string;
   }[];
   allPlaces: Place[];
   factors: AnalysisFactor[];
@@ -50,11 +51,22 @@ export interface AnalysisResult {
     sourceUrl?: string;
     status?: string;
   } | null;
-  sources?: { id: string; label: string; count: number; status: string }[];
+  sources?: {
+    id: string;
+    label: string;
+    count: number | null;
+    status: string;
+    truncated?: boolean;
+    year?: number | string | null;
+  }[];
   limitations?: string;
+  isTruncated?: boolean;
+  isStaleOsm?: boolean;
   isValidLocation?: boolean;
   isWaterOrOffshore?: boolean;
   unsupportedReason?: string;
+  analysisCompleteness?: 'full' | 'partial' | 'insufficient_data';
+  algorithmVersion?: string;
 }
 
 export function calculateAnalysis(
@@ -178,6 +190,15 @@ export function calculateAnalysis(
   // Sort relevant POI by distance
   relevantPOI.sort((a, b) => a.distance - b.distance);
 
+  const hasStaleOsm = places.some((p) => Boolean(p.isStale));
+  const isTruncated = places.length > 250;
+  if (hasStaleOsm) {
+    dataWarnings.push('Sebagian data OpenStreetMap bersumber dari cache spasial lokal.');
+  }
+  if (isTruncated) {
+    dataWarnings.push('Data tempat eksternal OpenStreetMap melebihi 250 titik dan telah dipotong.');
+  }
+
   return {
     candidateId,
     lat,
@@ -194,6 +215,29 @@ export function calculateAnalysis(
     allPlaces: placesWithDistance,
     factors,
     dataWarnings,
+    isTruncated,
+    isStaleOsm: hasStaleOsm,
+    sources: [
+      {
+        id: 'openstreetmap',
+        label: 'OpenStreetMap (Overpass API)',
+        count: placesWithDistance.length,
+        status: placesWithDistance.length === 0 ? 'empty' : (hasStaleOsm ? 'stale' : 'loaded'),
+        truncated: isTruncated,
+      },
+      {
+        id: 'lociva_registered',
+        label: 'Usaha Terdaftar LOCIVA',
+        count: 0,
+        status: 'empty',
+      },
+      {
+        id: 'bps_ri',
+        label: 'Badan Pusat Statistik (BPS RI)',
+        count: null,
+        status: 'unavailable',
+      },
+    ],
     updatedAt: Date.now()
   };
 }

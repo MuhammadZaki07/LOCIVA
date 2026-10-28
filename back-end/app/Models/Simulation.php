@@ -37,4 +37,14 @@ class Simulation extends Model
     {
         return $this->hasOne(SimulationScore::class);
     }
+
+    public function factors()
+    {
+        return $this->hasMany(SimulationFactor::class);
+    }
+
+    public function snapshots()
+    {
+        return $this->hasMany(AnalysisSnapshot::class)->latest('created_at');
+    }
 }

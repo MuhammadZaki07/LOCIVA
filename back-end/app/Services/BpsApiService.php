@@ -143,7 +143,7 @@ class BpsApiService
      * Fetch list of domains (provinces / regencies) from BPS WebAPI.
      * Uses 24-hour cache.
      */
-    public function getDomains(string $type = 'kabbyprov', string $prov = '3200'): array
+    public function getDomains(string $type = 'kabbyprov', string $prov = '3500'): array
     {
         $cacheKey = "bps_domains_{$type}_{$prov}";
 

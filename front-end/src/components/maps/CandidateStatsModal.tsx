@@ -17,6 +17,13 @@ import {
   CheckCircle2,
   AlertTriangle,
   ExternalLink,
+  Globe,
+  Database,
+  Clock,
+  FileWarning,
+  Target,
+  Activity,
+  AlertCircle,
 } from 'lucide-react';
 
 export interface BpsRegionData {
@@ -210,7 +217,12 @@ export const CandidateStatsModal: React.FC<CandidateStatsModalProps> = ({
                       <span className="text-xs text-muted">/100</span>
                     </div>
                     <span className="mt-1 text-[11px] text-muted leading-tight">
-                      Berdasarkan POI relevan & bobot segmen
+                      {result.opportunityScore !== null
+                        ? result.opportunityScore >= 80 ? 'Peluang Sangat Tinggi'
+                          : result.opportunityScore >= 60 ? 'Peluang Baik'
+                          : result.opportunityScore >= 40 ? 'Peluang Moderat'
+                          : 'Peluang Terbatas'
+                        : 'Belum dianalisis'}
                     </span>
                   </div>
 
@@ -265,6 +277,30 @@ export const CandidateStatsModal: React.FC<CandidateStatsModalProps> = ({
                     </span>
                   </div>
                 </div>
+
+                {/* Civic Risk / Report Count Metric */}
+                {typeof result.reportCount === 'number' && result.reportCount > 0 ? (
+                  <div className="flex items-start gap-2.5 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900">
+                    <FileWarning size={15} className="text-rose-600 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-bold block">
+                        {result.reportCount} Laporan Masalah Infrastruktur Aktif
+                      </span>
+                      <span className="text-[11px] text-rose-700 leading-snug">
+                        Penalti skor telah diterapkan berdasarkan jumlah laporan warga aktif yang berpotensi memengaruhi aksesibilitas lokasi ini.
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50/60 border border-emerald-100 text-emerald-800 text-[11px]">
+                    <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                    <span>
+                      {typeof result.reportCount === 'number'
+                        ? '0 laporan masalah aktif — kondisi infrastruktur area stabil.'
+                        : 'Data laporan warga belum tersedia untuk kandidat ini.'}
+                    </span>
+                  </div>
+                )}
               </section>
 
               {/* SECTION 2: Demografi & Agregat BPS */}
@@ -283,6 +319,17 @@ export const CandidateStatsModal: React.FC<CandidateStatsModalProps> = ({
                       <div className="size-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                       <span>Memuat data demografi wilayah dari layanan BPS...</span>
                     </div>
+                  ) : (result.bpsData?.status === 'unsupported_region') ? (
+                    <div className="flex items-start gap-2.5 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900">
+                      <AlertCircle size={15} className="text-amber-600 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <span className="text-xs font-semibold block">Wilayah Belum Didukung BPS</span>
+                        <p className="text-[11px] leading-snug text-amber-800">
+                          Lokasi ini berada di luar cakupan data sensus BPS yang terintegrasi. Skor tidak menerapkan penyesuaian bobot kepadatan penduduk.
+                          Bukan berarti data BPS bernilai nol — wilayah ini belum terdaftar di sistem LOCIVA.
+                        </p>
+                      </div>
+                    </div>
                   ) : bpsData ? (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="p-3 bg-white rounded-lg border border-slate-100">
@@ -298,7 +345,9 @@ export const CandidateStatsModal: React.FC<CandidateStatsModalProps> = ({
                       <div className="p-3 bg-white rounded-lg border border-slate-100">
                         <span className="text-[11px] text-muted block">Populasi Terdaftar (BPS)</span>
                         <span className="text-sm font-semibold text-ink mt-0.5 block tabular-nums">
-                          {bpsData.population ? `${bpsData.population.toLocaleString('id-ID')} jiwa` : 'N/A'}
+                          {typeof bpsData.population === 'number'
+                            ? `${bpsData.population.toLocaleString('id-ID')} jiwa`
+                            : 'Tidak tersedia'}
                         </span>
                         <span className="text-[10px] text-slate-400">Tahun: {bpsData.year || '2024'}</span>
                       </div>
@@ -306,7 +355,9 @@ export const CandidateStatsModal: React.FC<CandidateStatsModalProps> = ({
                       <div className="p-3 bg-white rounded-lg border border-slate-100">
                         <span className="text-[11px] text-muted block">Kepadatan Penduduk</span>
                         <span className="text-sm font-semibold text-ink mt-0.5 block tabular-nums">
-                          {bpsData.densityPerKm2 ? `${bpsData.densityPerKm2.toLocaleString('id-ID')} jiwa/km²` : 'N/A'}
+                          {typeof bpsData.densityPerKm2 === 'number'
+                            ? `${bpsData.densityPerKm2.toLocaleString('id-ID')} jiwa/km²`
+                            : 'Tidak tersedia'}
                         </span>
                         <span className="text-[10px] text-slate-400">Tingkat: Agregat Kota/Kecamatan</span>
                       </div>
@@ -328,10 +379,10 @@ export const CandidateStatsModal: React.FC<CandidateStatsModalProps> = ({
                   <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-200/60">
                     <span className="flex items-center gap-1">
                       <Calendar size={11} />
-                      Tahun Referensi: {bpsData?.year || '2023/2024'}
+                      Tahun Referensi: {bpsData?.year || result.bpsData?.year || '2023/2024'}
                     </span>
                     <span className="flex items-center gap-1">
-                      Sumber: Badan Pusat Statistik (BPS WebAPI / Portal Statistik Daerah)
+                      Sumber: Badan Pusat Statistik (BPS WebAPI)
                     </span>
                   </div>
                 </div>
@@ -453,73 +504,157 @@ export const CandidateStatsModal: React.FC<CandidateStatsModalProps> = ({
                 </section>
               )}
 
-              {/* SECTION 6: Faktor Pendukung & Detail Penilaian */}
-              {result.factors && result.factors.length > 0 && (
-                <section className="space-y-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
-                    6. Rincian Faktor Analisis
-                  </h3>
+              {/* SECTION 6: Faktor Pendukung & Detail Penilaian — grouped by impact */}
+              {result.factors && result.factors.length > 0 && (() => {
+                const positiveFs = result.factors.filter(f => f.impact === 'positive');
+                const negativeFs = result.factors.filter(f => f.impact === 'negative');
+                const neutralFs  = result.factors.filter(f => f.impact === 'neutral');
+                return (
+                  <section className="space-y-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
+                      6. Rincian Faktor Analisis
+                    </h3>
 
-                  <div className="space-y-2">
-                    {result.factors.map((f) => (
-                      <div
-                        key={f.key}
-                        className="p-3 rounded-xl border border-slate-100 bg-slate-50/60 flex items-start justify-between gap-3"
-                      >
-                        <div>
-                          <span className="text-xs font-semibold text-ink block">{f.label}</span>
-                          <span className="text-[11px] text-muted mt-0.5 block">{f.note}</span>
-                        </div>
-                        <span
-                          className={`text-xs font-bold px-2 py-0.5 rounded-md shrink-0 ${
-                            f.impact === 'positive'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : f.impact === 'negative'
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-slate-200 text-slate-700'
-                          }`}
-                        >
-                          {f.impact === 'positive' ? '+ Positif' : f.impact === 'negative' ? '- Negatif' : 'Netral'}
+                    {positiveFs.length > 0 && (
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1">
+                          <Target size={11} /> Faktor Pendorong
                         </span>
+                        {positiveFs.map((f) => (
+                          <div key={f.key} className="p-3 rounded-xl border border-emerald-100 bg-emerald-50/50 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <span className="text-xs font-semibold text-ink block">{f.label}</span>
+                              <span className="text-[11px] text-slate-600 mt-0.5 block leading-snug">{f.note}</span>
+                            </div>
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-md shrink-0 bg-emerald-100 text-emerald-800">+ Positif</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </section>
-              )}
+                    )}
 
-              {/* SECTION 7: Sumber Data, Transparansi, & Keterbatasan */}
+                    {negativeFs.length > 0 && (
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-bold text-rose-700 uppercase tracking-wider flex items-center gap-1">
+                          <ShieldAlert size={11} /> Faktor Pengurang / Risiko
+                        </span>
+                        {negativeFs.map((f) => (
+                          <div key={f.key} className="p-3 rounded-xl border border-rose-100 bg-rose-50/50 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <span className="text-xs font-semibold text-ink block">{f.label}</span>
+                              <span className="text-[11px] text-slate-600 mt-0.5 block leading-snug">{f.note}</span>
+                            </div>
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-md shrink-0 bg-red-100 text-red-800">− Negatif</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {neutralFs.length > 0 && (
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                          <Activity size={11} /> Faktor Kontekstual
+                        </span>
+                        {neutralFs.map((f) => (
+                          <div key={f.key} className="p-3 rounded-xl border border-slate-100 bg-slate-50/60 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <span className="text-xs font-semibold text-ink block">{f.label}</span>
+                              <span className="text-[11px] text-muted mt-0.5 block leading-snug">{f.note}</span>
+                            </div>
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-md shrink-0 bg-slate-200 text-slate-700">Netral</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                );
+              })()}
+
+              {/* SECTION 7: Sumber Data, Transparansi, & Keterbatasan — live from result.sources API */}
               <section className="p-4 rounded-xl border border-slate-200/80 bg-slate-50/40 space-y-3">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted flex items-center gap-1.5">
                   <Info size={13} className="text-primary" />
                   7. Sumber Data & Keterbatasan Analisis
                 </h3>
 
-                <div className="space-y-2 text-xs text-slate-600">
-                  <div className="flex items-center justify-between py-1 border-b border-slate-200/60">
-                    <span>OpenStreetMap / Overpass API (Eksternal)</span>
-                    <span className="font-semibold text-ink">{result.allPlaces?.length || 0} POI dimuat</span>
+                {result.sources && result.sources.length > 0 ? (
+                  <div className="space-y-2">
+                    {result.sources.map((src) => {
+                      const isStale = src.status === 'stale';
+                      const isLoaded = src.status === 'loaded';
+                      const isEmpty = src.status === 'empty';
+                      const isUnavail = src.status === 'unavailable' || src.status === 'error';
+                      const isTrunc = Boolean(src.truncated);
+
+                      return (
+                        <div key={src.id} className="flex items-start justify-between gap-3 py-2 border-b border-slate-200/60 last:border-0">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {src.id === 'openstreetmap' && <Globe size={13} className="text-sky-500 shrink-0" />}
+                            {src.id === 'lociva_registered' && <Database size={13} className="text-indigo-500 shrink-0" />}
+                            {src.id === 'lociva_internal' && <Layers size={13} className="text-teal-600 shrink-0" />}
+                            {src.id === 'bps_ri' && <Users size={13} className="text-primary shrink-0" />}
+                            <span className="text-xs text-slate-700 font-medium truncate" title={src.label}>
+                              {src.id === 'openstreetmap' ? 'OpenStreetMap (Overpass)'
+                                : src.id === 'lociva_registered' ? 'Usaha Terdaftar LOCIVA'
+                                : src.id === 'lociva_internal' ? 'POI Fasilitas Internal'
+                                : src.id === 'bps_ri' ? 'BPS RI Demografi'
+                                : src.label}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {/* Count only if meaningful */}
+                            {typeof src.count === 'number' && isLoaded && (
+                              <span className="text-xs font-semibold text-ink tabular-nums">
+                                {src.count.toLocaleString('id-ID')}
+                              </span>
+                            )}
+                            {isEmpty && (
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
+                                0 Data
+                              </span>
+                            )}
+                            {isStale && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 flex items-center gap-0.5">
+                                <Clock size={9} /> Cache Stale
+                              </span>
+                            )}
+                            {isLoaded && !isStale && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                                Aktif
+                              </span>
+                            )}
+                            {isUnavail && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                                {src.id === 'bps_ri' ? 'Belum Didukung' : 'Tidak Tersedia'}
+                              </span>
+                            )}
+                            {isTrunc && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800" title="Data dibatasi pada 250 tempat terdekat">
+                                Terpotong
+                              </span>
+                            )}
+                            {src.year && (
+                              <span className="text-[10px] text-slate-400">({src.year})</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div className="flex items-center justify-between py-1 border-b border-slate-200/60">
-                    <span>Database Usaha Terdaftar LOCIVA</span>
-                    <span className="font-semibold text-ink">
-                      {result.registeredBusinessCount !== null && result.registeredBusinessCount !== undefined
-                        ? `${result.registeredBusinessCount} Usaha`
-                        : result.internalBusinessCount !== null && result.internalBusinessCount !== undefined
-                        ? `${result.internalBusinessCount} Usaha`
-                        : 'Belum dimuat'}
-                    </span>
-                  </div>
-                  {result.internalPoiCount !== null && result.internalPoiCount !== undefined && (
+                ) : (
+                  // Fallback if sources array not present (client-side only analysis)
+                  <div className="space-y-2 text-xs text-slate-600">
                     <div className="flex items-center justify-between py-1 border-b border-slate-200/60">
-                      <span>POI Fasilitas Publik Internal</span>
-                      <span className="font-semibold text-ink">{result.internalPoiCount} POI</span>
+                      <span className="flex items-center gap-1.5"><Globe size={12} className="text-sky-500"/> OpenStreetMap (Overpass)</span>
+                      <span className="font-semibold text-ink">{result.allPlaces?.length || 0} POI</span>
                     </div>
-                  )}
-                  <div className="flex items-center justify-between py-1 border-b border-slate-200/60">
-                    <span>Badan Pusat Statistik (BPS RI)</span>
-                    <span className="font-semibold text-ink">Agregat Wilayah Administratif</span>
+                    <div className="flex items-center justify-between py-1 border-b border-slate-200/60">
+                      <span className="flex items-center gap-1.5"><Database size={12} className="text-indigo-500"/> Usaha Terdaftar LOCIVA</span>
+                      <span className="font-semibold text-ink">
+                        {result.registeredBusinessCount ?? result.internalBusinessCount ?? '—'}
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="pt-2 text-[11px] text-slate-500 leading-relaxed space-y-1">
                   <p>

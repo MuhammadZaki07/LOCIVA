@@ -12,10 +12,12 @@ interface CandidateMarkerProps {
   onClick: (id: CandidateId) => void;
 }
 
-const colorMap: Record<CandidateId, string> = {
+const colorMap: Record<string, string> = {
   A: '#5b5bd6',
   B: '#2f9e6b',
   C: '#c4922a',
+  D: '#e11d48',
+  E: '#8b5cf6',
 };
 
 export const CandidateMarker: React.FC<CandidateMarkerProps> = ({
@@ -39,9 +41,11 @@ export const CandidateMarker: React.FC<CandidateMarkerProps> = ({
     [id, onDragEnd, onClick]
   );
 
+  const markerColor = colorMap[id] || '#0891b2';
+
   const iconNode = (
     <div style={{
-      backgroundColor: colorMap[id], 
+      backgroundColor: markerColor, 
       width: '30px', 
       height: '30px', 
       borderRadius: '50%', 
@@ -71,26 +75,23 @@ export const CandidateMarker: React.FC<CandidateMarkerProps> = ({
         eventHandlers={eventHandlers}
         ref={markerRef}
       >
-        <MapPopup className="lociva-popup-wrapper">
-          <div className="p-3 text-center space-y-1">
-            <p className="font-bold text-ink text-sm">Candidate {id}</p>
-            <p className="text-xs text-muted">Drag marker to adjust location</p>
-            <p className="text-[10px] text-slate-400 font-mono">
-              {lat.toFixed(5)}, {lng.toFixed(5)}
-            </p>
+        <MapPopup>
+          <div className="p-1 text-center font-sans">
+            <span className="font-bold text-slate-800 text-sm block">Kandidat {id}</span>
+            <span className="text-xs text-slate-500 block">Radius: {radius}m</span>
+            <span className="text-[10px] text-muted block mt-1">Geser pin untuk memindahkan</span>
           </div>
         </MapPopup>
       </MapMarker>
-      
       <MapCircle
         center={[lat, lng]}
         radius={radius}
         pathOptions={{
-          color: colorMap[id],
-          fillColor: colorMap[id],
-          fillOpacity: 0.1,
+          color: markerColor,
+          fillColor: markerColor,
+          fillOpacity: 0.12,
           weight: 2,
-          dashArray: '4'
+          dashArray: '4, 4'
         }}
       />
     </>

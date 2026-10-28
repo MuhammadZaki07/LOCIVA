@@ -10,6 +10,8 @@ import {
   AlertCircle,
   ArrowLeft,
   RotateCcw,
+  Tag,
+  X,
 } from "lucide-react";
 import {
   getBusinessTypes,
@@ -31,6 +33,25 @@ import {
   ModalDescription,
   ModalFooter,
 } from "@/components/ui/Modal";
+
+const COMMON_COMPETITOR_SUGGESTIONS: Array<{ label: string; value: string }> = [
+  { label: "cafe", value: "cafe" },
+  { label: "restaurant", value: "restaurant" },
+  { label: "fast_food", value: "fast_food" },
+  { label: "food_court", value: "food_court" },
+  { label: "bakery", value: "bakery" },
+  { label: "convenience", value: "convenience" },
+  { label: "supermarket", value: "supermarket" },
+  { label: "retail", value: "retail" },
+  { label: "barbershop", value: "barbershop" },
+  { label: "hairdresser", value: "hairdresser" },
+  { label: "laundry", value: "laundry" },
+  { label: "dry_cleaning", value: "dry_cleaning" },
+  { label: "pharmacy", value: "pharmacy" },
+  { label: "dentist", value: "amenity=dentist" },
+  { label: "car_repair", value: "shop=car_repair" },
+  { label: "motorcycle_repair", value: "shop=motorcycle_repair" },
+];
 
 const AVAILABLE_FACTORS = [
   { key: "campus", label: "kampus / universitas", desc: "mahasiswa & civitas akademika" },
@@ -79,7 +100,9 @@ export default function AdminBusinessTypes() {
     min_radius_m: 100,
     max_radius_m: 1500,
     is_active: true,
+    competitor_categories: [] as string[],
   });
+  const [customTagInput, setCustomTagInput] = useState("");
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -133,7 +156,9 @@ export default function AdminBusinessTypes() {
       min_radius_m: 100,
       max_radius_m: 1500,
       is_active: true,
+      competitor_categories: [],
     });
+    setCustomTagInput("");
     setFormError(null);
     setMode("create");
   };
@@ -151,7 +176,11 @@ export default function AdminBusinessTypes() {
       min_radius_m: item.min_radius_m || 100,
       max_radius_m: item.max_radius_m || 1500,
       is_active: item.is_active,
+      competitor_categories: Array.isArray(item.competitor_categories)
+        ? item.competitor_categories
+        : [],
     });
+    setCustomTagInput("");
     setFormError(null);
     setMode("edit");
   };
@@ -172,6 +201,35 @@ export default function AdminBusinessTypes() {
     setMode("detail");
   };
 
+  const handleToggleCompetitorCategory = (value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      competitor_categories: prev.competitor_categories.includes(value)
+        ? prev.competitor_categories.filter((c) => c !== value)
+        : [...prev.competitor_categories, value],
+    }));
+  };
+
+  const handleAddCustomCompetitorCategory = () => {
+    const tag = customTagInput.trim().toLowerCase();
+    if (!tag || formData.competitor_categories.includes(tag)) {
+      setCustomTagInput("");
+      return;
+    }
+    setFormData((prev) => ({
+      ...prev,
+      competitor_categories: [...prev.competitor_categories, tag],
+    }));
+    setCustomTagInput("");
+  };
+
+  const handleRemoveCompetitorCategory = (value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      competitor_categories: prev.competitor_categories.filter((c) => c !== value),
+    }));
+  };
+
   const handleSaveForm = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
@@ -188,6 +246,7 @@ export default function AdminBusinessTypes() {
           ...formData,
           name: formData.name.trim(),
           slug: formData.slug.trim() || formData.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+          competitor_categories: formData.competitor_categories,
         });
         toast({
           title: "Jenis usaha ditambahkan",
@@ -198,6 +257,7 @@ export default function AdminBusinessTypes() {
         await updateBusinessType(selectedItem.id, {
           ...formData,
           name: formData.name.trim(),
+          competitor_categories: formData.competitor_categories,
         });
         toast({
           title: "Jenis usaha diperbarui",
@@ -459,6 +519,26 @@ export default function AdminBusinessTypes() {
             </div>
           </div>
 
+          {/* Competitor categories in detail view */}
+          {Array.isArray(selectedItem.competitor_categories) && selectedItem.competitor_categories.length > 0 && (
+            <div className="pt-4 border-t border-[#f0f0f8]">
+              <h3 className="font-display text-[14px] font-medium text-ink mb-2 flex items-center gap-1.5">
+                <Tag size={14} className="text-primary" />
+                kategori kompetitor OSM
+              </h3>
+              <div className="flex flex-wrap gap-1.5">
+                {selectedItem.competitor_categories.map((cat) => (
+                  <span
+                    key={cat}
+                    className="inline-flex items-center rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-[11px] font-medium text-primary"
+                  >
+                    {cat}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Weights breakdown */}
           <div className="pt-4 border-t border-[#f0f0f8]">
             <h3 className="font-display text-[14px] font-medium text-ink mb-3">
@@ -590,6 +670,87 @@ export default function AdminBusinessTypes() {
               placeholder="Jelaskan karakteristik konsumen sasaran, kebutuhan akses transportasi, atau preferensi zonasi..."
               className="mt-1 w-full rounded-[10px] border border-[#e5e5f0] bg-white px-3.5 py-2 text-[12.5px] text-ink outline-none focus:border-primary"
             />
+          </div>
+
+          {/* Competitor Categories Section */}
+          <div className="rounded-[14px] border border-[#e5e5f0] p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Tag size={14} className="text-primary shrink-0" />
+              <span className="text-[12.5px] font-medium text-ink">
+                kategori kompetitor OSM
+              </span>
+            </div>
+            <p className="text-[11.5px] text-muted">
+              Tentukan kategori atau tag OSM yang dianggap pesaing langsung. Contoh:{" "}
+              <code className="bg-slate-100 px-1 rounded text-[10.5px]">barbershop</code>,{" "}
+              <code className="bg-slate-100 px-1 rounded text-[10.5px]">amenity=dentist</code>,{" "}
+              <code className="bg-slate-100 px-1 rounded text-[10.5px]">shop=bakery</code>.
+            </p>
+
+            {/* Selected tags */}
+            {formData.competitor_categories.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {formData.competitor_categories.map((cat) => (
+                  <span
+                    key={cat}
+                    className="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-[11px] font-medium text-primary"
+                  >
+                    {cat}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCompetitorCategory(cat)}
+                      className="ml-0.5 rounded-full hover:bg-primary/20 p-0.5 cursor-pointer"
+                      title={`Hapus ${cat}`}
+                    >
+                      <X size={9} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Custom tag input */}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={customTagInput}
+                onChange={(e) => setCustomTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddCustomCompetitorCategory();
+                  }
+                }}
+                placeholder="Ketik tag kustom (mis. shop=bakery) lalu Enter"
+                className="flex-1 rounded-[8px] border border-[#e5e5f0] bg-white px-3 py-1.5 text-[12px] text-ink outline-none focus:border-primary"
+              />
+              <button
+                type="button"
+                onClick={handleAddCustomCompetitorCategory}
+                className="clay-press inline-flex items-center gap-1 rounded-[8px] border border-primary/30 bg-primary/5 px-3 py-1.5 text-[11.5px] font-medium text-primary hover:bg-primary/10 cursor-pointer"
+              >
+                <Plus size={12} />
+                <span>tambah</span>
+              </button>
+            </div>
+
+            {/* Quick-add suggestions */}
+            <div className="flex flex-wrap gap-1.5">
+              {COMMON_COMPETITOR_SUGGESTIONS.map((s) => (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => handleToggleCompetitorCategory(s.value)}
+                  className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10.5px] font-medium cursor-pointer transition-colors ${
+                    formData.competitor_categories.includes(s.value)
+                      ? "bg-primary/10 border-primary/30 text-primary"
+                      : "bg-slate-50 border-slate-200 text-muted hover:border-primary/30 hover:text-primary"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="flex items-center gap-2">

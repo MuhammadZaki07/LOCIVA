@@ -462,7 +462,22 @@ export function MapPage() {
     C: null,
   });
 
-  const { analyze, isAnalyzing, error: analysisError } = useLocationAnalysis();
+  const { analyze, isAnalyzing, getCandidateStage, error: analysisError } = useLocationAnalysis();
+
+  const [candidateStatuses, setCandidateStatuses] = useState<
+    Record<string, 'draft' | 'location_selected' | 'analyzing' | 'ready' | 'stale' | 'failed'>
+  >({
+    A: 'draft',
+    B: 'draft',
+    C: 'draft',
+  });
+  const [persistedCandidateMap, setPersistedCandidateMap] = useState<
+    Record<string, boolean>
+  >({
+    A: false,
+    B: false,
+    C: false,
+  });
 
   const [isSelectingStartPoint, setIsSelectingStartPoint] = useState(false);
   const activeCandidate = candidates[activeCandidateId];
@@ -764,6 +779,7 @@ export function MapPage() {
   }, [fetchPublicRoutes]);
 
   // ── Explicit candidate persistence (no auto-save on drag) ─────────────────
+  // ── Explicit candidate persistence (with snapshot history & business linkage) ──
   const persistCandidateToDatabase = useCallback(
     async (
       candidate: CandidateData,
@@ -771,35 +787,65 @@ export function MapPage() {
       analysis?: AnalysisResult | null,
     ) => {
       const token = localStorage.getItem("token");
-      if (!token) return;
+      if (!token) {
+        toast({
+          title: "Perlu Masuk Akun",
+          description: "Silakan masuk (login) terlebih dahulu untuk menyimpan kandidat ke database.",
+          variant: "warning",
+        });
+        return;
+      }
       try {
-        await api.post("/simulations/candidate", {
+        const businessId = (businessType as any).business_id || (businessType as any).id;
+        const payload: Record<string, any> = {
           candidate_id: candidate.id,
           latitude: candidate.lat,
           longitude: candidate.lng,
           radius_m: candidate.radius,
           business_type_id: businessType.id,
+          business_id: businessId,
           session_name: `Simulation ${businessType.name}`,
           location_name: `Candidate Point ${candidate.id}`,
-          scores: analysis
-            ? {
-                opportunity_score: analysis.opportunityScore,
-                competition_score: analysis.competitionScore,
-                accessibility_score: analysis.accessibilityScore,
-                data_confidence: analysis.dataConfidence,
-              }
-            : undefined,
-        });
+          status: analysis ? "calculated" : "draft",
+        };
+
+        if (analysis) {
+          payload.scores = {
+            opportunity_score: analysis.opportunityScore,
+            competition_score: analysis.competitionScore,
+            accessibility_score: analysis.accessibilityScore,
+            data_confidence: analysis.dataConfidence,
+          };
+          payload.analyzed_lat = analysis.lat ?? candidate.lat;
+          payload.analyzed_lng = analysis.lng ?? candidate.lng;
+          payload.algorithm_version = "1.0";
+          payload.competitor_count = analysis.competitorCount;
+          payload.report_count = analysis.reportCount;
+          payload.competitor_categories = (businessType as any).competitor_categories;
+          payload.data_warnings = analysis.dataWarnings;
+          payload.factors = analysis.factors;
+          payload.sources = analysis.sources;
+          payload.limitations = analysis.limitations;
+        }
+
+        await api.post("/simulations/candidate", payload);
         setIsPersistedInDb(true);
+        setPersistedCandidateMap((prev) => ({
+          ...prev,
+          [candidate.id]: true,
+        }));
         toast({
-          title: "Candidate Saved",
-          description: "Location point saved to database successfully.",
+          title: `Kandidat ${candidate.id} Tersimpan`,
+          description: "Data kandidat dan riwayat snapshot berhasil disimpan ke database.",
           variant: "success",
         });
-      } catch (err) {
+      } catch (err: any) {
+        const errMsg =
+          err?.response?.data?.message ||
+          "Gagal menyimpan ke database. Periksa koneksi jaringan Anda.";
         toast({
-          title: "Failed to Save",
-          description: "Please check your network connection or sign in again.",
+          title: "Gagal Menyimpan",
+          description: errMsg,
           variant: "error",
         });
       }
@@ -807,35 +853,76 @@ export function MapPage() {
     [toast],
   );
 
-  // ── Run analysis when candidate debounced position changes ────────────────
-  useEffect(() => {
-    if (selectedBusiness && debouncedLat && debouncedLng && debouncedRadius) {
-      const runAnalysis = async () => {
-        const res = await analyze(
-          activeCandidateId,
-          debouncedLat,
-          debouncedLng,
-          debouncedRadius,
-          selectedBusiness,
-        );
-        if (res) {
-          setAnalysisResults((prev) => ({ ...prev, [activeCandidateId]: res }));
-          fetchLocivaData(debouncedLat, debouncedLng, debouncedRadius * 1.5);
-        }
-      };
-      runAnalysis();
+  // ── Manual analysis trigger (explicit user action, no auto-trigger on drag) ──
+  const handleRunAnalysis = useCallback(async () => {
+    const cand = candidates[activeCandidateId];
+    if (!cand || !selectedBusiness) return;
+
+    setCandidateStatuses((prev) => ({ ...prev, [activeCandidateId]: "analyzing" }));
+
+    const res = await analyze(
+      activeCandidateId,
+      cand.lat,
+      cand.lng,
+      cand.radius,
+      selectedBusiness,
+    );
+
+    if (res) {
+      setAnalysisResults((prev) => ({ ...prev, [activeCandidateId]: res }));
+      setCandidateStatuses((prev) => ({ ...prev, [activeCandidateId]: "ready" }));
+      fetchLocivaData(cand.lat, cand.lng, cand.radius * 1.5);
+
+      toast({
+        title: `Analisis Kandidat ${activeCandidateId} Selesai`,
+        description: `Skor potensi lokasi: ${res.opportunityScore ?? "N/A"}%`,
+        variant: "success",
+      });
+
+      if (isLoggedIn) {
+        persistCandidateToDatabase(cand, selectedBusiness, res);
+      }
+    } else {
+      setCandidateStatuses((prev) => ({ ...prev, [activeCandidateId]: "failed" }));
+      toast({
+        title: "Analisis Gagal",
+        description: "Tidak dapat menyelesaikan analisis lokasi. Silakan coba lagi.",
+        variant: "error",
+      });
     }
   }, [
-    debouncedLat,
-    debouncedLng,
-    debouncedRadius,
-    selectedBusiness,
     activeCandidateId,
+    candidates,
+    selectedBusiness,
     analyze,
     fetchLocivaData,
+    isLoggedIn,
+    persistCandidateToDatabase,
+    toast,
   ]);
 
-  // ── Event Handlers ─────────────────────────────────────────────────────────
+  // ── Invalidate to stale when candidate position or radius changes ──────────
+  useEffect(() => {
+    if (activeCandidate && analysisResults[activeCandidateId]) {
+      const lastRes = analysisResults[activeCandidateId];
+      if (
+        lastRes &&
+        (Math.abs(lastRes.lat - activeCandidate.lat) > 0.0001 ||
+          Math.abs(lastRes.lng - activeCandidate.lng) > 0.0001 ||
+          lastRes.radius !== activeCandidate.radius)
+      ) {
+        setCandidateStatuses((prev) => ({
+          ...prev,
+          [activeCandidateId]: "stale",
+        }));
+        setPersistedCandidateMap((prev) => ({
+          ...prev,
+          [activeCandidateId]: false,
+        }));
+      }
+    }
+  }, [debouncedLat, debouncedLng, debouncedRadius, activeCandidateId, activeCandidate, analysisResults]);
+
   const handleSearchSelect = (lat: number, lng: number, name: string) => {
     setCenter([lat, lng]);
     mapRef.current?.flyTo([lat, lng], 15);
@@ -847,6 +934,8 @@ export function MapPage() {
     setIsPersistedInDb(false);
     setCandidates({ A: null, B: null, C: null });
     setAnalysisResults({ A: null, B: null, C: null });
+    setCandidateStatuses({ A: 'draft', B: 'draft', C: 'draft' });
+    setPersistedCandidateMap({ A: false, B: false, C: false });
     setActiveCandidateId("A");
     setActiveTool("analysis");
     if (window.innerWidth < 768) setActiveTool(null);
@@ -860,8 +949,6 @@ export function MapPage() {
     (lat: number, lng: number) => {
       if (pickingReportLocation) {
         setSelectedReportCoords({ lat, lng });
-        // Keep picking mode active so user can reposition — modal opens via button
-        // Immediately open the modal with updated coords so UX is seamless
         setPickingReportLocation(false);
         setCreateReportModalOpen(true);
         toast({
@@ -873,17 +960,26 @@ export function MapPage() {
       }
 
       if (clickMode === "candidate" && selectedBusiness) {
+        const existing = candidates[activeCandidateId];
         const newCandidate: CandidateData = {
           id: activeCandidateId,
           lat,
           lng,
           radius:
-            candidates[activeCandidateId]?.radius ||
+            existing?.radius ||
             selectedBusiness.defaultRadius,
         };
         setCandidates((prev) => ({
           ...prev,
           [activeCandidateId]: newCandidate,
+        }));
+        setCandidateStatuses((prev) => ({
+          ...prev,
+          [activeCandidateId]: analysisResults[activeCandidateId] ? 'stale' : 'location_selected',
+        }));
+        setPersistedCandidateMap((prev) => ({
+          ...prev,
+          [activeCandidateId]: false,
         }));
         setIsPersistedInDb(false);
         if (activeTool !== "analysis") setActiveTool("analysis");
@@ -936,9 +1032,11 @@ export function MapPage() {
       pickingReportLocation,
       clickMode,
       isSelectingStartPoint,
+      isSelectingWaypoint,
       selectedBusiness,
       activeCandidateId,
       candidates,
+      analysisResults,
       activeTool,
       toast,
     ],
@@ -952,9 +1050,17 @@ export function MapPage() {
         return { ...prev, [id]: { ...existing, lat, lng } };
       });
       setActiveCandidateId(id);
+      setCandidateStatuses((prev) => ({
+        ...prev,
+        [id]: analysisResults[id] ? 'stale' : 'location_selected',
+      }));
+      setPersistedCandidateMap((prev) => ({
+        ...prev,
+        [id]: false,
+      }));
       setIsPersistedInDb(false);
     },
-    [],
+    [analysisResults],
   );
 
   const handleRadiusChange = useCallback(
@@ -964,19 +1070,67 @@ export function MapPage() {
         if (!existing) return prev;
         return { ...prev, [activeCandidateId]: { ...existing, radius } };
       });
+      setCandidateStatuses((prev) => ({
+        ...prev,
+        [activeCandidateId]: analysisResults[activeCandidateId] ? 'stale' : 'location_selected',
+      }));
+      setPersistedCandidateMap((prev) => ({
+        ...prev,
+        [activeCandidateId]: false,
+      }));
     },
-    [activeCandidateId],
+    [activeCandidateId, analysisResults],
   );
 
-  const handleAddCandidate = () => {
-    const nextAvailable = (["A", "B", "C"] as CandidateId[]).find(
-      (id) => candidates[id] === null,
+  const handleAddCandidate = async () => {
+    const candidateKeys: CandidateId[] = ["A", "B", "C", "D", "E"];
+    const nextAvailable = candidateKeys.find(
+      (id) => !candidates[id],
     );
-    if (nextAvailable) {
-      setActiveCandidateId(nextAvailable);
+    if (!nextAvailable) {
       toast({
-        title: `Candidate ${nextAvailable}`,
-        description: "Click map to set candidate location.",
+        title: "Batas Tampilan Kandidat",
+        description: "Maksimal 5 kandidat per sesi komparasi aktif di peta.",
+        variant: "warning",
+      });
+      return;
+    }
+
+    setActiveCandidateId(nextAvailable);
+    setCandidateStatuses((prev) => ({ ...prev, [nextAvailable]: 'draft' }));
+    setAnalysisResults((prev) => ({ ...prev, [nextAvailable]: null }));
+    setPersistedCandidateMap((prev) => ({ ...prev, [nextAvailable]: false }));
+
+    // Create persistent draft in database via Laravel API
+    if (isLoggedIn && selectedBusiness) {
+      try {
+        await api.post("/simulations/candidate", {
+          candidate_id: nextAvailable,
+          latitude: selectedBusiness.latitude || center[0] || -7.9800,
+          longitude: selectedBusiness.longitude || center[1] || 112.6300,
+          radius_m: selectedBusiness.defaultRadius || 500,
+          business_type_id: selectedBusiness.id,
+          business_id: (selectedBusiness as any).business_id || (selectedBusiness as any).id,
+          status: 'draft',
+          session_name: `Simulasi ${selectedBusiness.name}`,
+          location_name: `Draft Kandidat ${nextAvailable}`,
+        });
+
+        toast({
+          title: `Draft Kandidat ${nextAvailable} Dibuat`,
+          description: "Draft tersimpan di backend. Klik peta untuk menentukan titik koordinat kandidat.",
+          variant: "success",
+        });
+      } catch {
+        toast({
+          title: `Kandidat ${nextAvailable} Siap`,
+          description: "Klik peta untuk menentukan titik koordinat kandidat.",
+        });
+      }
+    } else {
+      toast({
+        title: `Kandidat ${nextAvailable} Siap`,
+        description: "Klik peta untuk menentukan titik koordinat kandidat.",
       });
     }
   };
@@ -991,20 +1145,49 @@ export function MapPage() {
     );
   };
 
-  // ── Unified Places List (Viewport places + Candidate places) ──────────────
-  const currentResult = analysisResults[activeCandidateId];
-  const candidatePlaces = useMemo(
-    () => currentResult?.allPlaces || [],
-    [currentResult],
-  );
+  // ── Unified Places List Across ALL Candidates (Multi-candidate POI relevance) ──
+  const allCandidatePlaces = useMemo(() => {
+    const placesMap = new Map<string, Place & { candidateAssociations: CandidateId[] }>();
 
-  // Internal (LocalOSM) places: viewport + candidate analysis results, no duplicates
-  const allLocalPlaces: Place[] = useMemo(() => {
-    const mapById = new Map<string, Place>();
+    (Object.entries(analysisResults) as [CandidateId, AnalysisResult | null][]).forEach(
+      ([candId, result]) => {
+        if (!result?.allPlaces) return;
+        result.allPlaces.forEach((place) => {
+          const existing = placesMap.get(place.id);
+          if (existing) {
+            if (!existing.candidateAssociations.includes(candId)) {
+              existing.candidateAssociations.push(candId);
+            }
+          } else {
+            placesMap.set(place.id, {
+              ...place,
+              candidateAssociations: [candId],
+            });
+          }
+        });
+      },
+    );
+
+    return Array.from(placesMap.values());
+  }, [analysisResults]);
+
+  // Internal (LocalOSM) places: viewport + all candidate places, deduplicated by id
+  const allLocalPlaces: (Place & { candidateAssociations?: CandidateId[] })[] = useMemo(() => {
+    const mapById = new Map<string, Place & { candidateAssociations?: CandidateId[] }>();
     for (const p of viewportPlaces) mapById.set(p.id, p);
-    for (const p of candidatePlaces) mapById.set(p.id, p);
+    for (const p of allCandidatePlaces) {
+      const existing = mapById.get(p.id);
+      if (existing) {
+        mapById.set(p.id, {
+          ...existing,
+          candidateAssociations: p.candidateAssociations,
+        });
+      } else {
+        mapById.set(p.id, p);
+      }
+    }
     return Array.from(mapById.values());
-  }, [viewportPlaces, candidatePlaces]);
+  }, [viewportPlaces, allCandidatePlaces]);
 
   const filteredLocalPlaces = useMemo(
     () =>
@@ -1014,7 +1197,7 @@ export function MapPage() {
     [allLocalPlaces, showLocalPoiData, layerCategory],
   );
 
-  // External (Overpass) places; skip ones already shown by the internal layer
+  // External (Overpass) places; skip ones already shown by internal layer
   const filteredExternalPlaces = useMemo(() => {
     if (!showMapsData) return [];
     const localIds = showLocalPoiData
@@ -1261,8 +1444,13 @@ export function MapPage() {
                       isOpen={true}
                       onClose={() => setActiveTool(null)}
                       candidateExists={candidates[activeCandidateId] !== null}
-                      isPersistedInDb={isPersistedInDb}
+                      isPersistedInDb={persistedCandidateMap[activeCandidateId] ?? false}
                       onSaveCandidate={handleSaveCandidate}
+                      onAnalyze={handleRunAnalysis}
+                      candidateStatus={candidateStatuses[activeCandidateId]}
+                      isStale={candidateStatuses[activeCandidateId] === 'stale'}
+                      candidateId={activeCandidateId}
+                      analysisStage={getCandidateStage(activeCandidateId)}
                     />
                   </div>
                 </div>
@@ -1639,6 +1827,8 @@ export function MapPage() {
                 <PoiMarker
                   key={`poi-${place.id}`}
                   place={place}
+                  candidateAssociations={(place as any).candidateAssociations}
+                  activeCandidateId={activeCandidateId}
                   distanceFromCandidate={
                     activeCandidate
                       ? distanceMeters(
@@ -1658,6 +1848,8 @@ export function MapPage() {
                 <PoiMarker
                   key={`ext-poi-${place.id}`}
                   place={place}
+                  candidateAssociations={(place as any).candidateAssociations}
+                  activeCandidateId={activeCandidateId}
                   distanceFromCandidate={
                     activeCandidate
                       ? distanceMeters(
