@@ -6,7 +6,7 @@ import {
 } from "@/components/ui/shadcn-ui/map";
 import type { RouteWaypoint, RouteCalculationResult } from "@/lib/routing";
 import type { SavedRouteItem } from "./VendorRoutePanel";
-import { MapPin, Navigation, Clock } from "lucide-react";
+import { MapPin, Navigation, Clock, Check } from "lucide-react";
 import RouteDirectionArrows from "./RouteDirectionArrows";
 
 interface RouteLayerProps {
@@ -14,6 +14,8 @@ interface RouteLayerProps {
   currentCalculation: RouteCalculationResult | null;
   publicRoutes?: SavedRouteItem[];
   showPublicRoutes?: boolean;
+  activeWaypointIndex?: number;
+  completedWaypointKeys?: string[];
 }
 
 const PUBLIC_ROUTE_COLORS = [
@@ -42,6 +44,8 @@ export const RouteLayer: React.FC<RouteLayerProps> = ({
   currentCalculation,
   publicRoutes = [],
   showPublicRoutes = true,
+  activeWaypointIndex,
+  completedWaypointKeys,
 }) => {
   const [focusedPublicRouteId, setFocusedPublicRouteId] = React.useState<
     string | null
@@ -70,6 +74,7 @@ export const RouteLayer: React.FC<RouteLayerProps> = ({
 
     return { route, markerOffset };
   });
+
   return (
     <>
       {/* Active Calculated Route with White Outline */}
@@ -112,8 +117,59 @@ export const RouteLayer: React.FC<RouteLayerProps> = ({
       {activeWaypoints.map((wp, idx) => {
         const isFirst = idx === 0;
         const isLast = idx === activeWaypoints.length - 1;
+        const wpKey = (wp as any).id != null ? String((wp as any).id) : (wp.lat.toFixed(6) + "," + wp.lng.toFixed(6) + "," + idx);
+        const isCompleted =
+          (completedWaypointKeys && completedWaypointKeys.includes(wpKey)) ||
+          (activeWaypointIndex != null && idx < activeWaypointIndex);
+        const isCurrentTarget =
+          !isCompleted && activeWaypointIndex != null && idx === activeWaypointIndex;
 
-        const iconNode = (
+        const iconNode = isCompleted ? (
+          <div
+            style={{
+              backgroundColor: "#10b981",
+              width: "24px",
+              height: "24px",
+              borderRadius: "50%",
+              border: "2px solid white",
+              boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "white",
+              fontWeight: 700,
+              fontSize: "11px",
+              cursor: "pointer",
+            }}
+            title={`Titik ${idx + 1} (Telah Tercapai)`}
+          >
+            <Check size={13} strokeWidth={3} />
+          </div>
+        ) : isCurrentTarget ? (
+          <div className="relative flex items-center justify-center">
+            <span className="absolute inline-flex size-9 animate-ping rounded-full bg-amber-400 opacity-60" />
+            <div
+              style={{
+                backgroundColor: "#d97706",
+                width: "32px",
+                height: "32px",
+                borderRadius: "50%",
+                border: "2.5px solid white",
+                boxShadow: "0 3px 12px rgba(217,119,6,0.6)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "white",
+                fontWeight: 800,
+                fontSize: "12px",
+                cursor: "pointer",
+              }}
+              title={`Target Saat Ini: ${wp.name || idx + 1}`}
+            >
+              {isFirst ? "A" : isLast ? "B" : idx + 1}
+            </div>
+          </div>
+        ) : (
           <div
             style={{
               backgroundColor: isFirst
@@ -151,7 +207,7 @@ export const RouteLayer: React.FC<RouteLayerProps> = ({
             key={`wp-${idx}`}
             position={[wp.lat, wp.lng]}
             icon={iconNode}
-            iconAnchor={[13, 13]}
+            iconAnchor={isCurrentTarget ? [16, 16] : [13, 13]}
             popupAnchor={[0, -14]}
           >
             <MapPopup className="lociva-popup-wrapper">
@@ -160,21 +216,29 @@ export const RouteLayer: React.FC<RouteLayerProps> = ({
                   <span
                     className="size-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
                     style={{
-                      backgroundColor: isFirst
+                      backgroundColor: isCompleted
                         ? "#10b981"
-                        : isLast
-                          ? "#6366f1"
-                          : "#1e293b",
+                        : isCurrentTarget
+                          ? "#d97706"
+                          : isFirst
+                            ? "#10b981"
+                            : isLast
+                              ? "#6366f1"
+                              : "#1e293b",
                     }}
                   >
-                    {idx + 1}
+                    {isCompleted ? "✓" : idx + 1}
                   </span>
                   <span className="font-bold text-ink text-xs">
-                    {isFirst
-                      ? "Route Origin"
-                      : isLast
-                        ? "Route Destination"
-                        : "Waypoint Stop"}
+                    {isCompleted
+                      ? "Titik Selesai Dikunjungi"
+                      : isCurrentTarget
+                        ? "Target Waypoint Saat Ini"
+                        : isFirst
+                          ? "Route Origin"
+                          : isLast
+                            ? "Route Destination"
+                            : "Waypoint Stop"}
                   </span>
                 </div>
 

@@ -22,6 +22,12 @@ import { fetchPlacesInBounds as fetchExternalPlacesInBounds } from "@/lib/Osm";
 import { useToast } from "@/components/ui/Toast";
 import api from "@/context/apiClient";
 
+// Batas wilayah kepulauan Indonesia: Barat Daya (Samudra Hindia / selatan Rote) s/d Timur Laut (Laut Natuna Utara / Papua timur)
+export const INDONESIA_BOUNDS: [[number, number], [number, number]] = [
+  [-13.5, 92.0],
+  [8.5, 144.0],
+];
+
 import { BusinessCatalogPanel } from "@/components/maps/BusinessCatalogPanel";
 import { CandidateMarker } from "@/components/maps/CandidateMarker";
 import { AnalysisPanel } from "@/components/maps/AnalysisPanel";
@@ -40,7 +46,7 @@ import {
   DataSourceControl,
   type FilterCategory,
 } from "@/components/maps/DataSourceControl";
-import { VendorRoutePanel } from "@/components/maps/VendorRoutePanel";
+import { VendorRoutePanel, type TrackingLocationUpdate } from "@/components/maps/VendorRoutePanel";
 import { RouteLayer } from "@/components/maps/RouteLayer";
 import { MapPillNav, type MapToolId } from "@/components/maps/MapPillNav";
 import { SearchModal } from "@/components/maps/SearchModal";
@@ -67,6 +73,7 @@ import L from "leaflet";
 import { useMapEvents } from "react-leaflet";
 import {
   AlertCircle,
+  Compass,
   AlertTriangle,
   BookOpen,
   CheckCircle2,
@@ -370,10 +377,41 @@ export function MapPage() {
   const [bpsLegendYear, setBpsLegendYear] = useState<number>(
     new Date().getFullYear(),
   );
-  const [trackingLocation, setTrackingLocation] = useState<{
-    lat: number;
-    lng: number;
-  } | null>(null);
+  const [trackingLocation, setTrackingLocation] = useState<TrackingLocationUpdate | null>(null);
+  const [mapRotation, setMapRotation] = useState<number | null>(null);
+  const [isHeadingLocked, setIsHeadingLocked] = useState<boolean>(true);
+
+  // Sync map rotation with user heading when active
+  // Using a ref to hold the target rotation and a separate low-frequency
+  // state update so that heading changes don't block the GPS callback chain.
+  const mapRotationTargetRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (
+      trackingLocation &&
+      typeof trackingLocation.heading === "number" &&
+      !isNaN(trackingLocation.heading) &&
+      isHeadingLocked
+    ) {
+      // Shortest-path angle transition: normalize to avoid 359->1 full rotation
+      const newHeading = ((trackingLocation.heading % 360) + 360) % 360;
+      const prev = mapRotationTargetRef.current;
+      if (prev !== null) {
+        const delta = ((newHeading - prev + 540) % 360) - 180;
+        const shortest = prev + delta;
+        mapRotationTargetRef.current = shortest;
+        setMapRotation(shortest);
+      } else {
+        mapRotationTargetRef.current = newHeading;
+        setMapRotation(newHeading);
+      }
+    } else if (!trackingLocation) {
+      mapRotationTargetRef.current = null;
+      setMapRotation(null);
+    }
+  }, [trackingLocation, isHeadingLocked]);
+
+  const activeUserLocation = trackingLocation || userLocation;
   const [createReportModalOpen, setCreateReportModalOpen] = useState(false);
   const [selectedReportCoords, setSelectedReportCoords] = useState<{
     lat: number;
@@ -441,7 +479,7 @@ export function MapPage() {
 
     mapRef.current.setView(
       [trackingLocation.lat, trackingLocation.lng],
-      Math.max(mapRef.current.getZoom(), 16),
+      Math.max(mapRef.current.getZoom(), 17),
       { animate: true },
     );
   }, [trackingLocation]);
@@ -1536,8 +1574,8 @@ export function MapPage() {
                 }}
                 onOpenCreateModal={() => {
                   setSelectedReportCoords(
-                    userLocation
-                      ? { lat: userLocation.lat, lng: userLocation.lng }
+                    activeUserLocation
+                      ? { lat: activeUserLocation.lat, lng: activeUserLocation.lng }
                       : { lat: center[0], lng: center[1] },
                   );
                   setCreateReportModalOpen(true);
@@ -1557,7 +1595,7 @@ export function MapPage() {
                 onRouteCalculated={setRouteCalculation}
                 currentCalculation={routeCalculation}
                 mapCenter={center}
-                userLocation={userLocation}
+                userLocation={activeUserLocation}
                 // onSelectStartPoint={() => setIsSelectingStartPoint(true)}
                 onTrackingLocationChange={setTrackingLocation}
                 onSelectStartPoint={() => {
@@ -1609,6 +1647,42 @@ export function MapPage() {
 
           {/* Map Controls — Right Side */}
           <div className="pointer-events-none absolute right-4 top-35 z-[1000] flex -translate-y-1/2 flex-col gap-2">
+            {/* Compass / Heading Lock Button (visible during tracking or when rotated) */}
+            {(trackingLocation || (mapRotation !== null && mapRotation !== 0)) && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (mapRotation === 0 || mapRotation === null) {
+                    setIsHeadingLocked(true);
+                    if (trackingLocation?.heading != null) {
+                      setMapRotation(trackingLocation.heading);
+                    }
+                  } else {
+                    setMapRotation(0);
+                    setIsHeadingLocked(false);
+                  }
+                }}
+                title={
+                  mapRotation && mapRotation !== 0
+                    ? `Reset ke Utara (Rotasi: ${Math.round(mapRotation)}°)`
+                    : "Kunci Arah Navigasi"
+                }
+                aria-label="Kompas Arah"
+                className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-md cursor-pointer border shadow-sm backdrop-blur-md transition-all duration-200 active:scale-95 border-slate-200/80 bg-white/95 text-primary hover:bg-primary-soft"
+              >
+                <Compass
+                  size={20}
+                  className={cn(
+                    "transition-transform duration-300",
+                    isHeadingLocked && trackingLocation ? "text-blue-600" : "text-slate-600"
+                  )}
+                  style={{
+                    transform: `rotate(-${mapRotation ?? 0}deg)`,
+                  }}
+                />
+              </button>
+            )}
+
             {/* GPS Location */}
             <button
               type="button"
@@ -1703,17 +1777,113 @@ export function MapPage() {
         </div>
 
         {/* ── Leaflet Map Viewport ─────────────────────────────────────────── */}
-        <div className="flex-1 relative z-0">
-          <MapContainer
+        <div className="flex-1 relative z-0 overflow-hidden">
+          {/* ── Top Navigation HUD Banner (Google Maps style) ────────────────── */}
+          {trackingLocation && (trackingLocation.targetWaypointName || trackingLocation.isFinished) && (
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] pointer-events-auto max-w-md w-[92%] sm:w-auto bg-slate-900/95 text-white backdrop-blur-md px-4 py-2.5 rounded-2xl shadow-2xl border border-slate-700/80 flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+              <div
+                className={cn(
+                  "h-9 w-9 rounded-xl text-white flex items-center justify-center shrink-0 shadow-md",
+                  trackingLocation.isFinished
+                    ? "bg-emerald-600 shadow-emerald-500/30"
+                    : "bg-blue-600/90 shadow-blue-500/20",
+                )}
+              >
+                {trackingLocation.isFinished ? (
+                  <CheckCircle2 size={20} className="text-white" />
+                ) : (
+                  <Navigation size={18} className="fill-white" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0 pr-1">
+                {trackingLocation.isFinished ? (
+                  <>
+                    <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">
+                      Navigasi Selesai
+                    </div>
+                    <div className="text-sm font-bold text-white truncate">
+                      Semua Titik Tujuan Berhasil Dikunjungi
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>Menuju Waypoint</span>
+                      {trackingLocation.currentWaypointIndex != null &&
+                        trackingLocation.totalWaypoints != null && (
+                          <span className="bg-slate-800 text-blue-400 px-1.5 py-0.2 rounded font-mono text-[10px]">
+                            {trackingLocation.currentWaypointIndex + 1}/
+                            {trackingLocation.totalWaypoints}
+                          </span>
+                        )}
+                      {/* GPS Accuracy Badge */}
+                      <span className="flex items-center gap-1 ml-auto text-[10px] text-slate-300">
+                        <span
+                          className={cn(
+                            "size-1.5 rounded-full",
+                            (trackingLocation.accuracy ?? 30) <= 15
+                              ? "bg-emerald-400"
+                              : (trackingLocation.accuracy ?? 30) <= 35
+                                ? "bg-amber-400"
+                                : "bg-red-400",
+                          )}
+                        />
+                        {(trackingLocation.accuracy ?? 30) <= 15
+                          ? "GPS Baik"
+                          : (trackingLocation.accuracy ?? 30) <= 35
+                            ? "GPS Sedang"
+                            : "GPS Lemah"}
+                      </span>
+                    </div>
+                    <div className="text-sm font-bold text-white truncate">
+                      {trackingLocation.targetWaypointName}
+                    </div>
+                  </>
+                )}
+              </div>
+              {!trackingLocation.isFinished &&
+                trackingLocation.targetDistanceMeters != null && (
+                  <div className="text-right shrink-0 border-l border-slate-700/80 pl-3">
+                    <div className="text-base font-extrabold text-blue-400">
+                      {trackingLocation.targetDistanceMeters >= 1000
+                        ? `${(trackingLocation.targetDistanceMeters / 1000).toFixed(1)} km`
+                        : `${Math.round(trackingLocation.targetDistanceMeters)} m`}
+                    </div>
+                    <div className="text-[10px] text-slate-400">Jarak target</div>
+                  </div>
+                )}
+            </div>
+          )}
+
+          <div
+            className="w-full h-full transition-transform duration-500 ease-out"
+            style={
+              mapRotation != null && mapRotation !== 0
+                ? {
+                    transform: `rotate(-${mapRotation}deg) scale(1.42)`,
+                    transformOrigin: "center center",
+                  }
+                : undefined
+            }
+          >
+            <MapContainer
             ref={mapRef}
             center={center}
             zoom={14}
+            minZoom={4}
+            maxZoom={19}
+            maxBounds={INDONESIA_BOUNDS}
+            maxBoundsViscosity={1.0}
             className="w-full h-full"
           >
             {basemapMode === "satellite" ? (
               <MapTileLayer
                 key="satellite"
                 name="Satellite"
+                bounds={INDONESIA_BOUNDS}
+                noWrap={true}
+                minZoom={4}
+                maxZoom={19}
                 rasterUrl={
                   (import.meta.env.VITE_SATELLITE_TILE_URL as string) ||
                   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
@@ -1722,12 +1892,15 @@ export function MapPage() {
                   (import.meta.env.VITE_SATELLITE_ATTRIBUTION as string) ||
                   "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
                 }
-                maxZoom={19}
               />
             ) : (
               <MapTileLayer
                 key="default"
                 name="Default"
+                bounds={INDONESIA_BOUNDS}
+                noWrap={true}
+                minZoom={4}
+                maxZoom={19}
                 rasterUrl={
                   (import.meta.env.VITE_STANDARD_TILE_URL as string) ||
                   "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -1736,7 +1909,6 @@ export function MapPage() {
                   (import.meta.env.VITE_STANDARD_ATTRIBUTION as string) ||
                   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 }
-                maxZoom={19}
               />
             )}
 
@@ -1783,11 +1955,12 @@ export function MapPage() {
             </MapReadyGate>
 
             {/* User GPS location marker */}
-            {userLocation && (
+            {activeUserLocation && (
               <UserLocationMarker
-                lat={userLocation.lat}
-                lng={userLocation.lng}
-                accuracy={userLocation.accuracy}
+                lat={activeUserLocation.lat}
+                lng={activeUserLocation.lng}
+                accuracy={activeUserLocation.accuracy}
+                heading={trackingLocation?.heading}
               />
             )}
 
@@ -1816,6 +1989,8 @@ export function MapPage() {
               currentCalculation={routeCalculation}
               publicRoutes={showPublicRoutes ? publicRoutes : []}
               showPublicRoutes={showPublicRoutes}
+              activeWaypointIndex={trackingLocation?.currentWaypointIndex}
+              completedWaypointKeys={trackingLocation?.completedWaypointKeys}
             />
 
             <MapMarkerClusterGroup
@@ -1893,6 +2068,7 @@ export function MapPage() {
                 ))}
             </MapMarkerClusterGroup>
           </MapContainer>
+          </div>
 
           {/* Prompt: Candidate placement mode */}
           {clickMode === "candidate" && activeCount === 0 && (

@@ -66,6 +66,7 @@ export const RouteLocationSearch: React.FC<RouteLocationSearchProps> = ({
         format: "jsonv2",
         addressdetails: "1",
         limit: "10",
+        countrycodes: "id",
       });
 
       const response = await fetch(

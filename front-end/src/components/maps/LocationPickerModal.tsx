@@ -17,6 +17,12 @@ import { MapPin, Check, Crosshair, Navigation } from "lucide-react";
 // Default coordinate fallback: Malang (matching MapPage / view-map)
 const DEFAULT_CENTER: [number, number] = [-7.9797, 112.6304];
 
+// Batas wilayah kepulauan Indonesia: Barat Daya (Samudra Hindia / selatan Rote) s/d Timur Laut (Laut Natuna Utara / Papua timur)
+const INDONESIA_BOUNDS: [[number, number], [number, number]] = [
+  [-13.5, 92.0],
+  [8.5, 144.0],
+];
+
 // ─── Click handler inside the map ──────────────────────────────────────────────
 const PickerClickHandler: React.FC<{
   onMapClick: (lat: number, lng: number) => void;
@@ -179,9 +185,25 @@ export function LocationPickerModal({ isOpen, onClose, onConfirm, initialLat, in
         {/* Map Body */}
         <ModalBody className="p-0">
           <div className="relative w-full h-[380px] sm:h-[420px]">
-            <Map ref={mapRef} center={mapCenter} zoom={14} className="w-full h-full !rounded-none !min-h-0">
+            <Map
+              ref={mapRef}
+              center={mapCenter}
+              zoom={14}
+              minZoom={4}
+              maxZoom={19}
+              maxBounds={INDONESIA_BOUNDS}
+              maxBoundsViscosity={1.0}
+              className="w-full h-full !rounded-none !min-h-0"
+            >
               {/* Basemap tile — identical to MapPage / view-map */}
-              <MapTileLayer key="default" name="Default" />
+              <MapTileLayer
+                key="default"
+                name="Default"
+                bounds={INDONESIA_BOUNDS}
+                noWrap={true}
+                minZoom={4}
+                maxZoom={19}
+              />
               <MapZoomControl position="bottom-3 right-3" />
               <MapResizeHandler />
               <PickerClickHandler onMapClick={handleMapClick} />
