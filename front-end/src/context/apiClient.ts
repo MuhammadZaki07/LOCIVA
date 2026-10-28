@@ -1,11 +1,11 @@
 import axios, { AxiosError } from "axios";
 
 function resolveBaseUrl(): string {
-    const configured = import.meta.env.VITE_APP_BACK_END as string | undefined;
-    if (configured && configured.trim().length > 0) {
-        return configured.replace(/\/$/, "");
-    }
-    return "/api";
+  const configured = import.meta.env.VITE_APP_BACK_END as string | undefined;
+  if (configured && configured.trim().length > 0) {
+    return configured.replace(/\/$/, "");
+  }
+  return "/api";
 }
 
 export type ApiFailureKind =

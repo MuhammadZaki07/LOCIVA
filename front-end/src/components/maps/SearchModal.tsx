@@ -72,6 +72,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSel
         format: "jsonv2",
         addressdetails: "1",
         limit: "10",
+        countrycodes: "id",
       });
 
       const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
@@ -143,7 +144,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSel
             type="text"
             value={query}
             onChange={(e) => handleInput(e.target.value)}
-            placeholder="Search places, addresses, cities worldwide..."
+            placeholder="Search places, addresses, cities in Indonesia..."
             className="flex-1 bg-transparent text-sm text-ink placeholder:text-muted focus:outline-none"
             autoComplete="off"
             spellCheck={false}
@@ -180,7 +181,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSel
           {!error && searched && results.length === 0 && (
             <div className="p-6 text-center text-muted text-sm">
               No results found for <strong>"{query}"</strong>.<br />
-              <span className="text-xs">Try searching for a different city, district, or landmark.</span>
+              <span className="text-xs">Try searching for a different city, district, or landmark in Indonesia.</span>
             </div>
           )}
 
@@ -210,8 +211,8 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose, onSel
           {!searched && !loading && !error && (
             <div className="p-6 text-center text-muted text-xs space-y-1">
               <Search size={24} className="mx-auto text-slate-200 mb-2" />
-              <p className="font-medium text-slate-600">Type a place, street, or city name</p>
-              <p className="text-slate-400">Global geospatial index powered by Nominatim / OpenStreetMap</p>
+              <p className="font-medium text-slate-600">Type a place, street, or city name in Indonesia</p>
+              <p className="text-slate-400">Geospatial index powered by Nominatim / OpenStreetMap (Indonesia)</p>
             </div>
           )}
         </div>
