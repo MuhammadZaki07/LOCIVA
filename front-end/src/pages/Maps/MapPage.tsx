@@ -7,12 +7,12 @@ import React, {
   useMemo,
 } from "react";
 import { useSearchParams } from "react-router-dom";
-import {
-  Map as MapContainer,
-  MapTileLayer,
-  MapZoomControl,
-  MapMarkerClusterGroup,
-} from "@/components/ui/shadcn-ui/map";
+import { RecommendationPanel } from "@/components/maps/RecommendationPanel";
+import { useBusinessRecommendation } from "@/hooks/useBusinessRecommendation";
+import type { RecommendationItem } from "@/lib/recommendation";
+// add MapMarker to the existing map import
+import { Map as MapContainer, MapTileLayer, MapZoomControl, MapMarkerClusterGroup, MapMarker } from "@/components/ui/shadcn-ui/map";
+// add Sparkles to the lucide import
 import {
   distanceMeters,
   fetchPlacesInBounds as fetchLocalPlacesInBounds,
@@ -86,6 +86,7 @@ import {
   Target,
   Users,
   X,
+  Sparkles,
 } from "lucide-react";
 
 // ─── Map Ready Gate: delays children until Leaflet fires whenReady ─────────────
@@ -128,7 +129,7 @@ const MapEventHandler: React.FC<{
     zoom: number,
     bounds: L.LatLngBounds,
   ) => void;
-  mode: "candidate" | "waypoint" | "report" | "none";
+  mode: "candidate" | "waypoint" | "report" | "recommend" | "none";
 }> = ({ onMapClick, onViewportChange, mode }) => {
   const emitViewport = useCallback(
     (m: L.Map) => {
@@ -169,11 +170,8 @@ const MapEventHandler: React.FC<{
       const container = map.getContainer();
       if (!container) return;
       container.style.cursor =
-        mode === "candidate" || mode === "report"
-          ? "crosshair"
-          : mode === "waypoint"
-            ? "cell"
-            : "";
+        mode === "candidate" || mode === "report" || mode === "recommend" ? "crosshair"
+        : mode === "waypoint" ? "cell" : "";
       return () => {
         try {
           container.style.cursor = "";
@@ -529,35 +527,7 @@ export function MapPage() {
     useState<RouteCalculationResult | null>(null);
 
   const [isLoggedIn] = useState(() => Boolean(localStorage.getItem("token")));
-
-  // ── Click mode: either placing candidate, waypoint, or report location ──────
-  const clickMode = useMemo(():
-    | "candidate"
-    | "waypoint"
-    | "report"
-    | "none" => {
-    if (pickingReportLocation) return "report";
-
-    if (
-      isLoggedIn &&
-      isRoutePanelOpen &&
-      (isSelectingStartPoint || isSelectingWaypoint)
-    ) {
-      return "waypoint";
-    }
-
-    if (selectedBusiness) return "candidate";
-
-    return "none";
-  }, [
-    pickingReportLocation,
-    isLoggedIn,
-    isRoutePanelOpen,
-    isSelectingStartPoint,
-    isSelectingWaypoint,
-    selectedBusiness,
-  ]);
-
+  
   // ── Privacy-Aware Opt-in User GPS Location (Section 6) ───────────────────
   // Location sharing is strictly opt-in and disabled by default. No silent tracking.
   const [isLocationOptedIn, setIsLocationOptedIn] = useState(false);
@@ -983,6 +953,80 @@ export function MapPage() {
     });
   };
 
+  const {
+    status: recStatus,
+    progress: recProgress,
+    data: recData,
+    error: recError,
+    run: runRecommendation,
+    reset: resetRecommendation,
+  } = useBusinessRecommendation();
+  
+  const [recommendPoint, setRecommendPoint] = useState<{ lat: number; lng: number } | null>(null);
+  const [isPickingRecommendPoint, setIsPickingRecommendPoint] = useState(false);
+
+  // ── Click mode: either placing candidate, waypoint, or report location ──────
+  const clickMode = useMemo((): "candidate" | "waypoint" | "report" | "recommend" | "none" => {
+    if (pickingReportLocation) return "report";
+    if (isPickingRecommendPoint) return "recommend";
+
+    if (
+      isLoggedIn &&
+      isRoutePanelOpen &&
+      (isSelectingStartPoint || isSelectingWaypoint)
+    ) {
+      return "waypoint";
+    }
+
+    if (selectedBusiness) return "candidate";
+
+    return "none";
+  }, [
+    isPickingRecommendPoint,
+    pickingReportLocation,
+    isLoggedIn,
+    isRoutePanelOpen,
+    isSelectingStartPoint,
+    isSelectingWaypoint,
+    selectedBusiness,
+  ]);
+
+  
+  const startRecommendationAt = useCallback(
+    (lat: number, lng: number) => {
+      setIsPickingRecommendPoint(false);
+      setRecommendPoint({ lat, lng });
+      mapRef.current?.flyTo([lat, lng], Math.max(mapRef.current.getZoom(), 15));
+      void runRecommendation(lat, lng);
+    },
+    [runRecommendation],
+  );
+  
+  const handleUseRecommendation = useCallback(
+    (item: RecommendationItem) => {
+      if (!recommendPoint) return;
+      setSelectedBusiness(item.business);
+      setIsPersistedInDb(false);
+      setCandidates({
+        A: { id: "A", lat: recommendPoint.lat, lng: recommendPoint.lng, radius: item.radius },
+        B: null,
+        C: null,
+      });
+      setAnalysisResults({ A: null, B: null, C: null });
+      setCandidateStatuses({ A: "location_selected", B: "draft", C: "draft" });
+      setPersistedCandidateMap({ A: false, B: false, C: false });
+      setActiveCandidateId("A");
+      setActiveTool("analysis");
+      mapRef.current?.flyTo([recommendPoint.lat, recommendPoint.lng], 16);
+      toast({
+        title: `${item.business.name} dipilih`,
+        description: "Kandidat A ditempatkan di titik rekomendasi. Tekan “Jalankan Analisis Lokasi”.",
+        variant: "success",
+      });
+    },
+    [recommendPoint, toast],
+  );
+  
   const handleMapClick = useCallback(
     (lat: number, lng: number) => {
       if (pickingReportLocation) {
@@ -994,6 +1038,12 @@ export function MapPage() {
           description: `Koordinat ${lat.toFixed(4)}, ${lng.toFixed(4)} diterapkan ke form.`,
           variant: "success",
         });
+        return;
+      }
+
+      if (clickMode === "recommend") {
+        startRecommendationAt(lat, lng);
+        setActiveTool("recommend"); // reopen the panel if it was closed for mobile picking
         return;
       }
 
@@ -1067,6 +1117,7 @@ export function MapPage() {
       }
     },
     [
+      startRecommendationAt,
       pickingReportLocation,
       clickMode,
       isSelectingStartPoint,
@@ -1362,6 +1413,38 @@ export function MapPage() {
                 selectedTypeId={selectedBusiness?.id || null}
                 onSelect={handleBusinessSelect}
                 isEmbedded={true}
+              />
+            )}
+
+            {activeTool === "recommend" && (
+              <RecommendationPanel
+                onClose={() => setActiveTool(null)}
+                status={recStatus}
+                progress={recProgress}
+                data={recData}
+                error={recError}
+                point={recommendPoint}
+                isPicking={isPickingRecommendPoint}
+                hasUserLocation={!!activeUserLocation}
+                onPickOnMap={() => {
+                  setIsPickingRecommendPoint(true);
+                  if (window.innerWidth < 768) setActiveTool(null); // panel is full-screen on mobile
+                }}
+                onCancelPick={() => setIsPickingRecommendPoint(false)}
+                onUseMapCenter={() => {
+                  const c = mapRef.current?.getCenter();
+                  if (c) startRecommendationAt(c.lat, c.lng);
+                }}
+                onUseMyLocation={() => {
+                  if (activeUserLocation) startRecommendationAt(activeUserLocation.lat, activeUserLocation.lng);
+                }}
+                onRetry={() => recommendPoint && void runRecommendation(recommendPoint.lat, recommendPoint.lng)}
+                onReset={() => {
+                  resetRecommendation();
+                  setRecommendPoint(null);
+                }}
+                onFlyToPoint={() => recommendPoint && mapRef.current?.flyTo([recommendPoint.lat, recommendPoint.lng], 16)}
+                onUseRecommendation={handleUseRecommendation}
               />
             )}
 
@@ -1915,6 +1998,28 @@ export function MapPage() {
             <MapReadyGate>
               <MapZoomControl position="bottom-24 right-4 md:bottom-8 md:right-4" />
 
+              {recommendPoint && (
+                <MapMarker
+                  key="recommend-point"
+                  position={[recommendPoint.lat, recommendPoint.lng]}
+                  iconAnchor={[16, 16]}
+                  icon={
+                    <div
+                      style={{
+                        width: 32, height: 32, borderRadius: "50%",
+                        background: "linear-gradient(135deg,#f59e0b,#d97706)",
+                        border: "3px solid #fff",
+                        boxShadow: "0 3px 10px rgba(217,119,6,.5)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        color: "#fff", fontSize: 14,
+                      }}
+                    >
+                      ✦
+                    </div>
+                  }
+                />
+                )}
+                
               {/* Viewport panning/zooming and click event listener */}
               <MapEventHandler
                 onMapClick={handleMapClick}
@@ -1951,8 +2056,22 @@ export function MapPage() {
                     media: [],
                   }}
                 />
+                )}
+
+              {isPickingRecommendPoint && (
+                <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[450] bg-amber-600 text-white px-5 py-2.5 rounded-full text-xs font-semibold shadow-xl flex items-center gap-3 border border-amber-300 pointer-events-auto">
+                  <Sparkles size={14} className="shrink-0" />
+                  <span>Klik titik di peta untuk dicarikan rekomendasi usaha</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsPickingRecommendPoint(false)}
+                    className="rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] hover:bg-white/30 cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                </div>
               )}
-            </MapReadyGate>
+              </MapReadyGate>
 
             {/* User GPS location marker */}
             {activeUserLocation && (

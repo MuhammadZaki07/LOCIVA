@@ -1,7 +1,7 @@
-import { BookOpen, Layers, Route, Search, Target, Bookmark, Scale, AlertTriangle } from "lucide-react";
+import { BookOpen, Layers, Route, Search, Target, Bookmark, Scale, AlertTriangle, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type MapToolId = "catalog" | "search" | "layers" | "candidates" | "analysis" | "compare" | "routes" | "reports";
+export type MapToolId =| "catalog" | "recommend" | "search" | "layers" | "candidates" | "analysis" | "compare" | "routes" | "reports";
 
 interface MapPillNavProps {
   active: MapToolId | null;
@@ -12,7 +12,8 @@ interface MapPillNavProps {
 
 const ITEMS: { id: MapToolId; label: string; icon: typeof Search }[] = [
   { id: "catalog",    label: "Business Catalog",    icon: BookOpen      },
-  { id: "search",     label: "Search Location",     icon: Search        },
+  { id: "search", label: "Search Location", icon: Search },
+  { id: "recommend",  label: "AI Recommendation",   icon: Sparkles      },
   { id: "reports",    label: "Civic Reports",       icon: AlertTriangle },
   { id: "layers",     label: "Layers & POIs",       icon: Layers        },
   { id: "candidates", label: "Saved Candidates",    icon: Bookmark      },
