@@ -8,21 +8,22 @@ use App\Helpers\ApiResponse;
 use App\Helpers\PaginationHelper;
 use App\Http\Requests\BusinessMapQueryRequest;
 use App\Http\Requests\SaveCandidateLocationRequest;
+use App\Http\Requests\UpdateBusinessRequest;
 use App\Http\Resources\BusinessMapResource;
 use App\Http\Resources\BusinessResource;
 use App\Http\Resources\SimulationSessionResource;
 use App\Traits\UploadTrait;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Throwable;
 
 class BusinessController extends Controller
 {
     use UploadTrait;
     public function __construct(
         protected BusinessRepositoryInterface $businessRepository,
-        protected SimulationServiceInterface $simulationService
-    ) {
-    }
+        protected SimulationServiceInterface $simulationService,
+    ) {}
 
     /**
      * Get LOCIVA Internal businesses for the map layer.
@@ -31,36 +32,30 @@ class BusinessController extends Controller
     public function mapIndex(BusinessMapQueryRequest $request)
     {
         try {
-            $lat = $request->filled('lat') ? (float) $request->lat : null;
-            $lng = $request->filled('lng') ? (float) $request->lng : null;
-            $radius = $request->filled('radius') ? (float) $request->radius : null;
-            $minLat = $request->filled('min_lat') ? (float) $request->min_lat : null;
-            $minLng = $request->filled('min_lng') ? (float) $request->min_lng : null;
-            $maxLat = $request->filled('max_lat') ? (float) $request->max_lat : null;
-            $maxLng = $request->filled('max_lng') ? (float) $request->max_lng : null;
-            $category = $request->input('category');
-            $search = $request->input('search');
-            $limit = (int) $request->input('limit', 100);
-
+            $float = fn (string $key) => $request->filled($key) ? $request->float($key) : null;
+    
             $businesses = $this->businessRepository->getMapBusinesses(
-                $lat,
-                $lng,
-                $radius,
-                $category,
-                $search,
-                $limit,
-                $minLat,
-                $minLng,
-                $maxLat,
-                $maxLng
+                $float("lat"),
+                $float("lng"),
+                $float("radius"),
+                $request->input("category"),
+                $request->input("search"),
+                $request->integer("limit", 100),
+                $float("min_lat"),
+                $float("min_lng"),
+                $float("max_lat"),
+                $float("max_lng"),
             );
-
+    
             return ApiResponse::success(
                 BusinessMapResource::collection($businesses),
-                'LOCIVA internal businesses retrieved successfully'
+                "LOCIVA internal businesses retrieved successfully",
             );
         } catch (\Throwable $e) {
-            return ApiResponse::error('Failed to retrieve map businesses: ' . $e->getMessage(), 500);
+            return ApiResponse::error(
+                "Failed to retrieve map businesses: " . $e->getMessage(),
+                500,
+            );
         }
     }
 
@@ -73,41 +68,37 @@ class BusinessController extends Controller
 
         return ApiResponse::success(
             BusinessMapResource::collection($businesses),
-            'User businesses retrieved successfully'
+            "User businesses retrieved successfully",
         );
     }
 
     /**
      * Register a new business under the authenticated user.
      */
-    public function store(Request $request)
+    public function store(StoreBusinessRequest $request)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:150',
-            'description' => 'nullable|string',
-            'business_type_id' => 'required|exists:business_types,id',
-            'latitude' => 'required|numeric|between:-90,90',
-            'longitude' => 'required|numeric|between:-180,180',
-            'address' => 'nullable|string|max:500',
-            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-        ]);
+        try {
+            $validated = $request->validated();
 
-        if (isset($validated['image'])) {
-            $validated['image'] = $this->upload(
-                'businesses',
-                $validated['image']
+            if (isset($validated["image"])) {
+                $validated["image"] = $this->upload(
+                    "businesses",
+                    $validated["image"],
+                );
+            }
+
+            $validated["user_id"] = Auth::id();
+
+            $business = $this->businessRepository->createBusiness($validated);
+
+            return ApiResponse::success(
+                new BusinessMapResource($business),
+                "Business registered successfully",
+                201,
             );
+        } catch (Throwable $th) {
+            return ApiResponse::error($th->getMessage());
         }
-
-        $validated['user_id'] = Auth::id();
-
-        $business = $this->businessRepository->createBusiness($validated);
-
-        return ApiResponse::success(
-            new BusinessMapResource($business),
-            'Business registered successfully',
-            201
-        );
     }
 
     /**
@@ -115,50 +106,57 @@ class BusinessController extends Controller
      */
     public function show(string $id)
     {
-        $business = $this->businessRepository->getBusinessById($id);
+        try {
+            $business = $this->businessRepository->getBusinessById($id);
 
-        if (!$business) {
-            return ApiResponse::error('Bisnis tidak ditemukan.', 404);
+            if (!$business) {
+                return ApiResponse::error("Bisnis tidak ditemukan.", 404);
+            }
+
+            return ApiResponse::success(
+                new BusinessMapResource($business),
+                "Business details retrieved successfully",
+            );
+        } catch (Throwable $th) {
+            return ApiResponse::error($th->getMessage());
         }
-
-        return ApiResponse::success(
-            new BusinessMapResource($business),
-            'Business details retrieved successfully'
-        );
     }
 
     /**
      * Update business owned by the authenticated user.
      */
-    public function update(Request $request, string $id)
+    public function update(UpdateBusinessRequest $request, string $id)
     {
-        $business = $this->businessRepository->getBusinessById($id);
+        $validated = $request->validated();
 
-        if (!$business) {
-            return ApiResponse::error('Bisnis tidak ditemukan.', 404);
+        try {
+            $business = $this->businessRepository->getBusinessById($id);
+
+            if (!$business) {
+                return ApiResponse::error("Bisnis tidak ditemukan.", 404);
+            }
+
+            // Authorization check: only owner or admin can update
+            $user = $request->user();
+            if ($business->user_id !== $user->id && !$user->hasRole("admin")) {
+                return ApiResponse::error(
+                    "Anda tidak memiliki izin untuk mengubah data bisnis ini.",
+                    403,
+                );
+            }
+
+            $updated = $this->businessRepository->updateBusiness(
+                $business,
+                $validated,
+            );
+
+            return ApiResponse::success(
+                new BusinessMapResource($updated),
+                "Data bisnis berhasil diperbarui",
+            );
+        } catch (Throwable $th) {
+            return ApiResponse::error($th->getMessage());
         }
-
-        // Authorization check: only owner or admin can update
-        $user = Auth::user();
-        if ($business->user_id !== $user->id && !$user->hasRole('admin')) {
-            return ApiResponse::error('Anda tidak memiliki izin untuk mengubah data bisnis ini.', 403);
-        }
-
-        $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:150',
-            'description' => 'nullable|string',
-            'business_type_id' => 'sometimes|required|exists:business_types,id',
-            'latitude' => 'sometimes|required|numeric|between:-90,90',
-            'longitude' => 'sometimes|required|numeric|between:-180,180',
-            'address' => 'nullable|string|max:500',
-        ]);
-
-        $updated = $this->businessRepository->updateBusiness($business, $validated);
-
-        return ApiResponse::success(
-            new BusinessMapResource($updated),
-            'Data bisnis berhasil diperbarui'
-        );
     }
 
     /**
@@ -166,23 +164,32 @@ class BusinessController extends Controller
      */
     public function destroy(string $id)
     {
-        $business = $this->businessRepository->getBusinessById($id);
+        try {
+            $business = $this->businessRepository->getBusinessById($id);
 
-        if (!$business) {
-            return ApiResponse::error('Bisnis tidak ditemukan.', 404);
+            if (!$business) {
+                return ApiResponse::error("Bisnis tidak ditemukan.", 404);
+            }
+
+            if (
+                $business->user_id !== $request->user()->id &&
+                !$request->user()->hasRole("admin")
+            ) {
+                return ApiResponse::error(
+                    "Anda tidak memiliki izin untuk menghapus bisnis ini.",
+                    403,
+                );
+            }
+
+            $this->businessRepository->deleteBusiness($business);
+
+            return ApiResponse::success(
+                null,
+                "Bisnis berhasil dihapus dari sistem",
+            );
+        } catch (Throwable $th) {
+            return ApiResponse::error($th->getMessage());
         }
-
-        $user = Auth::user();
-        if ($business->user_id !== $user->id && !$user->hasRole('admin')) {
-            return ApiResponse::error('Anda tidak memiliki izin untuk menghapus bisnis ini.', 403);
-        }
-
-        $this->businessRepository->deleteBusiness($business);
-
-        return ApiResponse::success(
-            null,
-            'Bisnis berhasil dihapus dari sistem'
-        );
     }
 
     /**
@@ -190,45 +197,41 @@ class BusinessController extends Controller
      */
     public function saveCandidateLocation(SaveCandidateLocationRequest $request)
     {
-        $result = $this->simulationService->saveCandidateLocation(
-            Auth::id(),
-            $request->validated()
-        );
+        try {
+            $result = $this->simulationService->saveCandidateLocation(
+                Auth::id(),
+                $request->validated(),
+            );
 
-        return ApiResponse::success(
-            $result,
-            'Candidate location simulation saved successfully'
-        );
+            return ApiResponse::success(
+                $result,
+                "Candidate location simulation saved successfully",
+            );
+        } catch (Throwable $th) {
+            return ApiResponse::error($th->getMessage());
+        }
     }
 
     /**
      * Retrieve user's saved simulation sessions.
      */
-    public function getSimulationSessions(Request $request)
+    public function getSimulationSessions(SimulationSessionListRequest $request)
     {
-        $validated = $request->validate([
-            'search' => ['nullable', 'string', 'max:255'],
-            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
-            'business_id' => ['nullable', 'string'],
-            'business_type_id' => ['nullable', 'string'],
-            'page' => ['nullable', 'integer', 'min:1'],
-        ]);
+        $validated = $request->validated();
+        try {
+            $sessions = $this->simulationService->getUserSimulationSessions(
+                (string) Auth::id(),
+                $validated["search"] ?? "",
+                (int) ($validated["per_page"] ?? 10),
+            );
 
-        $perPage = min(max((int) ($validated['per_page'] ?? 10), 1), 100);
-        $sessions = $this->simulationService->getUserSimulationSessions(
-            (string) Auth::id(),
-            $validated['search'] ?? '',
-            (int) ($validated['per_page'] ?? 10),
-            $validated['business_id'] ?? null,
-            $validated['business_type_id'] ?? null
-        );
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Saved simulation sessions retrieved successfully',
-            'data' => SimulationSessionResource::collection($sessions)->resolve(),
-            'meta' => PaginationHelper::meta($sessions),
-        ]);
+            return ApiResponse::success(
+                SimulationSessionResource::collection($sessions),
+                "Saved simulation sessions retrieved successfully",
+            );
+        } catch (Throwable $th) {
+            return ApiResponse::error($th->getMessage());
+        }
     }
 
     /**
@@ -236,12 +239,13 @@ class BusinessController extends Controller
      */
     public function deleteSimulationSession(string $id)
     {
-        $this->simulationService->deleteSimulationSession(Auth::id(), $id);
+        try {
+            $this->simulationService->deleteSimulationSession(Auth::id(), $id);
 
-        return ApiResponse::success(
-            null,
-            'Sesi simulasi berhasil dihapus'
-        );
+            return ApiResponse::success(null, "Sesi simulasi berhasil dihapus");
+        } catch (Throwable $th) {
+            return ApiResponse::error($th->getMessage());
+        }
     }
 
     public function indexUser(Request $request)
@@ -255,17 +259,15 @@ class BusinessController extends Controller
         ]);
 
         try {
-            $perPage = min(max((int) ($validated['per_page'] ?? $request->query('per_page', 10)), 1), 100);
             $fetch = $this->businessRepository->paginateUserBusinesses(
                 $request->user()->id,
-                $perPage,
-                $validated
+                $request->query("per_page", 10),
             );
             return ApiResponse::success([
                 "meta" => PaginationHelper::meta($fetch),
                 "Data" => BusinessResource::collection($fetch),
             ]);
-        } catch (\Throwable $th) {
+        } catch (Throwable $th) {
             return ApiResponse::error($th->getMessage());
         }
     }

@@ -840,7 +840,7 @@ try {
 
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
             return ApiResponse::error(
-                'Koneksi ke server AI upstream terputus atau timeout (Cloudflare 524). Silakan coba kembali dengan preferensi rute yang lebih ringkas.' . $e,
+                'Koneksi ke server AI upstream terputus atau timeout (Cloudflare 524). Silakan coba kembali dengan preferensi rute yang lebih ringkas.' ,
                 504
             );
         } catch (\Throwable $e) {
@@ -899,7 +899,7 @@ try {
             ], 'Rekomendasi AI berhasil didapatkan');
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
             return ApiResponse::error(
-                'Koneksi ke server AI upstream terputus atau timeout (Cloudflare 524). Silakan coba kembali dengan preferensi rute yang lebih ringkas.'. $e,
+                'Koneksi ke server AI upstream terputus atau timeout (Cloudflare 524). Silakan coba kembali dengan preferensi rute yang lebih ringkas.',
                 504
             );
         } catch (\Throwable $e) {

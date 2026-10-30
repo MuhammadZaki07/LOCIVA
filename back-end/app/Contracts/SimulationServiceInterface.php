@@ -21,7 +21,8 @@ interface SimulationServiceInterface
         string $search = '',
         int $perPage = 10,
         ?string $businessId = null,
-        ?string $businessTypeId = null
+        ?string $businessTypeId = null,
+        ?string $status = null
     ): LengthAwarePaginator;
 
     /**

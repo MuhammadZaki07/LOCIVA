@@ -13,6 +13,7 @@ use App\Http\Controllers\BusinessTypeController;
 use App\Http\Controllers\BusinessTypeWeightController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VendorRouteController;
+use App\Http\Controllers\AiRecommendController;
 
 /*
 |--------------------------------------------------------------------------
@@ -93,6 +94,14 @@ Route::prefix('routing')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:sanctum')->group(function () {
+    // AI
+    Route::post('/ai/recommend', [AiRecommendController::class, 'recommend'])
+        ->middleware('throttle:ai-recommend');
+    
+    // give the bulk analysis its own, higher limiter
+    Route::post('/analysis/location', [LocationAnalysisController::class, 'analyze'])
+        ->middleware('throttle:analysis');
+
     // Reports (write)
     Route::post('/reports', [ReportController::class, 'store']);
     Route::post('/reports/{id}/confirm', [ReportController::class, 'confirm']);
