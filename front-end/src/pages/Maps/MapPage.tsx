@@ -90,6 +90,7 @@ import {
   Users,
   X,
   Sparkles,
+  HelpCircle,
 } from "lucide-react";
 
 // ─── Map Ready Gate: delays children until Leaflet fires whenReady ─────────────
@@ -301,6 +302,11 @@ export function MapPage() {
   // ── Navigation / Panel tool state ──────────────────────────────────────────
   const [activeTool, setActiveTool] = useState<MapToolId | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [tourRun, setTourRun] = useState(false);
+  
+  const handleTourFinish = useCallback(() => {
+    setTourRun(false);
+  }, []);
 
   const isRoutePanelOpen = activeTool === "routes";
 
