@@ -58,7 +58,7 @@ class OllamaRecommendationService
         Balas hanya JSON valid dengan format:
         {"reasons":["alasan 1","alasan 2"]}
 
-        KRITIKAL:
+        KRITIKAL
         Jumlah alasan harus sama dengan jumlah usaha yang diberikan, yaitu {$count} alasan.
 TXT;
 
