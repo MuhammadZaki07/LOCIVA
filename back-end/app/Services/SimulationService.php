@@ -60,9 +60,9 @@ class SimulationService implements SimulationServiceInterface
             }
 
             if (!$session) {
-                $sessionName = $payload['session_name'] 
+                $sessionName = $payload['session_name']
                     ?? ($business ? ('Simulasi ' . $business->name) : ('Sesi Simulasi ' . now()->translatedFormat('d M Y H:i')));
-                
+
                 $description = $payload['session_description'] ?? 'Analisis komparasi lokasi UMKM';
                 if ($business && empty($payload['session_description'])) {
                     $description = "Analisis komparasi lokasi UMKM untuk usaha: {$business->name} [business_id:{$business->id}]";
@@ -132,7 +132,7 @@ class SimulationService implements SimulationServiceInterface
 
                 // Coordinate match guard: Prevent out-of-order responses for old coordinates from marking the current location as valid
                 $isCoordMatch = (abs((float) $payload['latitude'] - $analyzedLat) < 0.0001) &&
-                                (abs((float) $payload['longitude'] - $analyzedLng) < 0.0001);
+                    (abs((float) $payload['longitude'] - $analyzedLng) < 0.0001);
                 $finalScoreStatus = $isCoordMatch ? $status : 'stale';
 
                 SimulationScore::updateOrCreate(
@@ -261,7 +261,8 @@ class SimulationService implements SimulationServiceInterface
         string $search = '',
         int $perPage = 10,
         ?string $businessId = null,
-        ?string $businessTypeId = null
+        ?string $businessTypeId = null,
+        ?string $status = null
     ): LengthAwarePaginator {
         // Enforce authorization on business_id if supplied
         if (!empty($businessId)) {
@@ -332,6 +333,27 @@ class SimulationService implements SimulationServiceInterface
                         }
                     );
             });
+        }
+
+        // Filter Business Type
+        if (!empty($businessTypeId)) {
+            $query->whereHas(
+                'simulations',
+                function (Builder $simulationQuery) use ($businessTypeId) {
+                    $simulationQuery->where('business_type_id', $businessTypeId);
+                }
+            );
+        }
+
+        // Filter Analysis Status
+        if ($status === 'completed') {
+            $query->whereHas(
+                'simulations.score'
+            );
+        } elseif ($status === 'pending') {
+            $query->whereDoesntHave(
+                'simulations.score'
+            );
         }
 
         $perPage = min(max($perPage, 1), 100);

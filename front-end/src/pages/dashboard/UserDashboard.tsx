@@ -15,9 +15,6 @@ import {
   X,
   BarChart3,
   Activity,
-  ShieldAlert,
-  Footprints,
-  Calendar,
 } from "lucide-react";
 import api from "@/context/apiClient";
 import { useToast } from "@/components/ui/Toast";
@@ -87,10 +84,12 @@ export default function UserDashboard() {
   const [activeTab, setActiveTab] = useState<"simulations" | "businesses">(
     "simulations",
   );
+
   const [sessions, setSessions] = useState<SimulationSessionItem[]>([]);
   const [businesses, setBusinesses] = useState<UserBusiness[]>([]);
   const [businessTypes, setBusinessTypes] = useState<BusinessTypeItem[]>([]);
   const [loading, setLoading] = useState(true);
+
   const [selectedCandidateDetail, setSelectedCandidateDetail] = useState<{
     session: SimulationSessionItem;
     simulation: NonNullable<SimulationSessionItem["simulations"]>[number];
@@ -99,16 +98,53 @@ export default function UserDashboard() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-  // State pagination usaha
+  // =========================================================
+  // SIMULATION SEARCH, FILTER AND PAGINATION
+  // =========================================================
+
+  const [sessionSearchInput, setSessionSearchInput] = useState("");
+  const [sessionSearch, setSessionSearch] = useState("");
+
+  const [sessionBusinessType, setSessionBusinessType] = useState("");
+  const [sessionStatus, setSessionStatus] = useState("");
+
+  const [sessionPage, setSessionPage] = useState(1);
+  const [sessionLastPage, setSessionLastPage] = useState(1);
+  const [sessionTotal, setSessionTotal] = useState(0);
+  const [sessionPerPage, setSessionPerPage] = useState(6);
+
+  // =========================================================
+  // BUSINESS PAGINATION
+  // =========================================================
+
   const [businessPage, setBusinessPage] = useState(1);
   const [businessLastPage, setBusinessLastPage] = useState(1);
   const [businessTotal, setBusinessTotal] = useState(0);
 
-  // State modal usaha
+  // =========================================================
+  // BUSINESS MODAL
+  // =========================================================
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBusiness, setEditingBusiness] = useState<UserBusiness | null>(
     null,
   );
+
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+    business_type_id: "",
+    latitude: "-6.2088",
+    longitude: "106.8456",
+    address: "",
+  });
+
+  const [submitting, setSubmitting] = useState(false);
+  const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
+
+  // =========================================================
+  // PAGINATION HELPER
+  // =========================================================
 
   const getPageNumbers = (
     currentPage: number,
@@ -142,17 +178,22 @@ export default function UserDashboard() {
     return pages;
   };
 
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    business_type_id: "",
-    latitude: "-6.2088",
-    longitude: "106.8456",
-    address: "",
-  });
+  // =========================================================
+  // SEARCH DEBOUNCE
+  // =========================================================
 
-  const [submitting, setSubmitting] = useState(false);
-  const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSessionSearch(sessionSearchInput.trim());
+      setSessionPage(1);
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [sessionSearchInput]);
+
+  // =========================================================
+  // BUSINESS IMAGE URL
+  // =========================================================
 
   const getBusinessImageUrl = (image?: string | null) => {
     if (!image) return null;
@@ -166,52 +207,107 @@ export default function UserDashboard() {
     return `${baseUrl}/storage/${image.replace(/^\/+/, "")}`;
   };
 
-  // Memuat sesi simulasi, usaha, dan jenis usaha
+  // =========================================================
+  // LOAD DASHBOARD DATA
+  // =========================================================
+
   const loadDashboardData = useCallback(async () => {
     setLoading(true);
 
     try {
       const results = await Promise.allSettled([
-        api.get("/simulations/sessions"),
+        // Simulation sessions
+        api.get("/simulations/sessions", {
+          params: {
+            search: sessionSearch || undefined,
+            status: sessionStatus || undefined,
+            per_page: sessionPerPage,
+            page: sessionPage,
+          },
+        }),
+
+        // Businesses
         api.get("/businesses/user", {
           params: {
             per_page: 6,
             page: businessPage,
           },
         }),
+
+        // Business types
         api.get("/business-types"),
       ]);
 
       const [sessionsResult, businessesResult, typesResult] = results;
 
-      // 1. Data sesi simulasi
-      if (sessionsResult.status === "fulfilled") {
-        const data = sessionsResult.value.data;
+      // =====================================================
+      // 1. SIMULATION SESSIONS
+      // =====================================================
 
-        if (data?.success && Array.isArray(data.data)) {
-          setSessions(data.data);
+      // =====================================================
+      // 1. SIMULATION SESSIONS
+      // =====================================================
+
+      if (sessionsResult.status === "fulfilled") {
+        const response = sessionsResult.value.data;
+
+        // Data sessions berada di response.data
+        const sessionList = response?.data;
+
+        // Metadata berada di response.meta
+        const meta = response?.meta;
+
+        if (Array.isArray(sessionList)) {
+          setSessions(sessionList);
+
+          setSessionTotal(Number(meta?.total ?? sessionList.length));
+          setSessionLastPage(Number(meta?.last_page ?? 1));
+
+          // Jika halaman aktif sudah tidak tersedia,
+          // kembali ke halaman terakhir yang tersedia.
+          const lastPage = Number(meta?.last_page ?? 1);
+
+          if (sessionPage > lastPage) {
+            setSessionPage(Math.max(1, lastPage));
+          }
+
+          console.log("Simulation response:", response);
+          console.log("Simulation pagination:", meta);
         } else {
-          console.error("Invalid simulation sessions response:", data);
+          setSessions([]);
+          setSessionTotal(0);
+          setSessionLastPage(1);
+
+          console.error("Invalid simulation sessions response:", response);
         }
       } else {
+        setSessions([]);
+        setSessionTotal(0);
+        setSessionLastPage(1);
+
         console.error(
-          "Gagal memuat sesi simulasi:",
+          "Failed to load simulation sessions:",
           sessionsResult.reason?.response?.data || sessionsResult.reason,
         );
       }
 
-      // 2. Data usaha pengguna
+      // =====================================================
+      // 2. USER BUSINESSES
+      // =====================================================
+
       if (businessesResult.status === "fulfilled") {
         const response = businessesResult.value.data;
+
         const businessList = response?.data?.Data;
         const meta = response?.data?.meta;
 
         if (Array.isArray(businessList)) {
           setBusinesses(businessList);
+
           setBusinessTotal(Number(meta?.total ?? businessList.length));
+
           setBusinessLastPage(Number(meta?.last_page ?? 1));
 
-          // Debug sementara jika metadata pagination bermasalah
           console.log("Response bisnis:", response);
           console.log("Metadata pagination:", meta);
         } else {
@@ -232,7 +328,10 @@ export default function UserDashboard() {
         );
       }
 
-      // 3. Jenis usaha dari API /business-types
+      // =====================================================
+      // 3. BUSINESS TYPES
+      // =====================================================
+
       if (typesResult.status === "fulfilled") {
         const data = typesResult.value.data;
 
@@ -259,13 +358,23 @@ export default function UserDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [businessPage]);
+  }, [
+    businessPage,
+    sessionSearch,
+    sessionBusinessType,
+    sessionStatus,
+    sessionPerPage,
+    sessionPage,
+  ]);
 
   useEffect(() => {
     loadDashboardData();
   }, [loadDashboardData]);
 
-  // Membuka modal untuk membuat usaha
+  // =========================================================
+  // CREATE BUSINESS
+  // =========================================================
+
   const handleOpenCreate = () => {
     setEditingBusiness(null);
     setImageFile(null);
@@ -283,7 +392,10 @@ export default function UserDashboard() {
     setIsModalOpen(true);
   };
 
-  // Membuka modal untuk mengedit usaha
+  // =========================================================
+  // EDIT BUSINESS
+  // =========================================================
+
   const handleOpenEdit = (biz: UserBusiness) => {
     setEditingBusiness(biz);
     setImageFile(null);
@@ -304,6 +416,11 @@ export default function UserDashboard() {
 
     setIsModalOpen(true);
   };
+
+  // =========================================================
+  // SELECT CANDIDATE
+  // =========================================================
+
   const handleSelectCandidate = (
     session: SimulationSessionItem,
     simulation: NonNullable<SimulationSessionItem["simulations"]>[number],
@@ -316,7 +433,10 @@ export default function UserDashboard() {
     });
   };
 
-  // Membuat atau memperbarui usaha
+  // =========================================================
+  // SUBMIT BUSINESS
+  // =========================================================
+
   const handleSubmitBusiness = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -326,6 +446,7 @@ export default function UserDashboard() {
         description: "Name and business type are required.",
         variant: "error",
       });
+
       return;
     }
 
@@ -340,6 +461,7 @@ export default function UserDashboard() {
         description: "Please select a business location on the map first.",
         variant: "error",
       });
+
       return;
     }
 
@@ -362,7 +484,6 @@ export default function UserDashboard() {
       let res;
 
       if (editingBusiness) {
-        // Method spoofing untuk request multipart Laravel
         payload.append("_method", "PUT");
 
         res = await api.post(`/businesses/${editingBusiness.id}`, payload);
@@ -398,7 +519,10 @@ export default function UserDashboard() {
     }
   };
 
-  // Menghapus usaha
+  // =========================================================
+  // DELETE BUSINESS
+  // =========================================================
+
   const handleDeleteBusiness = async (id: string, name: string) => {
     if (!window.confirm(`Delete business "${name}" from the system?`)) {
       return;
@@ -414,8 +538,6 @@ export default function UserDashboard() {
           variant: "success",
         });
 
-        // Muat ulang data agar total dan pagination tetap akurat.
-        // Jika halaman terakhir menjadi kosong, kembali ke halaman sebelumnya.
         if (businesses.length === 1 && businessPage > 1) {
           setBusinessPage((prev) => prev - 1);
         } else {
@@ -432,7 +554,10 @@ export default function UserDashboard() {
     }
   };
 
-  // Menghapus sesi simulasi
+  // =========================================================
+  // DELETE SIMULATION SESSION
+  // =========================================================
+
   const handleDeleteSession = async (
     sessionId: string,
     sessionName: string,
@@ -445,15 +570,16 @@ export default function UserDashboard() {
       const res = await api.delete(`/simulations/sessions/${sessionId}`);
 
       if (res.data?.success) {
-        setSessions((prev) =>
-          prev.filter((session) => session.id !== sessionId),
-        );
-
         toast({
           title: "Session Deleted",
           description: `Session "${sessionName}" deleted successfully.`,
           variant: "success",
         });
+
+        // Muat ulang agar total dan pagination akurat.
+        // Jika sesi terakhir di halaman terakhir dihapus,
+        // backend akan mengembalikan halaman yang tersedia.
+        await loadDashboardData();
       }
     } catch (err: any) {
       toast({
@@ -465,14 +591,20 @@ export default function UserDashboard() {
     }
   };
 
-  // Membuka lokasi simulasi pada peta
+  // =========================================================
+  // OPEN SIMULATION ON MAP
+  // =========================================================
+
   const handleOpenSimulationOnMap = (sim: any) => {
     if (!sim) return;
 
     navigate(`/view-maps?lat=${sim.latitude}&lng=${sim.longitude}`);
   };
 
-  // Menghitung skor tertinggi dari seluruh sesi
+  // =========================================================
+  // HIGHEST SCORE
+  // =========================================================
+
   const highestScore = sessions.reduce((max, session) => {
     const sessionMax = (session.simulations || []).reduce((sMax, item) => {
       const score =
@@ -484,9 +616,13 @@ export default function UserDashboard() {
     return Math.max(max, sessionMax);
   }, 0);
 
+  // =========================================================
+  // RENDER
+  // =========================================================
+
   return (
     <div className="space-y-8">
-      {/* Welcome Banner */}
+      {/* WELCOME BANNER */}
       <div className="clay rounded-[22px] p-6 sm:p-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -525,7 +661,7 @@ export default function UserDashboard() {
         </div>
       </div>
 
-      {/* KPI Stats Strip */}
+      {/* KPI STATS */}
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="clay clay-lift rounded-[16px] p-5">
           <div className="flex items-center justify-between text-muted">
@@ -536,7 +672,7 @@ export default function UserDashboard() {
           </div>
 
           <p className="mt-3 font-display text-[32px] font-medium leading-none text-ink">
-            {sessions.length}
+            {sessionTotal}
           </p>
 
           <p className="mt-2 text-[11.5px] text-muted">
@@ -580,7 +716,7 @@ export default function UserDashboard() {
         </div>
       </div>
 
-      {/* Tab Switcher */}
+      {/* TAB SWITCHER */}
       <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
         <button
           type="button"
@@ -591,7 +727,7 @@ export default function UserDashboard() {
               : "text-muted hover:bg-slate-100 hover:text-ink"
           }`}
         >
-          Location Simulations ({sessions.length})
+          Location Simulations ({sessionTotal})
         </button>
 
         <button
@@ -607,33 +743,89 @@ export default function UserDashboard() {
         </button>
       </div>
 
-      {/* TAB 1: SIMULATION SESSIONS */}
+      {/* =====================================================
+          TAB 1: SIMULATION SESSIONS
+      ===================================================== */}
+
       {activeTab === "simulations" && (
         <div className="clay rounded-[20px] p-6">
-          <div className="flex items-center justify-between border-b border-[#ececf6] pb-4">
-            <div>
-              <h2 className="font-display text-[20px] font-medium text-ink">
-                Saved Location Models
-              </h2>
+          {/* HEADER */}
+          <div className="space-y-5 border-b border-[#ececf6] pb-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="font-display text-[20px] font-medium text-ink">
+                  Saved Location Models
+                </h2>
 
-              <p className="text-[12.5px] text-muted">
-                Evaluation results for business location candidates saved to the
-                database.
-              </p>
+                <p className="text-[12.5px] text-muted">
+                  Evaluation results for business location candidates saved to
+                  the database.
+                </p>
+              </div>
+
+              <Link
+                to="/view-maps"
+                className="flex w-fit items-center gap-1 text-[12.5px] font-bold text-primary no-underline hover:underline"
+              >
+                <span>+ New Location Simulation</span>
+                <ArrowRight size={13} />
+              </Link>
             </div>
 
-            <Link
-              to="/view-maps"
-              className="flex items-center gap-1 text-[12.5px] font-bold text-primary no-underline hover:underline"
-            >
-              <span>+ New Location Simulation</span>
-              <ArrowRight size={13} />
-            </Link>
+            {/* SEARCH AND FILTER */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {/* SEARCH */}
+              <div className="relative sm:col-span-2">
+                <input
+                  type="text"
+                  value={sessionSearchInput}
+                  onChange={(e) => setSessionSearchInput(e.target.value)}
+                  placeholder="Search simulation sessions..."
+                  className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-10 text-xs text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
+                />
+
+                <Compass
+                  size={15}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+
+                {sessionSearchInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSessionSearchInput("");
+                      setSessionSearch("");
+                      setSessionPage(1);
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500"
+                    title="Clear search"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* STATUS FILTER */}
+              <select
+                value={sessionStatus}
+                onChange={(e) => {
+                  setSessionStatus(e.target.value);
+                  setSessionPage(1);
+                }}
+                className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs text-ink outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
+              >
+                <option value="">All Analysis Status</option>
+                <option value="completed">Analysis Completed</option>
+                <option value="pending">Not Analyzed</option>
+              </select>
+            </div>
           </div>
 
+          {/* SIMULATION CONTENT */}
           {loading ? (
             <div className="space-y-2 py-16 text-center">
               <RefreshCw className="mx-auto size-6 animate-spin text-primary" />
+
               <p className="text-xs text-muted">
                 Loading simulation sessions from the database...
               </p>
@@ -643,162 +835,258 @@ export default function UserDashboard() {
               <Store size={36} className="mx-auto text-slate-300" />
 
               <h3 className="text-sm font-bold text-ink">
-                No Saved Simulation Sessions
+                {sessionSearch || sessionBusinessType || sessionStatus
+                  ? "No Matching Simulation Sessions"
+                  : "No Saved Simulation Sessions"}
               </h3>
 
               <p className="mx-auto max-w-sm text-xs text-muted">
-                Open the map page to analyze and save your business location
-                candidates.
+                {sessionSearch || sessionBusinessType || sessionStatus
+                  ? "No simulation sessions match your current search or filters. Try adjusting your filters."
+                  : "Open the map page to analyze and save your business location candidates."}
               </p>
 
-              <Link
-                to="/view-maps"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-primary-deep"
-              >
-                <Compass size={14} />
-                <span>Start a Map Simulation</span>
-              </Link>
+              {sessionSearch || sessionBusinessType || sessionStatus ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSessionSearchInput("");
+                    setSessionSearch("");
+                    setSessionBusinessType("");
+                    setSessionStatus("");
+                    setSessionPage(1);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-ink transition hover:bg-slate-100"
+                >
+                  <RefreshCw size={13} />
+                  Reset Filters
+                </button>
+              ) : (
+                <Link
+                  to="/view-maps"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-primary-deep"
+                >
+                  <Compass size={14} />
+                  <span>Start a Map Simulation</span>
+                </Link>
+              )}
             </div>
           ) : (
-            <div className="mt-5 grid gap-4 md:grid-cols-3">
-              {sessions.map((session) => {
-                const firstSim = session.simulations?.[0];
-                const score =
-                  firstSim?.score?.total_score ||
-                  firstSim?.score?.target_market_score ||
-                  0;
+            <>
+              {/* SIMULATION CARDS */}
+              <div className="mt-5 grid gap-4 md:grid-cols-3">
+                {sessions.map((session) => {
+                  const firstSim = session.simulations?.[0];
 
-                return (
-                  <div
-                    key={session.id}
-                    className="clay-soft clay-lift flex flex-col justify-between space-y-4 rounded-[16px] p-5"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <span className="rounded-[6px] bg-canvas px-2 py-0.5 text-[11px] font-bold text-primary">
-                          {firstSim?.business_type?.name || "SME Catalog"}
+                  const score =
+                    firstSim?.score?.total_score ||
+                    firstSim?.score?.target_market_score ||
+                    0;
+
+                  return (
+                    <div
+                      key={session.id}
+                      className="clay-soft clay-lift flex flex-col justify-between space-y-4 rounded-[16px] p-5"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <span className="rounded-[6px] bg-canvas px-2 py-0.5 text-[11px] font-bold text-primary">
+                            {firstSim?.business_type?.name || "SME Catalog"}
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleDeleteSession(session.id, session.name)
+                            }
+                            className="cursor-pointer rounded p-1 text-slate-400 transition-colors hover:text-red-600"
+                            title="Hapus sesi ini"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+
+                        <h3 className="mt-2 text-[15px] font-bold text-ink">
+                          {session.name}
+                        </h3>
+
+                        <p className="mt-1 flex items-center gap-1 text-[11.5px] text-muted">
+                          <MapPin size={11} className="text-primary" />
+
+                          <span>
+                            {firstSim
+                              ? `${parseFloat(String(firstSim.latitude)).toFixed(4)}, ${parseFloat(String(firstSim.longitude)).toFixed(4)}`
+                              : "Coordinates unavailable"}
+                          </span>
+                        </p>
+
+                        <div className="mt-3 flex items-baseline gap-1.5">
+                          <span className="font-display text-[30px] font-bold text-ink tabular-nums">
+                            {score}
+                          </span>
+
+                          <span className="text-[13px] text-muted">/ 100</span>
+
+                          <span className="ml-2 text-[11px] text-muted">
+                            (radius {firstSim?.radius_m || 500}m)
+                          </span>
+                        </div>
+
+                        {/* CANDIDATE PILLS */}
+                        {session.simulations &&
+                          session.simulations.length > 0 && (
+                            <div className="mt-2.5 flex flex-wrap gap-1.5">
+                              {session.simulations.map((sim, sIdx) => {
+                                const candLetter =
+                                  sim.candidate_id ||
+                                  (sim.target_market
+                                    ? sim.target_market.replace(
+                                        "Candidate_",
+                                        "",
+                                      )
+                                    : String.fromCharCode(65 + sIdx));
+
+                                const candScore =
+                                  sim.score?.total_score ||
+                                  sim.score?.target_market_score ||
+                                  0;
+
+                                return (
+                                  <button
+                                    key={sim.id}
+                                    type="button"
+                                    onClick={() =>
+                                      handleSelectCandidate(session, sim)
+                                    }
+                                    className="flex cursor-pointer items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700 transition-colors hover:bg-slate-200"
+                                    title={`Buka statistik kandidat ${candLetter}`}
+                                  >
+                                    <span className="flex size-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-white">
+                                      {candLetter}
+                                    </span>
+
+                                    <span className="font-semibold tabular-nums">
+                                      {candScore}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                        {session.description && (
+                          <p className="mt-2 text-[11.5px] leading-5 text-muted">
+                            {session.description}
+                          </p>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (firstSim) {
+                              handleSelectCandidate(session, firstSim);
+                            }
+                          }}
+                          disabled={!firstSim}
+                          className="mt-3.5 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-xl bg-primary-soft px-3 py-2 text-xs font-semibold text-primary transition-all hover:bg-primary/20 disabled:opacity-50"
+                        >
+                          <BarChart3 size={13} />
+                          <span>Lihat Statistik Lengkap</span>
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-[#f0f0f8] pt-3">
+                        <span className="text-[11px] text-muted">
+                          {session.simulations?.length || 1} titik kandidat
                         </span>
 
                         <button
                           type="button"
-                          onClick={() =>
-                            handleDeleteSession(session.id, session.name)
-                          }
-                          className="rounded p-1 text-slate-400 transition-colors hover:text-red-600 cursor-pointer"
-                          title="Hapus sesi ini"
+                          onClick={() => handleOpenSimulationOnMap(firstSim)}
+                          disabled={!firstSim}
+                          className="inline-flex cursor-pointer items-center gap-1 text-[12px] font-bold text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          <Trash2 size={13} />
+                          <span>Buka di Maps</span>
+                          <ArrowRight size={12} />
                         </button>
                       </div>
-
-                      <h3 className="mt-2 text-[15px] font-bold text-ink">
-                        {session.name}
-                      </h3>
-
-                      <p className="mt-1 flex items-center gap-1 text-[11.5px] text-muted">
-                        <MapPin size={11} className="text-primary" />
-                        <span>
-                          {firstSim
-                            ? `${parseFloat(String(firstSim.latitude)).toFixed(4)}, ${parseFloat(String(firstSim.longitude)).toFixed(4)}`
-                            : "Coordinates unavailable"}
-                        </span>
-                      </p>
-
-                      <div className="mt-3 flex items-baseline gap-1.5">
-                        <span className="font-display text-[30px] font-bold text-ink tabular-nums">
-                          {score}
-                        </span>
-                        <span className="text-[13px] text-muted">/ 100</span>
-                        <span className="ml-2 text-[11px] text-muted">
-                          (radius {firstSim?.radius_m || 500}m)
-                        </span>
-                      </div>
-
-                      {/* Candidate points pills if multiple */}
-                      {session.simulations &&
-                        session.simulations.length > 0 && (
-                          <div className="mt-2.5 flex flex-wrap gap-1.5">
-                            {session.simulations.map((sim, sIdx) => {
-                              const candLetter =
-                                sim.candidate_id ||
-                                (sim.target_market
-                                  ? sim.target_market.replace("Candidate_", "")
-                                  : String.fromCharCode(65 + sIdx));
-                              const candScore =
-                                sim.score?.total_score ||
-                                sim.score?.target_market_score ||
-                                0;
-                              return (
-                                <button
-                                  key={sim.id}
-                                  type="button"
-                                  onClick={() =>
-                                    handleSelectCandidate(session, sim)
-                                  }
-                                  className="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-[11px] font-medium text-slate-700 flex items-center gap-1 transition-colors cursor-pointer"
-                                  title={`Buka statistik kandidat ${candLetter}`}
-                                >
-                                  <span className="size-3.5 rounded-full bg-primary text-white text-[9px] flex items-center justify-center font-bold">
-                                    {candLetter}
-                                  </span>
-                                  <span className="tabular-nums font-semibold">
-                                    {candScore}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                      {session.description && (
-                        <p className="mt-2 text-[11.5px] leading-5 text-muted">
-                          {session.description}
-                        </p>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (firstSim) {
-                            handleSelectCandidate(session, firstSim);
-                          }
-                        }}
-                        disabled={!firstSim}
-                        className="w-full mt-3.5 py-2 px-3 rounded-xl text-xs font-semibold bg-primary-soft hover:bg-primary/20 text-primary flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        <BarChart3 size={13} />
-                        <span>Lihat Statistik Lengkap</span>
-                      </button>
                     </div>
+                  );
+                })}
+              </div>
 
-                    <div className="flex items-center justify-between border-t border-[#f0f0f8] pt-3">
-                      <span className="text-[11px] text-muted">
-                        {session.simulations?.length || 1} titik kandidat
-                      </span>
+              {/* SIMULATION PAGINATION */}
+              {sessionLastPage > 1 && (
+                <div className="mt-6 flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="text-xs text-muted">
+                    Page {sessionPage} of {sessionLastPage}
+                    {" · "}
+                    {sessionTotal} simulation sessions
+                  </span>
 
-                      <button
-                        type="button"
-                        onClick={() => handleOpenSimulationOnMap(firstSim)}
-                        disabled={!firstSim}
-                        className="inline-flex cursor-pointer items-center gap-1 text-[12px] font-bold text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <span>Buka di Maps</span>
-                        <ArrowRight size={12} />
-                      </button>
-                    </div>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSessionPage((prev) => Math.max(1, prev - 1))
+                      }
+                      disabled={sessionPage <= 1 || loading}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-ink transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Previous
+                    </button>
+
+                    {getPageNumbers(sessionPage, sessionLastPage).map(
+                      (page, index) =>
+                        page === "..." ? (
+                          <span
+                            key={`session-ellipsis-${index}`}
+                            className="px-1 text-slate-400"
+                          >
+                            …
+                          </span>
+                        ) : (
+                          <button
+                            key={page}
+                            type="button"
+                            onClick={() => setSessionPage(page)}
+                            disabled={loading || sessionPage === page}
+                            className={`min-w-9 rounded-xl px-3 py-2 text-xs font-bold transition disabled:cursor-default ${
+                              sessionPage === page
+                                ? "bg-primary text-white"
+                                : "border border-slate-200 bg-white text-ink hover:bg-slate-100"
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        ),
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSessionPage((prev) =>
+                          Math.min(sessionLastPage, prev + 1),
+                        )
+                      }
+                      disabled={sessionPage >= sessionLastPage || loading}
+                      className="inline-flex items-center rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white transition hover:bg-primary-deep disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Next
+                      <ArrowRight size={13} className="ml-1" />
+                    </button>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              )}
+            </>
           )}
 
-          {/* Detail Statistik Kandidat pada Halaman */}
+          {/* DETAIL STATISTIK KANDIDAT */}
           {selectedCandidateDetail && (
             <div
               id="candidate-statistics"
               className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
             >
-              {/* Header */}
               <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-bold text-primary">
@@ -838,7 +1126,7 @@ export default function UserDashboard() {
               </div>
 
               <div className="space-y-6 p-5 sm:p-6">
-                {/* Status dan Lokasi */}
+                {/* STATUS DAN LOKASI */}
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
                   <div className="flex items-center gap-2 text-xs">
                     <span className="text-muted">Status Analisis:</span>
@@ -871,7 +1159,7 @@ export default function UserDashboard() {
                   </div>
                 </div>
 
-                {/* Skor Utama */}
+                {/* SKOR UTAMA */}
                 <section>
                   <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">
                     Ringkasan Skor Kelayakan Spasial
@@ -933,7 +1221,7 @@ export default function UserDashboard() {
                   </div>
                 </section>
 
-                {/* Indikator Pendukung */}
+                {/* INDIKATOR PENDUKUNG */}
                 <section>
                   <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">
                     Indikator Spasial Pendukung
@@ -984,7 +1272,7 @@ export default function UserDashboard() {
                   </div>
                 </section>
 
-                {/* Informasi Radius */}
+                {/* RADIUS */}
                 <section className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex items-center justify-between gap-3 text-xs">
                     <span className="text-muted">Radius Jangkauan Layanan</span>
@@ -1019,7 +1307,7 @@ export default function UserDashboard() {
                   </p>
                 </section>
 
-                {/* Actions */}
+                {/* ACTIONS */}
                 <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
                   <button
                     type="button"
@@ -1041,7 +1329,10 @@ export default function UserDashboard() {
         </div>
       )}
 
-      {/* TAB 2: USER BUSINESSES */}
+      {/* =====================================================
+          TAB 2: USER BUSINESSES
+      ===================================================== */}
+
       {activeTab === "businesses" && (
         <div className="clay rounded-[20px] p-6">
           <div className="flex items-center justify-between border-b border-[#ececf6] pb-4">
@@ -1069,6 +1360,7 @@ export default function UserDashboard() {
           {loading ? (
             <div className="space-y-2 py-16 text-center">
               <RefreshCw className="mx-auto size-6 animate-spin text-primary" />
+
               <p className="text-xs text-muted">
                 Loading business data from the database...
               </p>
@@ -1097,7 +1389,7 @@ export default function UserDashboard() {
             </div>
           ) : (
             <>
-              {/* Business Cards */}
+              {/* BUSINESS CARDS */}
               <div className="mt-5 grid gap-4 md:grid-cols-3">
                 {businesses.map((biz) => {
                   const imageUrl = getBusinessImageUrl(biz.image);
@@ -1209,7 +1501,7 @@ export default function UserDashboard() {
                 })}
               </div>
 
-              {/* Business Pagination */}
+              {/* BUSINESS PAGINATION */}
               {businessLastPage > 1 && (
                 <div className="mt-6 flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
                   <span className="text-xs text-muted">
@@ -1277,7 +1569,10 @@ export default function UserDashboard() {
         </div>
       )}
 
-      {/* CREATE / EDIT BUSINESS MODAL */}
+      {/* =====================================================
+          CREATE / EDIT BUSINESS MODAL
+      ===================================================== */}
+
       {isModalOpen && (
         <div className="fixed inset-0 z-[600] flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
           <div className="clay max-h-[90vh] w-full max-w-lg space-y-4 overflow-y-auto rounded-2xl bg-surface p-6 shadow-2xl">
@@ -1298,7 +1593,7 @@ export default function UserDashboard() {
             </div>
 
             <form onSubmit={handleSubmitBusiness} className="space-y-3 text-xs">
-              {/* Business Photo */}
+              {/* BUSINESS PHOTO */}
               <div>
                 <label className="mb-2 block font-bold text-ink">
                   Business Photo
@@ -1336,6 +1631,7 @@ export default function UserDashboard() {
 
                   <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-primary shadow-sm transition hover:bg-primary-soft">
                     <Plus size={16} />
+
                     {imagePreview
                       ? "Change Business Photo"
                       : "Choose Business Photo"}
@@ -1346,9 +1642,9 @@ export default function UserDashboard() {
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
+
                         if (!file) return;
 
-                        // Validate maximum file size: 2 MB
                         if (file.size > 2 * 1024 * 1024) {
                           toast({
                             title: "File Too Large",
@@ -1377,7 +1673,7 @@ export default function UserDashboard() {
                 </div>
               </div>
 
-              {/* Business Name */}
+              {/* BUSINESS NAME */}
               <div>
                 <label className="mb-1 block font-bold text-ink">
                   Business Name *
@@ -1398,7 +1694,7 @@ export default function UserDashboard() {
                 />
               </div>
 
-              {/* Business Type */}
+              {/* BUSINESS TYPE */}
               <div>
                 <label className="mb-1 block font-bold text-ink">
                   Business Type / Category *
@@ -1430,7 +1726,7 @@ export default function UserDashboard() {
                 </select>
               </div>
 
-              {/* Business Location */}
+              {/* BUSINESS LOCATION */}
               <div>
                 <label className="mb-1 block font-bold text-ink">
                   Business Location *
@@ -1467,7 +1763,7 @@ export default function UserDashboard() {
                 )}
               </div>
 
-              {/* Address */}
+              {/* ADDRESS */}
               <div>
                 <label className="mb-1 block font-bold text-ink">
                   Full Address
@@ -1487,7 +1783,7 @@ export default function UserDashboard() {
                 />
               </div>
 
-              {/* Description */}
+              {/* DESCRIPTION */}
               <div>
                 <label className="mb-1 block font-bold text-ink">
                   Short Description
@@ -1507,7 +1803,7 @@ export default function UserDashboard() {
                 />
               </div>
 
-              {/* Action Buttons */}
+              {/* ACTION BUTTONS */}
               <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
                 <button
                   type="button"
@@ -1534,7 +1830,7 @@ export default function UserDashboard() {
             </form>
           </div>
 
-          {/* Location Picker Modal */}
+          {/* LOCATION PICKER */}
           <LocationPickerModal
             isOpen={isMapPickerOpen}
             onClose={() => setIsMapPickerOpen(false)}

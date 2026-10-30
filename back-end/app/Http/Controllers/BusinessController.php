@@ -210,17 +210,20 @@ class BusinessController extends Controller
             'search' => ['nullable', 'string', 'max:255'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
             'business_id' => ['nullable', 'string'],
-            'business_type_id' => ['nullable', 'string'],
+            'business_type_id' => ['nullable', 'uuid'],
+            'status' => ['nullable', 'in:completed,pending'],
             'page' => ['nullable', 'integer', 'min:1'],
         ]);
 
-        $perPage = min(max((int) ($validated['per_page'] ?? 10), 1), 100);
+        $perPage = min(max((int) ($validated['per_page'] ?? 6), 1), 100);
+
         $sessions = $this->simulationService->getUserSimulationSessions(
             (string) Auth::id(),
             $validated['search'] ?? '',
-            (int) ($validated['per_page'] ?? 10),
+            $perPage,
             $validated['business_id'] ?? null,
-            $validated['business_type_id'] ?? null
+            $validated['business_type_id'] ?? null,
+            $validated['status'] ?? null
         );
 
         return response()->json([
