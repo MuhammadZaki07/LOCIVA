@@ -52,7 +52,7 @@ import {
 import { VendorRoutePanel, type TrackingLocationUpdate } from "@/components/maps/VendorRoutePanel";
 import { RouteLayer } from "@/components/maps/RouteLayer";
 import { MapPillNav, type MapToolId } from "@/components/maps/MapPillNav";
-import { MapTour } from "@/components/maps/MapTour";
+import { MapTour, TOUR_STORAGE_KEY } from "@/components/maps/MapTour";
 import { SearchModal } from "@/components/maps/SearchModal";
 import {
   ReportMarker,
@@ -561,27 +561,79 @@ export function MapPage() {
   const [tourRun, setTourRun] = useState(false);
   const tourAutoStartedRef = useRef(false);
 
-  // Auto-launch exactly once on the first (uncompleted) map visit, after
-  // the component has mounted and tour targets are present. Guarded by a
-  // ref so React StrictMode, rerenders, and route changes cannot relaunch it.
+  // Auto-launch on first visit when map and tour targets are mounted and ready.
+  // Guarded by ref and localStorage version check so StrictMode, rerenders,
+  // and route changes cannot duplicate or prematurely launch the tour.
   useEffect(() => {
     if (tourAutoStartedRef.current) return;
-    if (localStorage.getItem("lociva_map_tour_completed_v1") === "1") return;
+    try {
+      if (localStorage.getItem(TOUR_STORAGE_KEY) === "1") return;
+    } catch {
+      /* localStorage unavailable or restricted */
+    }
 
-    const timer = setTimeout(() => {
-      tourAutoStartedRef.current = true;
-      setTourRun(true);
-    }, 200);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    let attempts = 0;
+    const maxAttempts = 60; // 6 seconds max polling (60 x 100ms)
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const checkReadinessAndStart = () => {
+      attempts += 1;
+
+      // Ensure the Leaflet map instance is fully populated
+      const isMapReady = Boolean(mapRef.current);
+
+      // Verify essential tour targets are mounted in the DOM
+      const hasCatalogBtn = Boolean(document.querySelector('[data-tour="catalog-btn"]'));
+      const hasLayersBtn = Boolean(document.querySelector('[data-tour="layers-btn"]'));
+      const hasMapCanvas = Boolean(document.querySelector('[data-tour="map-canvas"]'));
+      const hasAnalysisBtn = Boolean(document.querySelector('[data-tour="analysis-btn"]'));
+      const hasCandidateBtnIfAuth = !isLoggedIn || Boolean(document.querySelector('[data-tour="candidates-btn"]'));
+
+      const isReady = isMapReady && hasCatalogBtn && hasLayersBtn && hasMapCanvas && hasAnalysisBtn && hasCandidateBtnIfAuth;
+
+      if (isReady) {
+        if (intervalId) clearInterval(intervalId);
+        if (!tourAutoStartedRef.current) {
+          try {
+            if (localStorage.getItem(TOUR_STORAGE_KEY) === "1") return;
+          } catch {
+            /* noop */
+          }
+          tourAutoStartedRef.current = true;
+          setTourRun(true);
+        }
+        return;
+      }
+
+      // Fallback: If timeout reached and catalog target is mounted, launch gracefully
+      if (attempts >= maxAttempts) {
+        if (intervalId) clearInterval(intervalId);
+        if (!tourAutoStartedRef.current && hasCatalogBtn) {
+          try {
+            if (localStorage.getItem(TOUR_STORAGE_KEY) === "1") return;
+          } catch {
+            /* noop */
+          }
+          tourAutoStartedRef.current = true;
+          setTourRun(true);
+        }
+      }
+    };
+
+    intervalId = setInterval(checkReadinessAndStart, 100);
+    checkReadinessAndStart();
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [isLoggedIn]);
 
   // Mark the tour as completed so it never auto-launches again on later visits.
   // Manual replay via the "Panduan" button does NOT clear this state.
   const handleTourFinish = useCallback(() => {
     setTourRun(false);
     try {
-      localStorage.setItem("lociva_map_tour_completed_v1", "1");
+      localStorage.setItem(TOUR_STORAGE_KEY, "1");
     } catch {
       /* noop */
     }

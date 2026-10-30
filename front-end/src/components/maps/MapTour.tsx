@@ -16,14 +16,73 @@ export interface MapTourProps {
   hasCandidate?: boolean;
 }
 
-const TOUR_STORAGE_KEY = "lociva_map_tour_completed_v1";
+export const TOUR_STORAGE_KEY = "lociva_map_tour_completed_v1";
 
-const markTourCompleted = (): void => {
+export const isTourCompleted = (): boolean => {
+  try {
+    return localStorage.getItem(TOUR_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
+export const markTourCompleted = (): void => {
   try {
     localStorage.setItem(TOUR_STORAGE_KEY, "1");
   } catch {
     /* noop */
   }
+};
+
+export const buildTourSteps = (isLoggedIn: boolean): Step[] => {
+  const steps: Step[] = [
+    {
+      target: '[data-tour="catalog-btn"]',
+      title: "1. Pilih Model Usaha",
+      content:
+        "Buka Katalog Usaha untuk memilih jenis UMKM (seperti Warung Kopi, Laundry, Mart) atau pilih dari usaha terdaftar Anda.",
+      placement: "right",
+      skipBeacon: true,
+    },
+    {
+      target: '[data-tour="layers-btn"]',
+      title: "2. Eksplorasi POI & Peta Publik",
+      content:
+        "Aktifkan layer fasilitas umum (POI lokal), demografi BPS, serta laporan warga langsung pada peta interaktif.",
+      placement: "right",
+      skipBeacon: true,
+    },
+    {
+      target: '[data-tour="map-canvas"]',
+      title: "3. Penempatan Titik Kandidat",
+      content:
+        "Tentukan titik lokasi kandidat usaha Anda di peta. Anda dapat menempatkan dan membandingkan hingga 8 titik kandidat lokasi untuk evaluasi komparatif.",
+      placement: "center",
+      skipBeacon: true,
+    },
+    {
+      target: '[data-tour="analysis-btn"]',
+      title: "4. Analisis Potensi & Kelayakan",
+      content: isLoggedIn
+        ? "Buka panel Analisis Lokasi untuk menjalankan kalkulasi backend LOCIVA, melihat skor potensi pasar, kepadatan kompetitor, dan kesesuaian wilayah."
+        : "Masuk atau buat akun untuk menjalankan kalkulasi backend LOCIVA, melihat skor potensi pasar, dan menguji kelayakan lokasi.",
+      placement: "right",
+      skipBeacon: true,
+    },
+  ];
+
+  if (isLoggedIn) {
+    steps.push({
+      target: '[data-tour="candidates-btn"]',
+      title: "5. Kandidat Tersimpan",
+      content:
+        "Lihat dan kelola seluruh riwayat simulasi kandidat lokasi yang telah tersimpan di akun Anda dengan filter usaha aktif dan pencarian server-side.",
+      placement: "right",
+      skipBeacon: true,
+    });
+  }
+
+  return steps;
 };
 
 export const MapTour: React.FC<MapTourProps> = ({
@@ -48,6 +107,8 @@ export const MapTour: React.FC<MapTourProps> = ({
     setStepIndex(0);
     onFinish();
   }, [onFinish]);
+
+  const steps = buildTourSteps(isLoggedIn);
 
   const handleJoyrideEvent = useCallback<EventHandler>(
     (data) => {
@@ -79,49 +140,6 @@ export const MapTour: React.FC<MapTourProps> = ({
     [handleFinishOrSkip]
   );
 
-  // Stable steps using reliably mounted DOM target selectors
-  const steps: Step[] = [
-    {
-      target: '[data-tour="catalog-btn"]',
-      title: "1. Pilih Model Usaha",
-      content:
-        "Buka Katalog Usaha untuk memilih jenis UMKM (seperti Warung Kopi, Laundry, Mart) atau pilih dari usaha terdaftar Anda.",
-      placement: "right",
-    },
-    {
-      target: '[data-tour="layers-btn"]',
-      title: "2. Eksplorasi POI & Peta Publik",
-      content:
-        "Aktifkan layer fasilitas umum (POI lokal), demografi BPS, serta laporan warga langsung pada peta interaktif.",
-      placement: "right",
-    },
-    {
-      target: '[data-tour="map-canvas"]',
-      title: "3. Penempatan Titik Kandidat",
-      content:
-        "Tentukan titik lokasi kandidat usaha Anda di peta. Anda dapat menempatkan dan membandingkan hingga 8 titik kandidat lokasi untuk evaluasi komparatif.",
-      placement: "center",
-    },
-    {
-      target: '[data-tour="analysis-btn"]',
-      title: "4. Analisis Potensi & Kelayakan",
-      content: isLoggedIn
-        ? "Buka panel Analisis Lokasi untuk menjalankan kalkulasi backend LOCIVA, melihat skor potensi pasar, kepadatan kompetitor, dan kesesuaian wilayah."
-        : "Masuk atau buat akun untuk menjalankan kalkulasi backend LOCIVA, melihat skor potensi pasar, dan menguji kelayakan lokasi.",
-      placement: "right",
-    },
-  ];
-
-  if (isLoggedIn) {
-    steps.push({
-      target: '[data-tour="candidates-btn"]',
-      title: "5. Kandidat Tersimpan",
-      content:
-        "Lihat dan kelola seluruh riwayat simulasi kandidat lokasi yang telah tersimpan di akun Anda dengan filter usaha aktif dan pencarian server-side.",
-      placement: "right",
-    });
-  }
-
   return (
     <Joyride
       steps={steps}
@@ -134,7 +152,7 @@ export const MapTour: React.FC<MapTourProps> = ({
         textColor: "#1e293b",
         backgroundColor: "#ffffff",
         arrowColor: "#ffffff",
-        overlayColor: "rgba(2, 6, 23, 0.90)",
+        overlayColor: "rgba(15, 23, 42, 0.85)",
         zIndex: 10000,
         showProgress: true,
         targetWaitTimeout: 1500,
@@ -154,15 +172,15 @@ export const MapTour: React.FC<MapTourProps> = ({
         },
         beacon: {
           zIndex: 10002,
-          width: 14,
-          height: 14,
+          width: 36,
+          height: 36,
           backgroundColor: "#4f46e5",
-          border: "2.5px solid #ffffff",
+          border: "3px solid #ffffff",
           boxShadow:
             "0 0 0 4px rgba(79, 70, 229, 0.35), 0 2px 8px rgba(0, 0, 0, 0.25)",
         },
         highlightElement: {
-          outline: "3px solid #4f46e5",
+          outline: "3px solid #6366f1",
           outlineOffset: "3px",
         },
         buttonPrimary: {

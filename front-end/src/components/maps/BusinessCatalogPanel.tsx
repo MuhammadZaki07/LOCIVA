@@ -255,136 +255,142 @@ export const BusinessCatalogPanel: React.FC<BusinessCatalogPanelProps> = ({
           : "relative clay rounded-3xl max-w-4xl max-h-[88vh] shadow-2xl border border-white/80 animate-in fade-in zoom-in-95 duration-200",
       )}
     >
-      {/* Header Bar */}
-      <div className="p-4 sm:p-5 border-b border-slate-200/80 bg-white/70 backdrop-blur-xs flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <div>
-            <h2 className="text-lg sm:text-xl font-display font-bold text-ink">
-              Business Catalog
-            </h2>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* View Mode Toggle */}
-            <div className="hidden sm:flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200/60">
-              <button
-                type="button"
-                onClick={() => setViewMode("grid")}
-                className={cn(
-                  "p-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
-                  viewMode === "grid"
-                    ? "bg-white text-primary shadow-xs"
-                    : "text-muted hover:text-ink",
-                )}
-                title="Grid View"
-              >
-                <LayoutGrid size={16} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("list")}
-                className={cn(
-                  "p-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
-                  viewMode === "list"
-                    ? "bg-white text-primary shadow-xs"
-                    : "text-muted hover:text-ink",
-                )}
-                title="List View"
-              >
-                <List size={16} />
-              </button>
-            </div>
 
-            {/* Close Button */}
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-muted hover:text-ink transition-colors cursor-pointer"
-              title="Close (Esc)"
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 mt-2">
-          <button
-            type="button"
-            onClick={() => setActiveSourceTab("catalog")}
-            className={cn(
-              "px-2 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer",
-              activeSourceTab === "catalog"
-                ? "bg-primary text-white shadow-xs"
-                : "bg-slate-100 text-slate-600 hover:bg-slate-200",
-            )}
-          >
-            Katalog Model Usaha
-          </button>
-          {token && (
-            <button
-              type="button"
-              onClick={() => setActiveSourceTab("my_businesses")}
-              className={cn(
-                "px-2 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer flex items-center gap-1.5",
-                activeSourceTab === "my_businesses"
-                  ? "bg-primary text-white shadow-xs"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200",
-              )}
-            >
-              Usaha Terdaftar Saya
-              {userBusinesses.length > 0 && (
-                <span className="size-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center">
-                  {userBusinesses.length}
-                </span>
-              )}
-            </button>
+{/* Header Bar */}
+<div className="p-4 sm:p-5 border-b border-slate-200/80 bg-white/70 backdrop-blur-xs shrink-0">
+  {/* Row 1: Title + Grid/List + Close */}
+  <div className="flex items-center justify-between gap-3">
+    <h2 className="text-lg sm:text-xl font-display font-bold text-ink">
+      Business Catalog
+    </h2>
+
+    <div className="flex items-center gap-2 shrink-0">
+      {/* View Mode Toggle */}
+      <div className="hidden sm:flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200/60">
+        <button
+          type="button"
+          onClick={() => setViewMode("grid")}
+          className={cn(
+            "p-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+            viewMode === "grid"
+              ? "bg-white text-primary shadow-xs"
+              : "text-muted hover:text-ink",
           )}
-        </div>
+          title="Grid View"
+        >
+          <LayoutGrid size={16} />
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode("list")}
+          className={cn(
+            "p-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+            viewMode === "list"
+              ? "bg-white text-primary shadow-xs"
+              : "text-muted hover:text-ink",
+          )}
+          title="List View"
+        >
+          <List size={16} />
+        </button>
       </div>
 
-      {/* Filters & Search Toolbar */}
-      <div className="p-4 border-b border-slate-100 bg-white/40 space-y-3">
-        {/* Search Input */}
-        <div className="relative">
-          <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-muted" />
-          <input
-            type="text"
-            placeholder="Search business models (e.g. Coffee Shop, Laundry, Mart, Bakery)..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-100/90 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary text-ink border border-slate-200/70"
-          />
-        </div>
+      {/* Close Button */}
+      <button
+        type="button"
+        onClick={onClose}
+        className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-muted hover:text-ink transition-colors cursor-pointer"
+        title="Close (Esc)"
+      >
+        <X size={18} />
+      </button>
+    </div>
+  </div>
 
-        {/* Category Filter Pills */}
-        <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-hide">
-          <button
-            type="button"
-            onClick={() => setSelectedCategory("All")}
-            className={cn(
-              "whitespace-nowrap px-3.5 py-1.5 text-xs rounded-full border transition-all cursor-pointer font-medium",
-              selectedCategory === "All"
-                ? "bg-primary text-white border-primary shadow-xs font-bold"
-                : "bg-white text-muted border-slate-200 hover:border-primary/40",
-            )}
-          >
-            All Categories
-          </button>
-          {categories.map((c) => (
-            <button
-              key={c.category}
-              type="button"
-              onClick={() => setSelectedCategory(c.category)}
-              className={cn(
-                "whitespace-nowrap px-3.5 py-1.5 text-xs rounded-full border transition-all cursor-pointer font-medium",
-                selectedCategory === c.category
-                  ? "bg-primary text-white border-primary shadow-xs font-bold"
-                  : "bg-white text-muted border-slate-200 hover:border-primary/40",
-              )}
-            >
-              {c.category} ({c.count})
-            </button>
-          ))}
-        </div>
-      </div>
+  {/* Row 2: Business Source Tabs */}
+  <div className="flex items-center gap-2 mt-3 flex-wrap">
+    <button
+      type="button"
+      onClick={() => setActiveSourceTab("catalog")}
+      className={cn(
+        "px-2 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer",
+        activeSourceTab === "catalog"
+          ? "bg-primary text-white shadow-xs"
+          : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+      )}
+    >
+      Katalog Model Usaha
+    </button>
+
+    {token && (
+      <button
+        type="button"
+        onClick={() => setActiveSourceTab("my_businesses")}
+        className={cn(
+          "px-2 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer flex items-center gap-1.5",
+          activeSourceTab === "my_businesses"
+            ? "bg-primary text-white shadow-xs"
+            : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+        )}
+      >
+        Usaha Terdaftar Saya
+        {userBusinesses.length > 0 && (
+          <span className="size-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center">
+            {userBusinesses.length}
+          </span>
+        )}
+      </button>
+    )}
+  </div>
+</div>
+
+{/* Filters & Search Toolbar */}
+<div className="p-4 border-b border-slate-100 bg-white/40 space-y-3">
+  {/* Search Input */}
+  <div className="relative">
+    <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-muted" />
+    <input
+      type="text"
+      placeholder="Search business models (e.g. Coffee Shop, Laundry, Mart, Bakery)..."
+      value={search}
+      onChange={(e) => setSearch(e.target.value)}
+      className="w-full pl-10 pr-4 py-2 bg-slate-100/90 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary text-ink border border-slate-200/70"
+    />
+  </div>
+
+  {/* Category Filter Pills */}
+  <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-hide">
+    <button
+      type="button"
+      onClick={() => setSelectedCategory("All")}
+      className={cn(
+        "whitespace-nowrap px-3.5 py-1.5 text-xs rounded-full border transition-all cursor-pointer font-medium",
+        selectedCategory === "All"
+          ? "bg-primary text-white border-primary shadow-xs font-bold"
+          : "bg-white text-muted border-slate-200 hover:border-primary/40",
+      )}
+    >
+      All Categories
+    </button>
+
+    {categories.map((c) => (
+      <button
+        key={c.category}
+        type="button"
+        onClick={() => setSelectedCategory(c.category)}
+        className={cn(
+          "whitespace-nowrap px-3.5 py-1.5 text-xs rounded-full border transition-all cursor-pointer font-medium",
+          selectedCategory === c.category
+            ? "bg-primary text-white border-primary shadow-xs font-bold"
+            : "bg-white text-muted border-slate-200 hover:border-primary/40",
+        )}
+      >
+        {c.category} ({c.count})
+      </button>
+    ))}
+  </div>
+</div>
+
 
       {/* My Businesses View */}
       {activeSourceTab === "my_businesses" && (
@@ -676,13 +682,6 @@ export const BusinessCatalogPanel: React.FC<BusinessCatalogPanelProps> = ({
       {/* Footer Bar */}
       <div className="p-3.5 border-t border-slate-200 bg-white/70 text-center text-xs text-muted flex items-center justify-between px-6">
         <span>{catalogItems.length} business models available</span>
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-xs font-bold text-primary hover:underline cursor-pointer"
-        >
-          Done
-        </button>
       </div>
     </div>
   );
