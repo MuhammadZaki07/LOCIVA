@@ -26,10 +26,16 @@ class UserController extends Controller
      */
     public function index(Request $request)
     {
-        $filter = $request->only(['search', 'role', 'from', 'to']);
+        $filter = $request->only(['search', 'role', 'from', 'to', 'sort_by', 'sort_order']);
+        $perPage = min(max((int) $request->query('per_page', 10), 1), 100);
         try {
-            $fetch = $this->userRepo->PaginateFilter($filter ,$request->query('per_page', 10));
-            return ApiResponse::success(["mete" => PaginationHelper::meta($fetch), "Data" => UserResource::collection($fetch)]);
+            $fetch = $this->userRepo->PaginateFilter($filter, $perPage);
+            $meta = PaginationHelper::meta($fetch);
+            return ApiResponse::success([
+                "meta" => $meta,
+                "mete" => $meta,
+                "Data" => UserResource::collection($fetch),
+            ]);
         } catch (\Throwable $th) {
             return ApiResponse::error($th->getMessage());
         }

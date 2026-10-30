@@ -12,6 +12,9 @@ import {
   MapTileLayer,
   MapZoomControl,
   MapMarkerClusterGroup,
+  MapMarker,
+  MapPopup,
+  MapCircle,
 } from "@/components/ui/shadcn-ui/map";
 import {
   distanceMeters,
@@ -56,6 +59,7 @@ import {
 } from "@/components/maps/ReportMarker";
 import { CivicReportsMapPanel } from "@/components/maps/CivicReportsMapPanel";
 import { CreateReportModal } from "@/components/maps/CreateReportModal";
+import type { AiAreaRouteResponse } from "@/lib/aiRoutePlanner";
 import {
   BpsLayer,
   BpsLegend,
@@ -512,6 +516,14 @@ export function MapPage() {
   const [activeWaypoints, setActiveWaypoints] = useState<RouteWaypoint[]>([]);
   const [routeCalculation, setRouteCalculation] =
     useState<RouteCalculationResult | null>(null);
+  const [isSelectingAnalysisArea, setIsSelectingAnalysisArea] = useState(false);
+  const [spotJituAnalysisCenter, setSpotJituAnalysisCenter] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const [spotJituRadius, setSpotJituRadius] = useState<number>(2000);
+  const [aiAreaResponse, setAiAreaResponse] = useState<AiAreaRouteResponse | null>(null);
+  const [highlightedStopId, setHighlightedStopId] = useState<string | number | null>(null);
 
   const [isLoggedIn] = useState(() => Boolean(localStorage.getItem("token")));
 
@@ -525,8 +537,7 @@ export function MapPage() {
 
     if (
       isLoggedIn &&
-      isRoutePanelOpen &&
-      (isSelectingStartPoint || isSelectingWaypoint)
+      (isSelectingStartPoint || isSelectingWaypoint || isSelectingAnalysisArea)
     ) {
       return "waypoint";
     }
@@ -537,9 +548,9 @@ export function MapPage() {
   }, [
     pickingReportLocation,
     isLoggedIn,
-    isRoutePanelOpen,
     isSelectingStartPoint,
     isSelectingWaypoint,
+    isSelectingAnalysisArea,
     selectedBusiness,
   ]);
 
@@ -926,6 +937,17 @@ export function MapPage() {
         setIsPersistedInDb(false);
         if (activeTool !== "analysis") setActiveTool("analysis");
       } else if (clickMode === "waypoint") {
+        if (isSelectingAnalysisArea) {
+          setSpotJituAnalysisCenter({ lat, lng });
+          setIsSelectingAnalysisArea(false);
+          setActiveTool("routes");
+          toast({
+            title: "Pusat Area Spot Jitu Dipilih",
+            description: `Koordinat ${lat.toFixed(4)}, ${lng.toFixed(4)} ditetapkan sebagai pusat analisis area.`,
+            variant: "success",
+          });
+          return;
+        }
         if (isSelectingStartPoint) {
           setActiveWaypoints([
             {
@@ -939,6 +961,7 @@ export function MapPage() {
           setRouteCalculation(null);
           setIsSelectingStartPoint(false);
           setIsSelectingWaypoint(false);
+          setActiveTool("routes");
 
           toast({
             title: "Titik Awal Dipilih",
@@ -962,6 +985,7 @@ export function MapPage() {
 
           setRouteCalculation(null);
           setIsSelectingWaypoint(false);
+          setActiveTool("routes");
 
           toast({
             title: "Titik Singgah Ditambahkan",
@@ -974,6 +998,7 @@ export function MapPage() {
       pickingReportLocation,
       clickMode,
       isSelectingStartPoint,
+      isSelectingAnalysisArea,
       selectedBusiness,
       activeCandidateId,
       candidates,
@@ -1158,7 +1183,7 @@ export function MapPage() {
             left-20 = pill (left-3 ≈12px + ~52px pill width) + 12px gap ≈ 80px.
             Capped height to avoid viewport overflow; solid white background.
         ─────────────────────────────────────────────────────────────────────── */}
-        {activeTool && activeTool !== "search" && (
+        {activeTool && activeTool !== "search" && activeTool !== "routes" && (
           <div
             className={cn(
               // Float fixed above everything — does NOT shift map layout
@@ -1395,7 +1420,11 @@ export function MapPage() {
               />
             )}
 
-            {activeTool === "routes" && (
+          </div>
+        )}
+
+        {/* ── Vendor Route Panel: Desktop Left Floating Card vs Mobile Draggable Bottom Sheet ── */}
+        {activeTool === "routes" && (
               <VendorRoutePanel
                 isOpen={true}
                 onClose={() => setActiveTool(null)}
@@ -1408,20 +1437,35 @@ export function MapPage() {
                 currentCalculation={routeCalculation}
                 mapCenter={center}
                 userLocation={activeUserLocation}
-                // onSelectStartPoint={() => setIsSelectingStartPoint(true)}
+                analysisAreaCenter={spotJituAnalysisCenter}
+                onAnalysisAreaCenterChange={setSpotJituAnalysisCenter}
+                spotJituRadius={spotJituRadius}
+                onSpotJituRadiusChange={setSpotJituRadius}
+                aiAreaResponse={aiAreaResponse}
+                onAiAreaResponseChange={setAiAreaResponse}
+                highlightedStopId={highlightedStopId}
+                onHighlightStopId={setHighlightedStopId}
+                onSelectAnalysisArea={() => {
+                  setIsSelectingStartPoint(false);
+                  setIsSelectingWaypoint(false);
+                  setIsSelectingAnalysisArea(true);
+                  setActiveTool(null);
+                }}
                 onTrackingLocationChange={setTrackingLocation}
                 onSelectStartPoint={() => {
                   setIsSelectingWaypoint(false);
+                  setIsSelectingAnalysisArea(false);
                   setIsSelectingStartPoint(true);
+                  setActiveTool(null);
                 }}
                 onSelectWaypoint={() => {
                   setIsSelectingStartPoint(false);
+                  setIsSelectingAnalysisArea(false);
                   setIsSelectingWaypoint(true);
+                  setActiveTool(null);
                 }}
               />
             )}
-          </div>
-        )}
 
         {/* ── Top-right Floating Map Controls ───────────────────────────────── */}
         <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2 pointer-events-none">
@@ -1796,6 +1840,184 @@ export function MapPage() {
               );
             })}
 
+            {/* Spot Jitu analysis area circle & marker */}
+            {activeTool === "routes" && spotJituAnalysisCenter && (
+              <>
+                <MapMarker
+                  position={[
+                    spotJituAnalysisCenter.lat,
+                    spotJituAnalysisCenter.lng,
+                  ]}
+                  icon={
+                    <div
+                      style={{
+                        backgroundColor: "#4f46e5",
+                        width: "28px",
+                        height: "28px",
+                        borderRadius: "50%",
+                        border: "3px solid white",
+                        boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "white",
+                        fontSize: "13px",
+                      }}
+                    >
+                      ✨
+                    </div>
+                  }
+                  iconAnchor={[14, 14]}
+                >
+                  <MapPopup className="lociva-popup-wrapper">
+                    <div className="p-2 text-center space-y-0.5">
+                      <p className="font-bold text-ink text-xs">
+                        Pusat Area Spot Jitu
+                      </p>
+                      <p className="text-[10px] text-muted">
+                        Radius:{" "}
+                        {spotJituRadius >= 1000
+                          ? `${spotJituRadius / 1000} km`
+                          : `${spotJituRadius} m`}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-mono">
+                        {spotJituAnalysisCenter.lat.toFixed(5)},{" "}
+                        {spotJituAnalysisCenter.lng.toFixed(5)}
+                      </p>
+                    </div>
+                  </MapPopup>
+                </MapMarker>
+                <MapCircle
+                  center={[
+                    spotJituAnalysisCenter.lat,
+                    spotJituAnalysisCenter.lng,
+                  ]}
+                  radius={spotJituRadius}
+                  pathOptions={{
+                    color: "#6366f1",
+                    fillColor: "#818cf8",
+                    fillOpacity: 0.12,
+                    weight: 2,
+                    dashArray: "6, 6",
+                  }}
+                />
+              </>
+            )}
+
+            {/* Spot Jitu AI Route Preview Markers */}
+            {activeTool === "routes" && aiAreaResponse && (
+              <>
+                {/* START POINT MARKER */}
+                <MapMarker
+                  position={[
+                    aiAreaResponse.start_point.lat,
+                    aiAreaResponse.start_point.lng,
+                  ]}
+                  icon={
+                    <div
+                      className={cn(
+                        "size-7 rounded-full bg-emerald-600 text-white font-extrabold flex items-center justify-center text-[10px] shadow-lg border-2 border-white transition-all duration-200 cursor-pointer",
+                        highlightedStopId === aiAreaResponse.start_point.id &&
+                          "scale-125 ring-4 ring-emerald-400 animate-pulse",
+                      )}
+                    >
+                      S
+                    </div>
+                  }
+                  iconAnchor={[14, 14]}
+                >
+                  <MapPopup className="lociva-popup-wrapper">
+                    <div className="p-2 space-y-1 max-w-[220px]">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
+                          Titik Awal (Start)
+                        </span>
+                      </div>
+                      <p className="font-bold text-xs text-ink">
+                        {aiAreaResponse.start_point.name}
+                      </p>
+                      <p className="text-[10px] text-muted leading-tight">
+                        {aiAreaResponse.start_point.reason}
+                      </p>
+                    </div>
+                  </MapPopup>
+                </MapMarker>
+
+                {/* INTERMEDIATE WAYPOINTS MARKERS */}
+                {aiAreaResponse.recommended_waypoints.map((wp, idx) => (
+                  <MapMarker
+                    key={`ai-wp-${wp.id}-${idx}`}
+                    position={[wp.lat, wp.lng]}
+                    icon={
+                      <div
+                        className={cn(
+                          "size-6 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-[10px] shadow-md border-2 border-white transition-all duration-200 cursor-pointer",
+                          highlightedStopId === wp.id &&
+                            "scale-125 ring-4 ring-indigo-400 animate-pulse",
+                        )}
+                      >
+                        {idx + 1}
+                      </div>
+                    }
+                    iconAnchor={[12, 12]}
+                  >
+                    <MapPopup className="lociva-popup-wrapper">
+                      <div className="p-2 space-y-1 max-w-[220px]">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[9px] font-bold bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded">
+                            Stop #{idx + 1}
+                          </span>
+                          <span className="text-[9px] text-muted">
+                            ~{wp.stop_duration_minutes || 30} mnt
+                          </span>
+                        </div>
+                        <p className="font-bold text-xs text-ink">{wp.name}</p>
+                        <p className="text-[10px] text-muted leading-tight">
+                          {wp.reason}
+                        </p>
+                      </div>
+                    </MapPopup>
+                  </MapMarker>
+                ))}
+
+                {/* END POINT MARKER */}
+                <MapMarker
+                  position={[
+                    aiAreaResponse.end_point.lat,
+                    aiAreaResponse.end_point.lng,
+                  ]}
+                  icon={
+                    <div
+                      className={cn(
+                        "size-7 rounded-full bg-rose-600 text-white font-extrabold flex items-center justify-center text-[10px] shadow-lg border-2 border-white transition-all duration-200 cursor-pointer",
+                        highlightedStopId === aiAreaResponse.end_point.id &&
+                          "scale-125 ring-4 ring-rose-400 animate-pulse",
+                      )}
+                    >
+                      E
+                    </div>
+                  }
+                  iconAnchor={[14, 14]}
+                >
+                  <MapPopup className="lociva-popup-wrapper">
+                    <div className="p-2 space-y-1 max-w-[220px]">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] font-bold uppercase tracking-wider bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded">
+                          Titik Akhir (End)
+                        </span>
+                      </div>
+                      <p className="font-bold text-xs text-ink">
+                        {aiAreaResponse.end_point.name}
+                      </p>
+                      <p className="text-[10px] text-muted leading-tight">
+                        {aiAreaResponse.end_point.reason}
+                      </p>
+                    </div>
+                  </MapPopup>
+                </MapMarker>
+              </>
+            )}
+
             <RouteLayer
               activeWaypoints={activeWaypoints}
               currentCalculation={routeCalculation}
@@ -1889,11 +2111,13 @@ export function MapPage() {
           {/* Prompt: Waypoint placement mode */}
           {isLoggedIn &&
             clickMode === "waypoint" &&
-            (isSelectingStartPoint || isSelectingWaypoint) && (
+            (isSelectingStartPoint || isSelectingWaypoint || isSelectingAnalysisArea) && (
               <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[400] bg-emerald-800/95 text-white px-5 py-2.5 rounded-full font-medium text-xs shadow-lg pointer-events-none flex items-center gap-2 border border-white/20">
                 <PenLine size={14} />
                 <span>
-                  {isSelectingStartPoint
+                  {isSelectingAnalysisArea
+                    ? "Klik peta untuk memilih pusat area Spot Jitu"
+                    : isSelectingStartPoint
                     ? "Klik peta untuk menentukan titik awal"
                     : "Klik peta untuk menambahkan titik singgah"}
                 </span>

@@ -27,7 +27,11 @@ class ReportController extends Controller
             'status'      => 'nullable|string',
             'severity'    => 'nullable|string',
             'search'      => 'nullable|string|max:200',
-            'per_page'    => 'nullable|integer|max:100',
+            'from'        => 'nullable|date',
+            'to'          => 'nullable|date',
+            'sort_by'     => 'nullable|in:created_at,status,severity,title,confirmations_count',
+            'sort_order'  => 'nullable|in:asc,desc',
+            'per_page'    => 'nullable|integer|min:1|max:100',
         ]);
 
         $query = Report::with([
@@ -54,8 +58,23 @@ class ReportController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhereHas('user', function ($uq) use ($search) {
+                        $uq->where('name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('area', function ($aq) use ($search) {
+                        $aq->where('name', 'like', "%{$search}%");
+                    });
             });
+        }
+
+        if ($request->filled('from')) {
+            $query->whereDate('created_at', '>=', $request->from);
+        }
+
+        if ($request->filled('to')) {
+            $query->whereDate('created_at', '<=', $request->to);
         }
 
         if ($request->filled('lat') && $request->filled('lng')) {
@@ -70,10 +89,12 @@ class ReportController extends Controller
                 ->having('distance', '<=', $radius)
                 ->orderBy('distance');
         } else {
-            $query->latest();
+            $sortBy = $request->input('sort_by', 'created_at');
+            $sortOrder = $request->input('sort_order', 'desc');
+            $query->orderBy($sortBy, $sortOrder);
         }
 
-        $perPage = (int) $request->input('per_page', 20);
+        $perPage = min(max((int) $request->input('per_page', 20), 1), 100);
         $reports = $query->paginate($perPage);
 
         return ApiResponse::success($reports, 'Reports retrieved successfully');

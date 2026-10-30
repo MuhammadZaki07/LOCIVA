@@ -18,7 +18,7 @@ import { getStorageUrl } from "@/context/userService";
 import api from "@/context/apiClient";
 import echo from "@/lib/echo";
 
-// Breadcrumb map: path segment -> readable label (sentence case)
+// Breadcrumb map: path segment -> readable label
 const BREADCRUMB_LABELS: Record<string, string> = {
   admin: "dashboard",
   reports: "moderasi laporan",
@@ -39,41 +39,50 @@ function Breadcrumb() {
 
   if (segments.length <= 1) {
     return (
-      <span className="text-[12.5px] font-medium text-ink">dashboard</span>
+      <span className="text-[12.5px] font-medium text-ink">
+        dashboard
+      </span>
     );
   }
 
   const crumbs = segments.map((seg, i) => {
     const path = "/" + segments.slice(0, i + 1).join("/");
-    // If segment is UUID or numeric ID, display as "detail" or "id"
     const isId =
       seg.length > 20 ||
       /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(seg) ||
       /^\d+$/.test(seg);
+
     const label = isId ? "detail" : (BREADCRUMB_LABELS[seg] ?? seg);
     const isLast = i === segments.length - 1;
+
     return { path, label, isLast };
   });
 
   return (
     <nav
-      className="flex items-center gap-1.5 text-[12px] text-muted overflow-x-auto"
+      className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap text-[12px] text-muted"
       aria-label="Breadcrumb"
     >
       {crumbs.map((crumb) => (
-        <span key={crumb.path} className="flex items-center gap-1.5 shrink-0">
+        <span
+          key={crumb.path}
+          className="flex shrink-0 items-center gap-1"
+        >
           {!crumb.isLast ? (
             <>
               <Link
                 to={crumb.path}
-                className="hover:text-ink transition-colors no-underline text-muted font-medium lowercase"
+                className="font-medium lowercase text-muted no-underline transition-colors hover:text-ink"
               >
                 {crumb.label}
               </Link>
-              <ChevronRight size={11} className="text-muted/50" />
+              <ChevronRight
+                size={11}
+                className="shrink-0 text-muted/50"
+              />
             </>
           ) : (
-            <span className="font-semibold text-ink lowercase">
+            <span className="font-semibold lowercase text-ink">
               {crumb.label}
             </span>
           )}
@@ -101,9 +110,8 @@ export default function AdminNavbar({
 }: AdminNavbarProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [search, setSearch] = useState("");
 
-  // Notifications from new reports
+  const [search, setSearch] = useState("");
   const [notifications, setNotifications] = useState<RecentReport[]>([]);
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -111,6 +119,7 @@ export default function AdminNavbar({
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
 
+  // Load recent reports
   useEffect(() => {
     api
       .get("/reports", {
@@ -139,6 +148,7 @@ export default function AdminNavbar({
       });
   }, []);
 
+  // Real-time notifications using Laravel Reverb
   useEffect(() => {
     if (!user || user.role !== "admin") return;
 
@@ -150,7 +160,6 @@ export default function AdminNavbar({
       console.log("[Reverb] Laporan baru diterima:", event);
 
       setNotifications((current) => {
-        // Hindari laporan ganda jika event terkirim lebih dari sekali.
         if (current.some((item) => item.id === String(event.id))) {
           return current;
         }
@@ -172,7 +181,10 @@ export default function AdminNavbar({
     };
   }, [user?.id, user?.role]);
 
-  const handleDeleteNotification = async (e: React.MouseEvent, id: string) => {
+  const handleDeleteNotification = async (
+    e: React.MouseEvent,
+    id: string,
+  ) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -187,26 +199,32 @@ export default function AdminNavbar({
     }
   };
 
-  // Close dropdowns on outside click
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+
+      if (notifRef.current && !notifRef.current.contains(target)) {
         setNotifOpen(false);
       }
-      if (
-        profileRef.current &&
-        !profileRef.current.contains(e.target as Node)
-      ) {
+
+      if (profileRef.current && !profileRef.current.contains(target)) {
         setProfileOpen(false);
       }
     };
+
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!search.trim()) return;
+
     navigate(`/admin/reports?search=${encodeURIComponent(search.trim())}`);
   };
 
@@ -219,47 +237,50 @@ export default function AdminNavbar({
   const avatarSrc = getStorageUrl(user?.profile_image);
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b border-[#ececf6] bg-white/90 lg:px-5 backdrop-blur-md px-8">
-      {/* Left: Collapse toggle + Breadcrumb */}
-      <div className="flex items-center gap-3 min-w-0 flex-1">
+    <header className="sticky top-0 z-40 flex min-h-14 w-full min-w-0 items-center gap-2 border-b border-[#ececf6] bg-white/95 px-3 py-2 backdrop-blur-md sm:gap-3 sm:px-5 lg:px-5">
+      {/* Left: Sidebar toggle + Breadcrumb */}
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
         {onToggleCollapse && (
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="p-1.5 rounded-[8px] text-muted hover:bg-slate-100 hover:text-ink cursor-pointer transition-colors shrink-0"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-slate-100 hover:text-ink"
             title={collapsed ? "Perluas sidebar" : "Ciutkan sidebar"}
+            aria-label={collapsed ? "Perluas sidebar" : "Ciutkan sidebar"}
           >
             {collapsed ? (
-              <PanelLeftOpen size={16} />
+              <PanelLeftOpen size={17} />
             ) : (
-              <PanelLeftClose size={16} />
+              <PanelLeftClose size={17} />
             )}
           </button>
         )}
-        <div className="min-w-0 flex-1">
+
+        <div className="min-w-0 flex-1 overflow-hidden">
           <Breadcrumb />
         </div>
       </div>
 
-      {/* Center: Search */}
+      {/* Center: Search, hidden on small screens */}
       <form
         onSubmit={handleSearch}
-        className="hidden sm:flex items-center gap-2 rounded-[10px] border border-[#e5e5f0] bg-slate-50/80 px-3 py-1.5 w-[200px] lg:w-[260px] focus-within:border-primary focus-within:bg-white transition-all"
+        className="hidden w-[200px] shrink-0 items-center gap-2 rounded-[10px] border border-[#e5e5f0] bg-slate-50/80 px-3 py-1.5 transition-all focus-within:border-primary focus-within:bg-white md:flex lg:w-[260px]"
       >
-        <Search size={13} className="text-muted shrink-0" />
+        <Search size={13} className="shrink-0 text-muted" />
+
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Cari laporan civic..."
-          className="flex-1 bg-transparent text-[12.5px] text-ink outline-none placeholder:text-muted"
+          className="min-w-0 flex-1 bg-transparent text-[12.5px] text-ink outline-none placeholder:text-muted"
         />
       </form>
 
       {/* Right: Notifications + Profile */}
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="ml-auto flex shrink-0 items-center gap-2">
         {/* Notifications */}
-        <div ref={notifRef} className="relative">
+        <div ref={notifRef} className="relative shrink-0">
           <button
             type="button"
             id="admin-notifications-btn"
@@ -267,40 +288,47 @@ export default function AdminNavbar({
               setNotifOpen((v) => !v);
               setProfileOpen(false);
             }}
-            className="clay-press relative flex h-8 w-8 items-center justify-center rounded-[8px] text-muted hover:text-ink border border-[#e5e5f0] bg-white cursor-pointer"
+            className="clay-press relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] border border-[#e5e5f0] bg-white text-muted transition-colors hover:text-ink"
             aria-label="Notifikasi laporan"
+            aria-expanded={notifOpen}
           >
-            <Bell size={15} />
+            <Bell size={17} />
+
             {unread > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white">
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">
                 {unread > 9 ? "9+" : unread}
               </span>
             )}
           </button>
 
           {notifOpen && (
-            <div className="absolute right-0 top-10 z-50 w-80 rounded-[14px] border border-[#ececf6] bg-white shadow-xl text-left">
-              <div className="flex items-center justify-between border-b border-[#f0f0f8] px-4 py-3">
+            <div className="absolute right-0 top-11 z-50 w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden rounded-[14px] border border-[#ececf6] bg-white text-left shadow-xl">
+              <div className="flex items-center justify-between gap-2 border-b border-[#f0f0f8] px-3 py-3 sm:px-4">
                 <span className="font-display text-[13px] font-medium text-ink">
                   Laporan civic baru
                 </span>
+
                 {unread > 0 && (
-                  <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10.5px] font-medium text-rose-600 border border-rose-100">
+                  <span className="shrink-0 rounded-full border border-rose-100 bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-600">
                     {unread} belum ditinjau
                   </span>
                 )}
               </div>
-              <div className="max-h-72 overflow-y-auto divide-y divide-[#f5f5fa]">
+
+              <div className="max-h-[min(18rem,60vh)] divide-y divide-[#f5f5fa] overflow-y-auto">
                 {notifications.length === 0 ? (
-                  <div className="flex items-center gap-2 px-4 py-6 text-[12.5px] text-muted justify-center">
-                    <CheckCircle2 size={16} className="text-emerald-500" />
+                  <div className="flex items-center justify-center gap-2 px-3 py-6 text-center text-[12.5px] text-muted sm:px-4">
+                    <CheckCircle2
+                      size={16}
+                      className="shrink-0 text-emerald-500"
+                    />
                     <span>Tidak ada antrean laporan baru</span>
                   </div>
                 ) : (
                   notifications.map((n) => (
                     <div
                       key={n.id}
-                      className="flex items-start gap-2 px-4 py-3 hover:bg-slate-50/70"
+                      className="flex items-start gap-2 px-3 py-3 transition-colors hover:bg-slate-50/70 sm:px-4"
                     >
                       <Link
                         to="/admin/reports"
@@ -312,7 +340,7 @@ export default function AdminNavbar({
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[12.5px] font-medium text-ink">
+                          <p className="break-words text-[12.5px] font-medium text-ink">
                             {n.title}
                           </p>
 
@@ -335,7 +363,7 @@ export default function AdminNavbar({
                         onClick={(e) => handleDeleteNotification(e, n.id)}
                         aria-label={`Hapus notifikasi ${n.title}`}
                         title="Hapus notifikasi"
-                        className="shrink-0 rounded-md p-1 text-muted hover:bg-red-50 hover:text-red-600"
+                        className="shrink-0 rounded-md p-1 text-muted transition-colors hover:bg-red-50 hover:text-red-600"
                       >
                         <X size={14} />
                       </button>
@@ -343,11 +371,12 @@ export default function AdminNavbar({
                   ))
                 )}
               </div>
-              <div className="border-t border-[#f0f0f8] px-4 py-2.5">
+
+              <div className="border-t border-[#f0f0f8] px-3 py-2.5 sm:px-4">
                 <Link
                   to="/admin/reports"
                   onClick={() => setNotifOpen(false)}
-                  className="text-[12px] font-medium text-primary hover:underline no-underline"
+                  className="text-[12px] font-medium text-primary no-underline hover:underline"
                 >
                   Buka moderasi laporan →
                 </Link>
@@ -357,7 +386,7 @@ export default function AdminNavbar({
         </div>
 
         {/* Profile dropdown */}
-        <div ref={profileRef} className="relative">
+        <div ref={profileRef} className="relative shrink-0">
           <button
             type="button"
             id="admin-profile-btn"
@@ -365,8 +394,9 @@ export default function AdminNavbar({
               setProfileOpen((v) => !v);
               setNotifOpen(false);
             }}
-            className="clay-press flex h-8 w-8 items-center justify-center rounded-full overflow-hidden border border-[#e5e5f0] bg-primary-soft text-[12px] font-bold text-primary cursor-pointer"
+            className="clay-press flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#e5e5f0] bg-primary-soft text-[12px] font-bold text-primary"
             aria-label="Profil administrator"
+            aria-expanded={profileOpen}
           >
             {avatarSrc ? (
               <img
@@ -380,13 +410,17 @@ export default function AdminNavbar({
           </button>
 
           {profileOpen && (
-            <div className="absolute right-0 top-10 z-50 w-56 rounded-[14px] border border-[#ececf6] bg-white p-1.5 shadow-xl text-left">
+            <div className="absolute right-0 top-11 z-50 w-[min(14rem,calc(100vw-1.5rem))] overflow-hidden rounded-[14px] border border-[#ececf6] bg-white p-1.5 text-left shadow-xl">
               <div className="border-b border-[#f0f0f8] px-3 py-2.5">
                 <p className="truncate text-[13px] font-medium text-ink">
                   {user?.name || "Admin"}
                 </p>
-                <p className="truncate text-[11px] text-muted">{user?.email}</p>
-                <span className="mt-1 inline-block rounded-[5px] bg-primary-soft px-1.5 py-0.2 text-[10px] font-medium text-primary">
+
+                <p className="truncate text-[11px] text-muted">
+                  {user?.email}
+                </p>
+
+                <span className="mt-1 inline-block rounded-[5px] bg-primary-soft px-1.5 py-0.5 text-[10px] font-medium text-primary">
                   administrator
                 </span>
               </div>
@@ -395,7 +429,7 @@ export default function AdminNavbar({
                 <Link
                   to="/admin/profile"
                   onClick={() => setProfileOpen(false)}
-                  className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-[12.5px] font-medium text-muted hover:bg-slate-50 hover:text-ink no-underline transition-colors"
+                  className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-[12.5px] font-medium text-muted no-underline transition-colors hover:bg-slate-50 hover:text-ink"
                 >
                   <User size={14} />
                   <span>profil akun</span>
@@ -404,7 +438,7 @@ export default function AdminNavbar({
                 <Link
                   to="/admin/system-health"
                   onClick={() => setProfileOpen(false)}
-                  className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-[12.5px] font-medium text-muted hover:bg-slate-50 hover:text-ink no-underline transition-colors"
+                  className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-[12.5px] font-medium text-muted no-underline transition-colors hover:bg-slate-50 hover:text-ink"
                 >
                   <Settings size={14} />
                   <span>status & audit sistem</span>
@@ -415,7 +449,7 @@ export default function AdminNavbar({
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="flex w-full items-center gap-2 rounded-[8px] px-3 py-2 text-[12.5px] font-medium text-warning hover:bg-red-50 no-underline transition-colors cursor-pointer"
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-[8px] px-3 py-2 text-left text-[12.5px] font-medium text-warning transition-colors hover:bg-red-50"
                 >
                   <LogOut size={14} />
                   <span>keluar</span>

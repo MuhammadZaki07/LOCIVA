@@ -65,6 +65,11 @@ class UserRepository extends BaseRepository
             $query->whereDate('created_at', '<=', $to);
         });
 
+        $allowedSorts = ['name', 'email', 'created_at'];
+        $sortBy = in_array($filters['sort_by'] ?? null, $allowedSorts, true) ? $filters['sort_by'] : 'created_at';
+        $sortOrder = ($filters['sort_order'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortBy, $sortOrder);
+
         return $query->paginate($perPage);
     }
 }

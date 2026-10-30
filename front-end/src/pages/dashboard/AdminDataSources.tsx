@@ -268,7 +268,7 @@ export default function AdminDataSources() {
                 {totalLogPages > 1 && (
                   <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-[11.5px] text-muted">
                     <span>
-                      halaman {logPage} dari {totalLogPages}
+                      halaman {logPage} dari {totalLogPages} ({logTotal} total log)
                     </span>
                     <div className="flex items-center gap-1">
                       <ClayButton

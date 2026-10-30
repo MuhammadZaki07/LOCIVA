@@ -14,12 +14,13 @@ import {
   RefreshCw,
   Activity,
   ChevronDown,
-  ChevronRight,
+  ChevronRight, Bell,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import Logo from "@/components/sections/Logo";
 import { getStorageUrl } from "@/context/userService";
-
+import { useAdminNotifications } from "@/context/AdminNotificationsContext";
 interface SidebarProps {
   onNavigate?: () => void;
   collapsed?: boolean;
@@ -87,7 +88,6 @@ function NavGroupSection({
   const hasActiveChild = group.items.some((item) =>
     item.end ? location.pathname === item.to : location.pathname.startsWith(item.to)
   );
-
   const [open, setOpen] = useState(hasActiveChild || (group.defaultOpen ?? true));
 
   if (collapsed) {
@@ -175,7 +175,8 @@ export default function Sidebar({
     onNavigate?.();
     navigate("/login");
   };
-
+  const { notifications, dismissNotification } = useAdminNotifications();
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   return (
     <aside className="flex w-full flex-col justify-between h-full text-left">
       <div className="flex-1 min-h-0 overflow-y-auto">
@@ -235,6 +236,128 @@ export default function Sidebar({
           </div>
         </nav>
       </div>
+
+
+      {/* Notifications */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setNotificationsOpen((open) => !open)}
+          aria-expanded={notificationsOpen}
+          aria-label="Buka notifikasi"
+          title="Notifikasi"
+          className={`clay-press flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-[12.5px] font-medium transition-all ${notificationsOpen
+            ? "clay-primary text-white shadow-sm"
+            : "text-muted hover:bg-slate-100 hover:text-ink"
+            } ${collapsed ? "h-10 w-10 justify-center mx-auto px-0" : ""}`}
+        >
+          <span className="relative shrink-0">
+            <Bell size={16} />
+            {notifications.length > 0 && (
+              <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">
+                {notifications.length > 9 ? "9+" : notifications.length}
+              </span>
+            )}
+          </span>
+
+          {!collapsed && <span>notifikasi</span>}
+
+          {!collapsed && notifications.length > 0 && (
+            <span className="ml-auto rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-600">
+              {notifications.length}
+            </span>
+          )}
+        </button>
+
+        {notificationsOpen && (
+          <div
+            className={`z-50 mt-2 overflow-hidden rounded-xl border border-[#ececf6] bg-white text-left shadow-xl ${collapsed
+              ? "absolute left-full top-0 ml-3 w-72"
+              : "w-full"
+              }`}
+          >
+            <div className="flex items-center justify-between gap-2 border-b border-[#f0f0f8] px-3 py-3">
+              <span className="text-[12.5px] font-semibold text-ink">
+                Laporan civic baru
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setNotificationsOpen(false)}
+                aria-label="Tutup notifikasi"
+                className="rounded-md p-1 text-muted hover:bg-slate-100"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <div className="max-h-64 divide-y divide-[#f5f5fa] overflow-y-auto">
+              {notifications.length === 0 ? (
+                <div className="px-3 py-6 text-center text-[12px] text-muted">
+                  Tidak ada antrean laporan baru.
+                </div>
+              ) : (
+                notifications.map((notification) => (
+                  <div
+                    key={notification.id}
+                    className="flex items-start gap-2 px-3 py-3 hover:bg-slate-50"
+                  >
+                    <Link
+                      to="/admin/reports"
+                      onClick={() => {
+                        setNotificationsOpen(false);
+                        onNavigate?.();
+                      }}
+                      className="min-w-0 flex-1 no-underline"
+                    >
+                      <p className="break-words text-[12px] font-medium text-ink">
+                        {notification.title}
+                      </p>
+
+                      <p className="mt-1 text-[10.5px] text-muted">
+                        {new Date(
+                          notification.created_at
+                        ).toLocaleString("id-ID", {
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </Link>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void dismissNotification(notification.id)
+                      }
+                      title="Sembunyikan notifikasi"
+                      aria-label={`Sembunyikan notifikasi ${notification.title}`}
+                      className="shrink-0 rounded-md p-1 text-muted hover:bg-red-50 hover:text-red-600"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="border-t border-[#f0f0f8] px-3 py-2.5">
+              <Link
+                to="/admin/reports"
+                onClick={() => {
+                  setNotificationsOpen(false);
+                  onNavigate?.();
+                }}
+                className="text-[11.5px] font-medium text-primary no-underline hover:underline"
+              >
+                Buka moderasi laporan →
+              </Link>
+            </div>
+          </div>
+        )}
+      </div>
+
 
       {/* Profile footer */}
       <div className={`clay mt-4 rounded-[14px] ${collapsed ? "p-2 text-center" : "p-3"}`}>

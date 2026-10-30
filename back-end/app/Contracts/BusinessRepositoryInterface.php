@@ -47,4 +47,13 @@ interface BusinessRepositoryInterface
      * Delete a business.
      */
     public function deleteBusiness(Business $business): bool;
+
+    /**
+     * Paginate businesses belonging to a user with search and filtering.
+     */
+    public function paginateUserBusinesses(
+        string $userId,
+        int $perPage = 10,
+        array $filters = []
+    );
 }
