@@ -14,6 +14,9 @@ use App\Http\Controllers\BusinessTypeWeightController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VendorRouteController;
 use App\Http\Controllers\AiRecommendController;
+use App\Http\Controllers\AiRouteRecommendationController;
+use App\Http\Controllers\BpsController;
+use App\Http\Controllers\OsrmRouteController;
 
 /*
 |--------------------------------------------------------------------------
@@ -75,17 +78,17 @@ Route::post('/analysis/location', [LocationAnalysisController::class, 'analyze']
 
 // BPS WebAPI Integration (Badan Pusat Statistik)
 Route::prefix('bps')->group(function () {
-    Route::get('/status', [\App\Http\Controllers\BpsController::class, 'status']);
-    Route::get('/domains', [\App\Http\Controllers\BpsController::class, 'domains']);
-    Route::get('/demographics', [\App\Http\Controllers\BpsController::class, 'demographics']);
-    Route::get('/map-layer', [\App\Http\Controllers\BpsController::class, 'mapLayer']);
+    Route::get('/status', [BpsController::class, 'status']);
+    Route::get('/domains', [BpsController::class, 'domains']);
+    Route::get('/demographics', [BpsController::class, 'demographics']);
+    Route::get('/map-layer', [BpsController::class, 'mapLayer']);
 });
 
 // Geospatial Routing & OSRMRoute
 Route::prefix('routing')->group(function () {
-    Route::get('/status', [\App\Http\Controllers\OsrmRouteController::class, 'status']);
-    Route::post('/calculate', [\App\Http\Controllers\OsrmRouteController::class, 'calculate']);
-    Route::get('/places', [\App\Http\Controllers\OsrmRouteController::class, 'places']);
+    Route::get('/status', [OsrmRouteController::class, 'status']);
+    Route::post('/calculate', [OsrmRouteController::class, 'calculate']);
+    Route::get('/places', [OsrmRouteController::class, 'places']);
 });
 
 /*
@@ -97,7 +100,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // AI
     Route::post('/ai/recommend', [AiRecommendController::class, 'recommend'])
         ->middleware('throttle:ai-recommend');
-    
+
+    // AI Mobile Business Route Recommendation
+    Route::post('/ai/routes/recommend', [AiRouteRecommendationController::class, 'recommend']);
+
     // give the bulk analysis its own, higher limiter
     Route::post('/analysis/location', [LocationAnalysisController::class, 'analyze'])
         ->middleware('throttle:analysis');

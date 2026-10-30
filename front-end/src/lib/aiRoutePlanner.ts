@@ -618,3 +618,148 @@ export function convertAiAreaResponseToWaypoints(
   return waypoints;
 }
 
+
+
+// ── AI Mobile Business Route Recommendation (Circular Routes + Groq AI) ──
+
+export interface AiRouteStop {
+  id: string | number;
+  name: string;
+  latitude: number;
+  longitude: number;
+  category: string;
+  reason?: string;
+  wait_duration_minutes?: number;
+  order: number;
+}
+
+export interface AiRouteCandidateScores {
+  business_relevance: number;
+  activity_potential: number;
+  road_accessibility: number;
+  competition_opportunity: number;
+  route_efficiency: number;
+  total_score: number;
+}
+
+export interface AiRouteCandidateItem {
+  id: string; // "route_opportunity" | "route_balanced" | "route_low_competition"
+  name: string;
+  profile: "opportunity" | "balanced" | "low_competition" | string;
+  distance_km: number;
+  duration_minutes: number;
+  scores: AiRouteCandidateScores;
+  stops: AiRouteStop[];
+  route_coordinates: [number, number][]; // [lat, lng] array
+}
+
+export interface AiRoutePerRouteAnalysis {
+  id: string;
+  highlight: string;
+  explanation: string;
+  trade_offs: string;
+  best_time_window: string;
+}
+
+export interface AiRouteInterpretation {
+  is_ai_explained: boolean;
+  ai_status: "success" | "fallback" | "unconfigured" | "api_failed" | "no_candidates" | string;
+  ai_model?: string;
+  recommended_route_id: string;
+  overall_summary: string;
+  routes_analysis: AiRoutePerRouteAnalysis[];
+}
+
+export interface AiRouteRecommendationResponseData {
+  business_type: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+  starting_point: {
+    latitude: number;
+    longitude: number;
+  };
+  constraints: {
+    max_distance_km: number;
+    max_duration_minutes: number;
+    travel_mode: "motorcycle" | "driving" | "bike" | "foot";
+  };
+  candidates: AiRouteCandidateItem[];
+  ai_interpretation: AiRouteInterpretation;
+}
+
+export interface AiRouteRecommendationRequestParams {
+  business_type_id: string;
+  starting_point: {
+    latitude: number;
+    longitude: number;
+  };
+  constraints?: {
+    max_distance_km?: number;
+    max_duration_minutes?: number;
+    travel_mode?: "motorcycle" | "driving" | "bike" | "foot";
+  };
+  signal?: AbortSignal;
+}
+
+/**
+ * Meminta rekomendasi rute sirkular berbasis AI dan OSRM road geometry
+ * dari backend endpoint /api/ai/routes/recommend
+ */
+export async function requestAiRouteRecommendations(
+  params: AiRouteRecommendationRequestParams,
+): Promise<AiRouteRecommendationResponseData> {
+  const payload = {
+    business_type_id: params.business_type_id,
+    starting_point: {
+      latitude: Number(params.starting_point.latitude),
+      longitude: Number(params.starting_point.longitude),
+    },
+    constraints: {
+      max_distance_km: params.constraints?.max_distance_km ?? 8.0,
+      max_duration_minutes: params.constraints?.max_duration_minutes ?? 120,
+      travel_mode: params.constraints?.travel_mode ?? "motorcycle",
+    },
+  };
+
+  const res = await api.post("/ai/routes/recommend", payload, {
+    signal: params.signal,
+    timeout: 60_000,
+  });
+
+  if (!res.data?.success || !res.data?.data) {
+    throw new Error(res.data?.message || "Gagal mendapatkan rekomendasi rute AI dari server.");
+  }
+
+  return res.data.data as AiRouteRecommendationResponseData;
+}
+
+/**
+ * Mengonversi kandidat rute sirkular AI ke RouteCalculationResult untuk RouteLayer
+ */
+export function convertCandidateToRouteCalculation(
+  candidate: AiRouteCandidateItem,
+): RouteCalculationResult {
+  return {
+    coordinates: candidate.route_coordinates,
+    distanceKm: candidate.distance_km,
+    durationMinutes: candidate.duration_minutes,
+    summary: `${candidate.name} (${candidate.stops.length} titik)`,
+    provider: "LOCIVA Smart Route Engine",
+  };
+}
+
+/**
+ * Mengonversi kandidat rute sirkular AI ke daftar RouteWaypoint
+ */
+export function convertCandidateToWaypoints(
+  candidate: AiRouteCandidateItem,
+): RouteWaypoint[] {
+  return candidate.stops.map((stop) => ({
+    lat: stop.latitude,
+    lng: stop.longitude,
+    name: stop.name,
+    stop_duration: stop.wait_duration_minutes || 20,
+  }));
+}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   AlertTriangle,
   Droplets,
@@ -108,6 +108,7 @@ export default function AdminReports() {
 
   // Photo upload
   const [uploadingMedia, setUploadingMedia] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchReports = useCallback(async () => {
     try {
@@ -205,9 +206,12 @@ export default function AdminReports() {
         description: err.response?.data?.message || "Ukuran file terlalu besar atau format tidak didukung.",
         variant: "error",
       });
-    } finally {
-      setUploadingMedia(false);
-    }
+     } finally {
+       setUploadingMedia(false);
+       if (fileInputRef.current) {
+         fileInputRef.current.value = "";
+       }
+     }
   };
 
   const getCategoryIcon = (slug?: string) => {
@@ -427,17 +431,23 @@ export default function AdminReports() {
                   <label className="block text-[12px] font-medium text-ink">
                     unggah foto verifikasi tambahan
                   </label>
-                  <label className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-[10px] border border-dashed border-[#d5d5e5] bg-slate-50/50 p-3 text-[12px] text-muted hover:bg-slate-100">
+                  <button
+                    type="button"
+                    disabled={uploadingMedia}
+                    onClick={() => fileInputRef.current?.click()}
+                    className="mt-1 flex cursor-pointer items-center justify-center gap-2 rounded-[10px] border border-dashed border-[#d5d5e5] bg-slate-50/50 p-3 text-[12px] text-muted hover:bg-slate-100 w-full"
+                  >
                     <Camera size={15} />
                     <span>{uploadingMedia ? "mengunggah..." : "pilih foto penanganan lapangan"}</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      disabled={uploadingMedia}
-                      onChange={handleUploadPhoto}
-                      className="hidden"
-                    />
-                  </label>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    disabled={uploadingMedia}
+                    onChange={handleUploadPhoto}
+                    className="hidden"
+                  />
                 </div>
 
                 <button

@@ -246,7 +246,7 @@ export default function Sidebar({
           aria-expanded={notificationsOpen}
           aria-label="Buka notifikasi"
           title="Notifikasi"
-          className={`clay-press flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-[12.5px] font-medium transition-all ${notificationsOpen
+          className={`clay-press lg:hidden flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-[12.5px] font-medium transition-all ${notificationsOpen
             ? "clay-primary text-white shadow-sm"
             : "text-muted hover:bg-slate-100 hover:text-ink"
             } ${collapsed ? "h-10 w-10 justify-center mx-auto px-0" : ""}`}

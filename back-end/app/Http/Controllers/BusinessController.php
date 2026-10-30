@@ -8,6 +8,7 @@ use App\Helpers\ApiResponse;
 use App\Helpers\PaginationHelper;
 use App\Http\Requests\BusinessMapQueryRequest;
 use App\Http\Requests\SaveCandidateLocationRequest;
+use App\Http\Requests\SimulationSessionListRequest;
 use App\Http\Requests\UpdateBusinessRequest;
 use App\Http\Resources\BusinessMapResource;
 use App\Http\Resources\BusinessResource;

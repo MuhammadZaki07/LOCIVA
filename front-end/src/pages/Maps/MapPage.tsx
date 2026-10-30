@@ -12,7 +12,13 @@ import { RecommendationPanel } from "@/components/maps/RecommendationPanel";
 import { useBusinessRecommendation } from "@/hooks/useBusinessRecommendation";
 import type { RecommendationItem } from "@/lib/recommendation";
 // add MapMarker to the existing map import
-import { Map as MapContainer, MapTileLayer, MapZoomControl, MapMarkerClusterGroup, MapMarker } from "@/components/ui/shadcn-ui/map";
+import {
+  Map as MapContainer,
+  MapTileLayer,
+  MapZoomControl,
+  MapMarkerClusterGroup,
+  MapMarker,
+} from "@/components/ui/shadcn-ui/map";
 // add Sparkles to the lucide import
 import {
   distanceMeters,
@@ -47,7 +53,10 @@ import {
   DataSourceControl,
   type FilterCategory,
 } from "@/components/maps/DataSourceControl";
-import { VendorRoutePanel, type TrackingLocationUpdate } from "@/components/maps/VendorRoutePanel";
+import {
+  VendorRoutePanel,
+  type TrackingLocationUpdate,
+} from "@/components/maps/VendorRoutePanel";
 import { RouteLayer } from "@/components/maps/RouteLayer";
 import { MapPillNav, type MapToolId } from "@/components/maps/MapPillNav";
 import { MapTour, TOUR_STORAGE_KEY } from "@/components/maps/MapTour";
@@ -90,6 +99,7 @@ import {
   Users,
   X,
   Sparkles,
+  HelpCircle,
 } from "lucide-react";
 
 // ─── Map Ready Gate: delays children until Leaflet fires whenReady ─────────────
@@ -173,8 +183,11 @@ const MapEventHandler: React.FC<{
       const container = map.getContainer();
       if (!container) return;
       container.style.cursor =
-        mode === "candidate" || mode === "report" || mode === "recommend" ? "crosshair"
-        : mode === "waypoint" ? "cell" : "";
+        mode === "candidate" || mode === "report" || mode === "recommend"
+          ? "crosshair"
+          : mode === "waypoint"
+            ? "cell"
+            : "";
       return () => {
         try {
           container.style.cursor = "";
@@ -313,7 +326,8 @@ export function MapPage() {
     if (!isLoggedIn && (id === "candidates" || id === "routes")) {
       toast({
         title: "Masuk Diperlukan",
-        description: "Silakan masuk untuk mengakses fitur ini. Klik untuk menuju halaman masuk.",
+        description:
+          "Silakan masuk untuk mengakses fitur ini. Klik untuk menuju halaman masuk.",
         duration: 4000,
       });
       return;
@@ -388,7 +402,8 @@ export function MapPage() {
   const [bpsLegendYear, setBpsLegendYear] = useState<number>(
     new Date().getFullYear(),
   );
-  const [trackingLocation, setTrackingLocation] = useState<TrackingLocationUpdate | null>(null);
+  const [trackingLocation, setTrackingLocation] =
+    useState<TrackingLocationUpdate | null>(null);
   const [mapRotation, setMapRotation] = useState<number | null>(null);
   const [isHeadingLocked, setIsHeadingLocked] = useState<boolean>(true);
 
@@ -511,14 +526,22 @@ export function MapPage() {
     C: null,
   });
 
-  const { analyze, isAnalyzing, getCandidateStage, error: analysisError } = useLocationAnalysis();
+  const {
+    analyze,
+    isAnalyzing,
+    getCandidateStage,
+    error: analysisError,
+  } = useLocationAnalysis();
 
   const [candidateStatuses, setCandidateStatuses] = useState<
-    Record<string, 'draft' | 'location_selected' | 'analyzing' | 'ready' | 'stale' | 'failed'>
+    Record<
+      string,
+      "draft" | "location_selected" | "analyzing" | "ready" | "stale" | "failed"
+    >
   >({
-    A: 'draft',
-    B: 'draft',
-    C: 'draft',
+    A: "draft",
+    B: "draft",
+    C: "draft",
   });
   const [persistedCandidateMap, setPersistedCandidateMap] = useState<
     Record<string, boolean>
@@ -544,13 +567,17 @@ export function MapPage() {
     lng: number;
   } | null>(null);
   const [spotJituRadius, setSpotJituRadius] = useState<number>(2000);
-  const [aiAreaResponse, setAiAreaResponse] = useState<AiAreaRouteResponse | null>(null);
-  const [highlightedStopId, setHighlightedStopId] = useState<string | number | null>(null);
+  const [aiAreaResponse, setAiAreaResponse] =
+    useState<AiAreaRouteResponse | null>(null);
+  const [highlightedStopId, setHighlightedStopId] = useState<
+    string | number | null
+  >(null);
 
   const [isLoggedIn] = useState(() => Boolean(localStorage.getItem("token")));
 
   // ── Candidate location picking mode (temporary interaction mode) ─────────
-  const [isPickingCandidateLocation, setIsPickingCandidateLocation] = useState(false);
+  const [isPickingCandidateLocation, setIsPickingCandidateLocation] =
+    useState(false);
 
   // ── Onboarding tour ─────────────────────────────────────────────────────
   const [tourRun, setTourRun] = useState(false);
@@ -578,13 +605,29 @@ export function MapPage() {
       const isMapReady = Boolean(mapRef.current);
 
       // Verify essential tour targets are mounted in the DOM
-      const hasCatalogBtn = Boolean(document.querySelector('[data-tour="catalog-btn"]'));
-      const hasLayersBtn = Boolean(document.querySelector('[data-tour="layers-btn"]'));
-      const hasMapCanvas = Boolean(document.querySelector('[data-tour="map-canvas"]'));
-      const hasAnalysisBtn = Boolean(document.querySelector('[data-tour="analysis-btn"]'));
-      const hasCandidateBtnIfAuth = !isLoggedIn || Boolean(document.querySelector('[data-tour="candidates-btn"]'));
+      const hasCatalogBtn = Boolean(
+        document.querySelector('[data-tour="catalog-btn"]'),
+      );
+      const hasLayersBtn = Boolean(
+        document.querySelector('[data-tour="layers-btn"]'),
+      );
+      const hasMapCanvas = Boolean(
+        document.querySelector('[data-tour="map-canvas"]'),
+      );
+      const hasAnalysisBtn = Boolean(
+        document.querySelector('[data-tour="analysis-btn"]'),
+      );
+      const hasCandidateBtnIfAuth =
+        !isLoggedIn ||
+        Boolean(document.querySelector('[data-tour="candidates-btn"]'));
 
-      const isReady = isMapReady && hasCatalogBtn && hasLayersBtn && hasMapCanvas && hasAnalysisBtn && hasCandidateBtnIfAuth;
+      const isReady =
+        isMapReady &&
+        hasCatalogBtn &&
+        hasLayersBtn &&
+        hasMapCanvas &&
+        hasAnalysisBtn &&
+        hasCandidateBtnIfAuth;
 
       if (isReady) {
         if (intervalId) clearInterval(intervalId);
@@ -661,6 +704,36 @@ export function MapPage() {
     selectedBusiness,
     isPickingCandidateLocation,
   ]);
+
+  // const clickMode = useMemo(():
+  //   | "candidate"
+  //   | "waypoint"
+  //   | "report"
+  //   | "recommend"
+  //   | "none" => {
+  //   if (pickingReportLocation) return "report";
+  //   if (isPickingRecommendPoint) return "recommend";
+
+  //   if (
+  //     isLoggedIn &&
+  //     isRoutePanelOpen &&
+  //     (isSelectingStartPoint || isSelectingWaypoint)
+  //   ) {
+  //     return "waypoint";
+  //   }
+
+  //   if (selectedBusiness) return "candidate";
+
+  //   return "none";
+  // }, [
+  //   isPickingRecommendPoint,
+  //   pickingReportLocation,
+  //   isLoggedIn,
+  //   isRoutePanelOpen,
+  //   isSelectingStartPoint,
+  //   isSelectingWaypoint,
+  //   selectedBusiness,
+  // ]);
 
   // ── Privacy-Aware Opt-in User GPS Location (Section 6) ───────────────────
   // Location sharing is strictly opt-in and disabled by default. No silent tracking.
@@ -932,15 +1005,18 @@ export function MapPage() {
       if (!token) {
         toast({
           title: "Perlu Masuk Akun",
-          description: "Silakan masuk (login) terlebih dahulu untuk menyimpan kandidat ke database.",
+          description:
+            "Silakan masuk (login) terlebih dahulu untuk menyimpan kandidat ke database.",
           variant: "warning",
         });
         return;
       }
       try {
-        const businessId = (businessType as any).business_id && (businessType as any).business_id !== businessType.id
-          ? (businessType as any).business_id
-          : undefined;
+        const businessId =
+          (businessType as any).business_id &&
+          (businessType as any).business_id !== businessType.id
+            ? (businessType as any).business_id
+            : undefined;
         const payload: Record<string, any> = {
           candidate_id: candidate.id,
           latitude: candidate.lat,
@@ -966,7 +1042,9 @@ export function MapPage() {
           payload.algorithm_version = "1.0";
           payload.competitor_count = analysis.competitorCount;
           payload.report_count = analysis.reportCount;
-          payload.competitor_categories = (businessType as any).competitor_categories;
+          payload.competitor_categories = (
+            businessType as any
+          ).competitor_categories;
           payload.data_warnings = analysis.dataWarnings;
           payload.factors = analysis.factors;
           payload.sources = analysis.sources;
@@ -984,7 +1062,8 @@ export function MapPage() {
         }));
         toast({
           title: `Kandidat ${candidate.id} Tersimpan`,
-          description: "Data kandidat dan riwayat snapshot berhasil disimpan ke database.",
+          description:
+            "Data kandidat dan riwayat snapshot berhasil disimpan ke database.",
           variant: "success",
         });
       } catch (err: any) {
@@ -1006,7 +1085,8 @@ export function MapPage() {
     if (!isLoggedIn) {
       toast({
         title: "Perlu Masuk Akun",
-        description: "Silakan masuk (login) terlebih dahulu untuk menjalankan analisis lokasi.",
+        description:
+          "Silakan masuk (login) terlebih dahulu untuk menjalankan analisis lokasi.",
         variant: "warning",
       });
       return;
@@ -1014,7 +1094,10 @@ export function MapPage() {
     const cand = candidates[activeCandidateId];
     if (!cand || !selectedBusiness) return;
 
-    setCandidateStatuses((prev) => ({ ...prev, [activeCandidateId]: "analyzing" }));
+    setCandidateStatuses((prev) => ({
+      ...prev,
+      [activeCandidateId]: "analyzing",
+    }));
 
     const res = await analyze(
       activeCandidateId,
@@ -1026,7 +1109,10 @@ export function MapPage() {
 
     if (res) {
       setAnalysisResults((prev) => ({ ...prev, [activeCandidateId]: res }));
-      setCandidateStatuses((prev) => ({ ...prev, [activeCandidateId]: "ready" }));
+      setCandidateStatuses((prev) => ({
+        ...prev,
+        [activeCandidateId]: "ready",
+      }));
       fetchLocivaData(cand.lat, cand.lng, cand.radius * 1.5);
 
       toast({
@@ -1034,12 +1120,15 @@ export function MapPage() {
         description: `Skor potensi lokasi: ${res.opportunityScore ?? "N/A"}%`,
         variant: "success",
       });
-
     } else {
-      setCandidateStatuses((prev) => ({ ...prev, [activeCandidateId]: "failed" }));
+      setCandidateStatuses((prev) => ({
+        ...prev,
+        [activeCandidateId]: "failed",
+      }));
       toast({
         title: "Analisis Gagal",
-        description: "Tidak dapat menyelesaikan analisis lokasi. Silakan coba lagi.",
+        description:
+          "Tidak dapat menyelesaikan analisis lokasi. Silakan coba lagi.",
         variant: "error",
       });
     }
@@ -1074,7 +1163,14 @@ export function MapPage() {
         }));
       }
     }
-  }, [debouncedLat, debouncedLng, debouncedRadius, activeCandidateId, activeCandidate, analysisResults]);
+  }, [
+    debouncedLat,
+    debouncedLng,
+    debouncedRadius,
+    activeCandidateId,
+    activeCandidate,
+    analysisResults,
+  ]);
 
   const handleSearchSelect = (lat: number, lng: number, name: string) => {
     setCenter([lat, lng]);
@@ -1088,7 +1184,7 @@ export function MapPage() {
     setIsPersistedInDb(false);
     setCandidates({ A: null, B: null, C: null });
     setAnalysisResults({ A: null, B: null, C: null });
-    setCandidateStatuses({ A: 'draft', B: 'draft', C: 'draft' });
+    setCandidateStatuses({ A: "draft", B: "draft", C: "draft" });
     setPersistedCandidateMap({ A: false, B: false, C: false });
     setActiveCandidateId("A");
     setActiveTool("analysis");
@@ -1108,37 +1204,15 @@ export function MapPage() {
     run: runRecommendation,
     reset: resetRecommendation,
   } = useBusinessRecommendation();
-  
-  const [recommendPoint, setRecommendPoint] = useState<{ lat: number; lng: number } | null>(null);
+
+  const [recommendPoint, setRecommendPoint] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
   const [isPickingRecommendPoint, setIsPickingRecommendPoint] = useState(false);
 
   // ── Click mode: either placing candidate, waypoint, or report location ──────
-  const clickMode = useMemo((): "candidate" | "waypoint" | "report" | "recommend" | "none" => {
-    if (pickingReportLocation) return "report";
-    if (isPickingRecommendPoint) return "recommend";
 
-    if (
-      isLoggedIn &&
-      isRoutePanelOpen &&
-      (isSelectingStartPoint || isSelectingWaypoint)
-    ) {
-      return "waypoint";
-    }
-
-    if (selectedBusiness) return "candidate";
-
-    return "none";
-  }, [
-    isPickingRecommendPoint,
-    pickingReportLocation,
-    isLoggedIn,
-    isRoutePanelOpen,
-    isSelectingStartPoint,
-    isSelectingWaypoint,
-    selectedBusiness,
-  ]);
-
-  
   const startRecommendationAt = useCallback(
     (lat: number, lng: number) => {
       setIsPickingRecommendPoint(false);
@@ -1148,14 +1222,19 @@ export function MapPage() {
     },
     [runRecommendation],
   );
-  
+
   const handleUseRecommendation = useCallback(
     (item: RecommendationItem) => {
       if (!recommendPoint) return;
       setSelectedBusiness(item.business);
       setIsPersistedInDb(false);
       setCandidates({
-        A: { id: "A", lat: recommendPoint.lat, lng: recommendPoint.lng, radius: item.radius },
+        A: {
+          id: "A",
+          lat: recommendPoint.lat,
+          lng: recommendPoint.lng,
+          radius: item.radius,
+        },
         B: null,
         C: null,
       });
@@ -1167,13 +1246,14 @@ export function MapPage() {
       mapRef.current?.flyTo([recommendPoint.lat, recommendPoint.lng], 16);
       toast({
         title: `${item.business.name} dipilih`,
-        description: "Kandidat A ditempatkan di titik rekomendasi. Tekan “Jalankan Analisis Lokasi”.",
+        description:
+          "Kandidat A ditempatkan di titik rekomendasi. Tekan “Jalankan Analisis Lokasi”.",
         variant: "success",
       });
     },
     [recommendPoint, toast],
   );
-  
+
   const handleMapClick = useCallback(
     (lat: number, lng: number) => {
       if (pickingReportLocation) {
@@ -1200,9 +1280,7 @@ export function MapPage() {
           id: activeCandidateId,
           lat,
           lng,
-          radius:
-            existing?.radius ||
-            selectedBusiness.defaultRadius,
+          radius: existing?.radius || selectedBusiness.defaultRadius,
         };
         setCandidates((prev) => ({
           ...prev,
@@ -1210,7 +1288,9 @@ export function MapPage() {
         }));
         setCandidateStatuses((prev) => ({
           ...prev,
-          [activeCandidateId]: analysisResults[activeCandidateId] ? 'stale' : 'location_selected',
+          [activeCandidateId]: analysisResults[activeCandidateId]
+            ? "stale"
+            : "location_selected",
         }));
         setPersistedCandidateMap((prev) => ({
           ...prev,
@@ -1303,7 +1383,7 @@ export function MapPage() {
       setActiveCandidateId(id);
       setCandidateStatuses((prev) => ({
         ...prev,
-        [id]: analysisResults[id] ? 'stale' : 'location_selected',
+        [id]: analysisResults[id] ? "stale" : "location_selected",
       }));
       setPersistedCandidateMap((prev) => ({
         ...prev,
@@ -1323,7 +1403,9 @@ export function MapPage() {
       });
       setCandidateStatuses((prev) => ({
         ...prev,
-        [activeCandidateId]: analysisResults[activeCandidateId] ? 'stale' : 'location_selected',
+        [activeCandidateId]: analysisResults[activeCandidateId]
+          ? "stale"
+          : "location_selected",
       }));
       setPersistedCandidateMap((prev) => ({
         ...prev,
@@ -1337,15 +1419,14 @@ export function MapPage() {
     if (!isLoggedIn) {
       toast({
         title: "Perlu Masuk Akun",
-        description: "Silakan masuk (login) terlebih dahulu untuk menambah kandidat lokasi.",
+        description:
+          "Silakan masuk (login) terlebih dahulu untuk menambah kandidat lokasi.",
         variant: "warning",
       });
       return;
     }
     const candidateKeys: CandidateId[] = ["A", "B", "C", "D", "E"];
-    const nextAvailable = candidateKeys.find(
-      (id) => !candidates[id],
-    );
+    const nextAvailable = candidateKeys.find((id) => !candidates[id]);
     if (!nextAvailable) {
       toast({
         title: "Batas Tampilan Kandidat",
@@ -1356,7 +1437,7 @@ export function MapPage() {
     }
 
     setActiveCandidateId(nextAvailable);
-    setCandidateStatuses((prev) => ({ ...prev, [nextAvailable]: 'draft' }));
+    setCandidateStatuses((prev) => ({ ...prev, [nextAvailable]: "draft" }));
     setAnalysisResults((prev) => ({ ...prev, [nextAvailable]: null }));
     setPersistedCandidateMap((prev) => ({ ...prev, [nextAvailable]: false }));
     setIsPickingCandidateLocation(true);
@@ -1364,18 +1445,20 @@ export function MapPage() {
     // Create persistent draft in database via Laravel API
     if (isLoggedIn && selectedBusiness) {
       try {
-        const businessId = (selectedBusiness as any).business_id && (selectedBusiness as any).business_id !== selectedBusiness.id
-          ? (selectedBusiness as any).business_id
-          : undefined;
+        const businessId =
+          (selectedBusiness as any).business_id &&
+          (selectedBusiness as any).business_id !== selectedBusiness.id
+            ? (selectedBusiness as any).business_id
+            : undefined;
         const draftRes = await api.post("/simulations/candidate", {
           candidate_id: nextAvailable,
-          latitude: selectedBusiness.latitude || center[0] || -7.9800,
-          longitude: selectedBusiness.longitude || center[1] || 112.6300,
+          latitude: selectedBusiness.latitude || center[0] || -7.98,
+          longitude: selectedBusiness.longitude || center[1] || 112.63,
           radius_m: selectedBusiness.defaultRadius || 500,
           business_type_id: selectedBusiness.id,
           ...(businessId ? { business_id: businessId } : {}),
           ...(currentSessionId ? { session_id: currentSessionId } : {}),
-          status: 'draft',
+          status: "draft",
           session_name: `Simulasi ${selectedBusiness.name}`,
           location_name: `Draft Kandidat ${nextAvailable}`,
         });
@@ -1385,7 +1468,8 @@ export function MapPage() {
 
         toast({
           title: `Draft Kandidat ${nextAvailable} Dibuat`,
-          description: "Draft tersimpan di backend. Klik peta untuk menentukan titik koordinat kandidat.",
+          description:
+            "Draft tersimpan di backend. Klik peta untuk menentukan titik koordinat kandidat.",
           variant: "success",
         });
       } catch {
@@ -1414,47 +1498,54 @@ export function MapPage() {
 
   // ── Unified Places List Across ALL Candidates (Multi-candidate POI relevance) ──
   const allCandidatePlaces = useMemo(() => {
-    const placesMap = new Map<string, Place & { candidateAssociations: CandidateId[] }>();
+    const placesMap = new Map<
+      string,
+      Place & { candidateAssociations: CandidateId[] }
+    >();
 
-    (Object.entries(analysisResults) as [CandidateId, AnalysisResult | null][]).forEach(
-      ([candId, result]) => {
-        if (!result?.allPlaces) return;
-        result.allPlaces.forEach((place) => {
-          const existing = placesMap.get(place.id);
-          if (existing) {
-            if (!existing.candidateAssociations.includes(candId)) {
-              existing.candidateAssociations.push(candId);
-            }
-          } else {
-            placesMap.set(place.id, {
-              ...place,
-              candidateAssociations: [candId],
-            });
+    (
+      Object.entries(analysisResults) as [CandidateId, AnalysisResult | null][]
+    ).forEach(([candId, result]) => {
+      if (!result?.allPlaces) return;
+      result.allPlaces.forEach((place) => {
+        const existing = placesMap.get(place.id);
+        if (existing) {
+          if (!existing.candidateAssociations.includes(candId)) {
+            existing.candidateAssociations.push(candId);
           }
-        });
-      },
-    );
+        } else {
+          placesMap.set(place.id, {
+            ...place,
+            candidateAssociations: [candId],
+          });
+        }
+      });
+    });
 
     return Array.from(placesMap.values());
   }, [analysisResults]);
 
   // Internal (LocalOSM) places: viewport + all candidate places, deduplicated by id
-  const allLocalPlaces: (Place & { candidateAssociations?: CandidateId[] })[] = useMemo(() => {
-    const mapById = new Map<string, Place & { candidateAssociations?: CandidateId[] }>();
-    for (const p of viewportPlaces) mapById.set(p.id, p);
-    for (const p of allCandidatePlaces) {
-      const existing = mapById.get(p.id);
-      if (existing) {
-        mapById.set(p.id, {
-          ...existing,
-          candidateAssociations: p.candidateAssociations,
-        });
-      } else {
-        mapById.set(p.id, p);
+  const allLocalPlaces: (Place & { candidateAssociations?: CandidateId[] })[] =
+    useMemo(() => {
+      const mapById = new Map<
+        string,
+        Place & { candidateAssociations?: CandidateId[] }
+      >();
+      for (const p of viewportPlaces) mapById.set(p.id, p);
+      for (const p of allCandidatePlaces) {
+        const existing = mapById.get(p.id);
+        if (existing) {
+          mapById.set(p.id, {
+            ...existing,
+            candidateAssociations: p.candidateAssociations,
+          });
+        } else {
+          mapById.set(p.id, p);
+        }
       }
-    }
-    return Array.from(mapById.values());
-  }, [viewportPlaces, allCandidatePlaces]);
+      return Array.from(mapById.values());
+    }, [viewportPlaces, allCandidatePlaces]);
 
   const filteredLocalPlaces = useMemo(
     () =>
@@ -1556,7 +1647,10 @@ export function MapPage() {
       />
 
       {/* ── Main Interactive Map Canvas ────────────────────────────────────── */}
-      <div data-tour="map-canvas" className="flex-1 relative flex flex-col min-w-0">
+      <div
+        data-tour="map-canvas"
+        className="flex-1 relative flex flex-col min-w-0"
+      >
         {/* ── Vertical Nav Pill (Anchored on Left, vertically centered) ──────── */}
         <MapPillNav
           active={activeTool}
@@ -1614,14 +1708,27 @@ export function MapPage() {
                   if (c) startRecommendationAt(c.lat, c.lng);
                 }}
                 onUseMyLocation={() => {
-                  if (activeUserLocation) startRecommendationAt(activeUserLocation.lat, activeUserLocation.lng);
+                  if (activeUserLocation)
+                    startRecommendationAt(
+                      activeUserLocation.lat,
+                      activeUserLocation.lng,
+                    );
                 }}
-                onRetry={() => recommendPoint && void runRecommendation(recommendPoint.lat, recommendPoint.lng)}
+                onRetry={() =>
+                  recommendPoint &&
+                  void runRecommendation(recommendPoint.lat, recommendPoint.lng)
+                }
                 onReset={() => {
                   resetRecommendation();
                   setRecommendPoint(null);
                 }}
-                onFlyToPoint={() => recommendPoint && mapRef.current?.flyTo([recommendPoint.lat, recommendPoint.lng], 16)}
+                onFlyToPoint={() =>
+                  recommendPoint &&
+                  mapRef.current?.flyTo(
+                    [recommendPoint.lat, recommendPoint.lng],
+                    16,
+                  )
+                }
                 onUseRecommendation={handleUseRecommendation}
               />
             )}
@@ -1686,7 +1793,9 @@ export function MapPage() {
               <SavedCandidatesPanel
                 isOpen={true}
                 onClose={() => setActiveTool(null)}
-                selectedBusinessId={(selectedBusiness as any)?.business_id || null}
+                selectedBusinessId={
+                  (selectedBusiness as any)?.business_id || null
+                }
                 selectedBusinessTypeId={selectedBusiness?.id || null}
                 selectedBusinessName={selectedBusiness?.name || null}
                 onSelectCandidate={(saved) => {
@@ -1746,15 +1855,19 @@ export function MapPage() {
                       isOpen={true}
                       onClose={() => setActiveTool(null)}
                       candidateExists={candidates[activeCandidateId] !== null}
-                      isPersistedInDb={persistedCandidateMap[activeCandidateId] ?? false}
+                      isPersistedInDb={
+                        persistedCandidateMap[activeCandidateId] ?? false
+                      }
                       onSaveCandidate={handleSaveCandidate}
                       onAnalyze={handleRunAnalysis}
                       candidateStatus={candidateStatuses[activeCandidateId]}
-                      isStale={candidateStatuses[activeCandidateId] === 'stale'}
+                      isStale={candidateStatuses[activeCandidateId] === "stale"}
                       candidateId={activeCandidateId}
                       analysisStage={getCandidateStage(activeCandidateId)}
                       isLoggedIn={isLoggedIn}
-                      onStartPickLocation={() => setIsPickingCandidateLocation(true)}
+                      onStartPickLocation={() =>
+                        setIsPickingCandidateLocation(true)
+                      }
                       isPickingLocation={isPickingCandidateLocation}
                     />
                   </div>
@@ -1843,67 +1956,70 @@ export function MapPage() {
                   if (!isLoggedIn) {
                     toast({
                       title: "Perlu Masuk Akun",
-                      description: "Silakan masuk (login) terlebih dahulu untuk membuat dan mengirim laporan warga.",
+                      description:
+                        "Silakan masuk (login) terlebih dahulu untuk membuat dan mengirim laporan warga.",
                       variant: "warning",
                     });
                     return;
                   }
                   setSelectedReportCoords(
                     activeUserLocation
-                      ? { lat: activeUserLocation.lat, lng: activeUserLocation.lng }
+                      ? {
+                          lat: activeUserLocation.lat,
+                          lng: activeUserLocation.lng,
+                        }
                       : { lat: center[0], lng: center[1] },
                   );
                   setCreateReportModalOpen(true);
                 }}
               />
             )}
-
           </div>
         )}
 
         {/* ── Vendor Route Panel: Desktop Left Floating Card vs Mobile Draggable Bottom Sheet ── */}
         {activeTool === "routes" && (
-              <VendorRoutePanel
-                isOpen={true}
-                onClose={() => setActiveTool(null)}
-                activeWaypoints={activeWaypoints}
-                onWaypointsChange={(wps) => {
-                  setActiveWaypoints(wps);
-                  setRouteCalculation(null);
-                }}
-                onRouteCalculated={setRouteCalculation}
-                currentCalculation={routeCalculation}
-                mapCenter={center}
-                userLocation={activeUserLocation}
-                analysisAreaCenter={spotJituAnalysisCenter}
-                onAnalysisAreaCenterChange={setSpotJituAnalysisCenter}
-                spotJituRadius={spotJituRadius}
-                onSpotJituRadiusChange={setSpotJituRadius}
-                aiAreaResponse={aiAreaResponse}
-                onAiAreaResponseChange={setAiAreaResponse}
-                highlightedStopId={highlightedStopId}
-                onHighlightStopId={setHighlightedStopId}
-                onSelectAnalysisArea={() => {
-                  setIsSelectingStartPoint(false);
-                  setIsSelectingWaypoint(false);
-                  setIsSelectingAnalysisArea(true);
-                  setActiveTool(null);
-                }}
-                onTrackingLocationChange={setTrackingLocation}
-                onSelectStartPoint={() => {
-                  setIsSelectingWaypoint(false);
-                  setIsSelectingAnalysisArea(false);
-                  setIsSelectingStartPoint(true);
-                  setActiveTool(null);
-                }}
-                onSelectWaypoint={() => {
-                  setIsSelectingStartPoint(false);
-                  setIsSelectingAnalysisArea(false);
-                  setIsSelectingWaypoint(true);
-                  setActiveTool(null);
-                }}
-              />
-            )}
+          <VendorRoutePanel
+            isOpen={true}
+            onClose={() => setActiveTool(null)}
+            activeWaypoints={activeWaypoints}
+            onWaypointsChange={(wps) => {
+              setActiveWaypoints(wps);
+              setRouteCalculation(null);
+            }}
+            onRouteCalculated={setRouteCalculation}
+            currentCalculation={routeCalculation}
+            mapCenter={center}
+            userLocation={activeUserLocation}
+            analysisAreaCenter={spotJituAnalysisCenter}
+            onAnalysisAreaCenterChange={setSpotJituAnalysisCenter}
+            spotJituRadius={spotJituRadius}
+            onSpotJituRadiusChange={setSpotJituRadius}
+            aiAreaResponse={aiAreaResponse}
+            onAiAreaResponseChange={setAiAreaResponse}
+            highlightedStopId={highlightedStopId}
+            onHighlightStopId={setHighlightedStopId}
+            onSelectAnalysisArea={() => {
+              setIsSelectingStartPoint(false);
+              setIsSelectingWaypoint(false);
+              setIsSelectingAnalysisArea(true);
+              setActiveTool(null);
+            }}
+            onTrackingLocationChange={setTrackingLocation}
+            onSelectStartPoint={() => {
+              setIsSelectingWaypoint(false);
+              setIsSelectingAnalysisArea(false);
+              setIsSelectingStartPoint(true);
+              setActiveTool(null);
+            }}
+            onSelectWaypoint={() => {
+              setIsSelectingStartPoint(false);
+              setIsSelectingAnalysisArea(false);
+              setIsSelectingWaypoint(true);
+              setActiveTool(null);
+            }}
+          />
+        )}
 
         {/* ── Top-right Floating Map Controls ───────────────────────────────── */}
         <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2 pointer-events-none">
@@ -1952,7 +2068,8 @@ export function MapPage() {
           {/* Map Controls — Right Side */}
           <div className="pointer-events-none absolute right-4 top-35 z-[1000] flex -translate-y-1/2 flex-col gap-2">
             {/* Compass / Heading Lock Button (visible during tracking or when rotated) */}
-            {(trackingLocation || (mapRotation !== null && mapRotation !== 0)) && (
+            {(trackingLocation ||
+              (mapRotation !== null && mapRotation !== 0)) && (
               <button
                 type="button"
                 onClick={() => {
@@ -1978,7 +2095,9 @@ export function MapPage() {
                   size={20}
                   className={cn(
                     "transition-transform duration-300",
-                    isHeadingLocked && trackingLocation ? "text-blue-600" : "text-slate-600"
+                    isHeadingLocked && trackingLocation
+                      ? "text-blue-600"
+                      : "text-slate-600",
                   )}
                   style={{
                     transform: `rotate(-${mapRotation ?? 0}deg)`,
@@ -2083,81 +2202,85 @@ export function MapPage() {
         {/* ── Leaflet Map Viewport ─────────────────────────────────────────── */}
         <div className="flex-1 relative z-0 overflow-hidden">
           {/* ── Top Navigation HUD Banner (Google Maps style) ────────────────── */}
-          {trackingLocation && (trackingLocation.targetWaypointName || trackingLocation.isFinished) && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] pointer-events-auto max-w-md w-[92%] sm:w-auto bg-slate-900/95 text-white backdrop-blur-md px-4 py-2.5 rounded-2xl shadow-2xl border border-slate-700/80 flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
-              <div
-                className={cn(
-                  "h-9 w-9 rounded-xl text-white flex items-center justify-center shrink-0 shadow-md",
-                  trackingLocation.isFinished
-                    ? "bg-emerald-600 shadow-emerald-500/30"
-                    : "bg-blue-600/90 shadow-blue-500/20",
-                )}
-              >
-                {trackingLocation.isFinished ? (
-                  <CheckCircle2 size={20} className="text-white" />
-                ) : (
-                  <Navigation size={18} className="fill-white" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0 pr-1">
-                {trackingLocation.isFinished ? (
-                  <>
-                    <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">
-                      Navigasi Selesai
-                    </div>
-                    <div className="text-sm font-bold text-white truncate">
-                      Semua Titik Tujuan Berhasil Dikunjungi
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <span>Menuju Waypoint</span>
-                      {trackingLocation.currentWaypointIndex != null &&
-                        trackingLocation.totalWaypoints != null && (
-                          <span className="bg-slate-800 text-blue-400 px-1.5 py-0.2 rounded font-mono text-[10px]">
-                            {trackingLocation.currentWaypointIndex + 1}/
-                            {trackingLocation.totalWaypoints}
-                          </span>
-                        )}
-                      {/* GPS Accuracy Badge */}
-                      <span className="flex items-center gap-1 ml-auto text-[10px] text-slate-300">
-                        <span
-                          className={cn(
-                            "size-1.5 rounded-full",
-                            (trackingLocation.accuracy ?? 30) <= 15
-                              ? "bg-emerald-400"
-                              : (trackingLocation.accuracy ?? 30) <= 35
-                                ? "bg-amber-400"
-                                : "bg-red-400",
+          {trackingLocation &&
+            (trackingLocation.targetWaypointName ||
+              trackingLocation.isFinished) && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] pointer-events-auto max-w-md w-[92%] sm:w-auto bg-slate-900/95 text-white backdrop-blur-md px-4 py-2.5 rounded-2xl shadow-2xl border border-slate-700/80 flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+                <div
+                  className={cn(
+                    "h-9 w-9 rounded-xl text-white flex items-center justify-center shrink-0 shadow-md",
+                    trackingLocation.isFinished
+                      ? "bg-emerald-600 shadow-emerald-500/30"
+                      : "bg-blue-600/90 shadow-blue-500/20",
+                  )}
+                >
+                  {trackingLocation.isFinished ? (
+                    <CheckCircle2 size={20} className="text-white" />
+                  ) : (
+                    <Navigation size={18} className="fill-white" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 pr-1">
+                  {trackingLocation.isFinished ? (
+                    <>
+                      <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">
+                        Navigasi Selesai
+                      </div>
+                      <div className="text-sm font-bold text-white truncate">
+                        Semua Titik Tujuan Berhasil Dikunjungi
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>Menuju Waypoint</span>
+                        {trackingLocation.currentWaypointIndex != null &&
+                          trackingLocation.totalWaypoints != null && (
+                            <span className="bg-slate-800 text-blue-400 px-1.5 py-0.2 rounded font-mono text-[10px]">
+                              {trackingLocation.currentWaypointIndex + 1}/
+                              {trackingLocation.totalWaypoints}
+                            </span>
                           )}
-                        />
-                        {(trackingLocation.accuracy ?? 30) <= 15
-                          ? "GPS Baik"
-                          : (trackingLocation.accuracy ?? 30) <= 35
-                            ? "GPS Sedang"
-                            : "GPS Lemah"}
-                      </span>
+                        {/* GPS Accuracy Badge */}
+                        <span className="flex items-center gap-1 ml-auto text-[10px] text-slate-300">
+                          <span
+                            className={cn(
+                              "size-1.5 rounded-full",
+                              (trackingLocation.accuracy ?? 30) <= 15
+                                ? "bg-emerald-400"
+                                : (trackingLocation.accuracy ?? 30) <= 35
+                                  ? "bg-amber-400"
+                                  : "bg-red-400",
+                            )}
+                          />
+                          {(trackingLocation.accuracy ?? 30) <= 15
+                            ? "GPS Baik"
+                            : (trackingLocation.accuracy ?? 30) <= 35
+                              ? "GPS Sedang"
+                              : "GPS Lemah"}
+                        </span>
+                      </div>
+                      <div className="text-sm font-bold text-white truncate">
+                        {trackingLocation.targetWaypointName}
+                      </div>
+                    </>
+                  )}
+                </div>
+                {!trackingLocation.isFinished &&
+                  trackingLocation.targetDistanceMeters != null && (
+                    <div className="text-right shrink-0 border-l border-slate-700/80 pl-3">
+                      <div className="text-base font-extrabold text-blue-400">
+                        {trackingLocation.targetDistanceMeters >= 1000
+                          ? `${(trackingLocation.targetDistanceMeters / 1000).toFixed(1)} km`
+                          : `${Math.round(trackingLocation.targetDistanceMeters)} m`}
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        Jarak target
+                      </div>
                     </div>
-                    <div className="text-sm font-bold text-white truncate">
-                      {trackingLocation.targetWaypointName}
-                    </div>
-                  </>
-                )}
+                  )}
               </div>
-              {!trackingLocation.isFinished &&
-                trackingLocation.targetDistanceMeters != null && (
-                  <div className="text-right shrink-0 border-l border-slate-700/80 pl-3">
-                    <div className="text-base font-extrabold text-blue-400">
-                      {trackingLocation.targetDistanceMeters >= 1000
-                        ? `${(trackingLocation.targetDistanceMeters / 1000).toFixed(1)} km`
-                        : `${Math.round(trackingLocation.targetDistanceMeters)} m`}
-                    </div>
-                    <div className="text-[10px] text-slate-400">Jarak target</div>
-                  </div>
-                )}
-            </div>
-          )}
+            )}
 
           <div
             className="w-full h-full transition-transform duration-500 ease-out"
@@ -2171,428 +2294,440 @@ export function MapPage() {
             }
           >
             <MapContainer
-            ref={mapRef}
-            center={center}
-            zoom={14}
-            minZoom={4}
-            maxZoom={19}
-            maxBounds={INDONESIA_BOUNDS}
-            maxBoundsViscosity={1.0}
-            className="w-full h-full"
-          >
-            {basemapMode === "satellite" ? (
-              <MapTileLayer
-                key="satellite"
-                name="Satellite"
-                bounds={INDONESIA_BOUNDS}
-                noWrap={true}
-                minZoom={4}
-                maxZoom={19}
-                rasterUrl={
-                  (import.meta.env.VITE_SATELLITE_TILE_URL as string) ||
-                  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                }
-                rasterAttribution={
-                  (import.meta.env.VITE_SATELLITE_ATTRIBUTION as string) ||
-                  "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
-                }
-              />
-            ) : (
-              <MapTileLayer
-                key="default"
-                name="Default"
-                bounds={INDONESIA_BOUNDS}
-                noWrap={true}
-                minZoom={4}
-                maxZoom={19}
-                rasterUrl={
-                  (import.meta.env.VITE_STANDARD_TILE_URL as string) ||
-                  "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-                }
-                rasterAttribution={
-                  (import.meta.env.VITE_STANDARD_ATTRIBUTION as string) ||
-                  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                }
-              />
-            )}
-
-            <MapReadyGate>
-              <MapZoomControl position="bottom-24 right-4 md:bottom-8 md:right-4" />
-
-              {recommendPoint && (
-                <MapMarker
-                  key="recommend-point"
-                  position={[recommendPoint.lat, recommendPoint.lng]}
-                  iconAnchor={[16, 16]}
-                  icon={
-                    <div
-                      style={{
-                        width: 32, height: 32, borderRadius: "50%",
-                        background: "linear-gradient(135deg,#f59e0b,#d97706)",
-                        border: "3px solid #fff",
-                        boxShadow: "0 3px 10px rgba(217,119,6,.5)",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        color: "#fff", fontSize: 14,
-                      }}
-                    >
-                      ✦
-                    </div>
+              ref={mapRef}
+              center={center}
+              zoom={14}
+              minZoom={4}
+              maxZoom={19}
+              maxBounds={INDONESIA_BOUNDS}
+              maxBoundsViscosity={1.0}
+              className="w-full h-full"
+            >
+              {basemapMode === "satellite" ? (
+                <MapTileLayer
+                  key="satellite"
+                  name="Satellite"
+                  bounds={INDONESIA_BOUNDS}
+                  noWrap={true}
+                  minZoom={4}
+                  maxZoom={19}
+                  rasterUrl={
+                    (import.meta.env.VITE_SATELLITE_TILE_URL as string) ||
+                    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                  }
+                  rasterAttribution={
+                    (import.meta.env.VITE_SATELLITE_ATTRIBUTION as string) ||
+                    "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
                   }
                 />
-                )}
-                
-              {/* Viewport panning/zooming and click event listener */}
-              <MapEventHandler
-                onMapClick={handleMapClick}
-                onViewportChange={loadViewportData}
-                mode={clickMode}
-              />
-
-              {/* BPS Demographic Choropleth Layer — must be inside MapReadyGate for Leaflet context */}
-              <BpsLayer
-                isVisible={showBpsLayer}
-                level={bpsLayerLevel}
-                onLoadingChange={setBpsLoading}
-                onErrorChange={setBpsError}
-                onLegendReady={(entries, year, regionName) => {
-                  setBpsLegendEntries(entries);
-                  setBpsLegendYear(year);
-                  if (regionName) setBpsRegionName(regionName);
-                }}
-              />
-
-              {/* Temporary preview marker while picking report location */}
-              {pickingReportLocation && selectedReportCoords && (
-                <ReportMarker
-                  key="report-preview"
-                  report={{
-                    id: "__preview__",
-                    title: "Pilih posisi laporan...",
-                    latitude: selectedReportCoords.lat,
-                    longitude: selectedReportCoords.lng,
-                    status: "reported",
-                    severity: "medium",
-                    confirmations_count: 0,
-                    created_at: new Date().toISOString(),
-                    media: [],
-                  }}
+              ) : (
+                <MapTileLayer
+                  key="default"
+                  name="Default"
+                  bounds={INDONESIA_BOUNDS}
+                  noWrap={true}
+                  minZoom={4}
+                  maxZoom={19}
+                  rasterUrl={
+                    (import.meta.env.VITE_STANDARD_TILE_URL as string) ||
+                    "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  }
+                  rasterAttribution={
+                    (import.meta.env.VITE_STANDARD_ATTRIBUTION as string) ||
+                    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  }
                 />
-                )}
-
-              {isPickingRecommendPoint && (
-                <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[450] bg-amber-600 text-white px-5 py-2.5 rounded-full text-xs font-semibold shadow-xl flex items-center gap-3 border border-amber-300 pointer-events-auto">
-                  <Sparkles size={14} className="shrink-0" />
-                  <span>Klik titik di peta untuk dicarikan rekomendasi usaha</span>
-                  <button
-                    type="button"
-                    onClick={() => setIsPickingRecommendPoint(false)}
-                    className="rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] hover:bg-white/30 cursor-pointer"
-                  >
-                    Batal
-                  </button>
-                </div>
               )}
-              </MapReadyGate>
 
-            {/* User GPS location marker */}
-            {activeUserLocation && (
-              <UserLocationMarker
-                lat={activeUserLocation.lat}
-                lng={activeUserLocation.lng}
-                accuracy={activeUserLocation.accuracy}
-                heading={trackingLocation?.heading}
-              />
-            )}
+              <MapReadyGate>
+                <MapZoomControl position="bottom-24 right-4 md:bottom-8 md:right-4" />
 
-            {/* Candidate analysis markers A, B, C */}
-            {(["A", "B", "C"] as CandidateId[]).map((id) => {
-              const cand = candidates[id];
-              if (!cand) return null;
-              return (
-                <CandidateMarker
-                  key={id}
-                  id={id}
-                  lat={cand.lat}
-                  lng={cand.lng}
-                  radius={cand.radius}
-                  onDragEnd={handleMarkerDragEnd}
-                  onClick={(clickedId) => {
-                    setActiveCandidateId(clickedId);
-                    setActiveTool("analysis");
-                  }}
-                />
-              );
-            })}
-
-            {/* Spot Jitu analysis area circle & marker */}
-            {activeTool === "routes" && spotJituAnalysisCenter && (
-              <>
-                <MapMarker
-                  position={[
-                    spotJituAnalysisCenter.lat,
-                    spotJituAnalysisCenter.lng,
-                  ]}
-                  icon={
-                    <div
-                      style={{
-                        backgroundColor: "#4f46e5",
-                        width: "28px",
-                        height: "28px",
-                        borderRadius: "50%",
-                        border: "3px solid white",
-                        boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "white",
-                        fontSize: "13px",
-                      }}
-                    >
-                      ✨
-                    </div>
-                  }
-                  iconAnchor={[14, 14]}
-                >
-                  <MapPopup className="lociva-popup-wrapper">
-                    <div className="p-2 text-center space-y-0.5">
-                      <p className="font-bold text-ink text-xs">
-                        Pusat Area Spot Jitu
-                      </p>
-                      <p className="text-[10px] text-muted">
-                        Radius:{" "}
-                        {spotJituRadius >= 1000
-                          ? `${spotJituRadius / 1000} km`
-                          : `${spotJituRadius} m`}
-                      </p>
-                      <p className="text-[10px] text-slate-400 font-mono">
-                        {spotJituAnalysisCenter.lat.toFixed(5)},{" "}
-                        {spotJituAnalysisCenter.lng.toFixed(5)}
-                      </p>
-                    </div>
-                  </MapPopup>
-                </MapMarker>
-                <MapCircle
-                  center={[
-                    spotJituAnalysisCenter.lat,
-                    spotJituAnalysisCenter.lng,
-                  ]}
-                  radius={spotJituRadius}
-                  pathOptions={{
-                    color: "#6366f1",
-                    fillColor: "#818cf8",
-                    fillOpacity: 0.12,
-                    weight: 2,
-                    dashArray: "6, 6",
-                  }}
-                />
-              </>
-            )}
-
-            {/* Spot Jitu AI Route Preview Markers */}
-            {activeTool === "routes" && aiAreaResponse && (
-              <>
-                {/* START POINT MARKER */}
-                <MapMarker
-                  position={[
-                    aiAreaResponse.start_point.lat,
-                    aiAreaResponse.start_point.lng,
-                  ]}
-                  icon={
-                    <div
-                      className={cn(
-                        "size-7 rounded-full bg-emerald-600 text-white font-extrabold flex items-center justify-center text-[10px] shadow-lg border-2 border-white transition-all duration-200 cursor-pointer",
-                        highlightedStopId === aiAreaResponse.start_point.id &&
-                          "scale-125 ring-4 ring-emerald-400 animate-pulse",
-                      )}
-                    >
-                      S
-                    </div>
-                  }
-                  iconAnchor={[14, 14]}
-                >
-                  <MapPopup className="lociva-popup-wrapper">
-                    <div className="p-2 space-y-1 max-w-[220px]">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
-                          Titik Awal (Start)
-                        </span>
-                      </div>
-                      <p className="font-bold text-xs text-ink">
-                        {aiAreaResponse.start_point.name}
-                      </p>
-                      <p className="text-[10px] text-muted leading-tight">
-                        {aiAreaResponse.start_point.reason}
-                      </p>
-                    </div>
-                  </MapPopup>
-                </MapMarker>
-
-                {/* INTERMEDIATE WAYPOINTS MARKERS */}
-                {aiAreaResponse.recommended_waypoints.map((wp, idx) => (
+                {recommendPoint && (
                   <MapMarker
-                    key={`ai-wp-${wp.id}-${idx}`}
-                    position={[wp.lat, wp.lng]}
+                    key="recommend-point"
+                    position={[recommendPoint.lat, recommendPoint.lng]}
+                    iconAnchor={[16, 16]}
                     icon={
                       <div
-                        className={cn(
-                          "size-6 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-[10px] shadow-md border-2 border-white transition-all duration-200 cursor-pointer",
-                          highlightedStopId === wp.id &&
-                            "scale-125 ring-4 ring-indigo-400 animate-pulse",
-                        )}
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: "50%",
+                          background: "linear-gradient(135deg,#f59e0b,#d97706)",
+                          border: "3px solid #fff",
+                          boxShadow: "0 3px 10px rgba(217,119,6,.5)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "#fff",
+                          fontSize: 14,
+                        }}
                       >
-                        {idx + 1}
+                        ✦
                       </div>
                     }
-                    iconAnchor={[12, 12]}
+                  />
+                )}
+
+                {/* Viewport panning/zooming and click event listener */}
+                <MapEventHandler
+                  onMapClick={handleMapClick}
+                  onViewportChange={loadViewportData}
+                  mode={clickMode}
+                />
+
+                {/* BPS Demographic Choropleth Layer — must be inside MapReadyGate for Leaflet context */}
+                <BpsLayer
+                  isVisible={showBpsLayer}
+                  level={bpsLayerLevel}
+                  onLoadingChange={setBpsLoading}
+                  onErrorChange={setBpsError}
+                  onLegendReady={(entries, year, regionName) => {
+                    setBpsLegendEntries(entries);
+                    setBpsLegendYear(year);
+                    if (regionName) setBpsRegionName(regionName);
+                  }}
+                />
+
+                {/* Temporary preview marker while picking report location */}
+                {pickingReportLocation && selectedReportCoords && (
+                  <ReportMarker
+                    key="report-preview"
+                    report={{
+                      id: "__preview__",
+                      title: "Pilih posisi laporan...",
+                      latitude: selectedReportCoords.lat,
+                      longitude: selectedReportCoords.lng,
+                      status: "reported",
+                      severity: "medium",
+                      confirmations_count: 0,
+                      created_at: new Date().toISOString(),
+                      media: [],
+                    }}
+                  />
+                )}
+
+                {isPickingRecommendPoint && (
+                  <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[450] bg-amber-600 text-white px-5 py-2.5 rounded-full text-xs font-semibold shadow-xl flex items-center gap-3 border border-amber-300 pointer-events-auto">
+                    <Sparkles size={14} className="shrink-0" />
+                    <span>
+                      Klik titik di peta untuk dicarikan rekomendasi usaha
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsPickingRecommendPoint(false)}
+                      className="rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] hover:bg-white/30 cursor-pointer"
+                    >
+                      Batal
+                    </button>
+                  </div>
+                )}
+              </MapReadyGate>
+
+              {/* User GPS location marker */}
+              {activeUserLocation && (
+                <UserLocationMarker
+                  lat={activeUserLocation.lat}
+                  lng={activeUserLocation.lng}
+                  accuracy={activeUserLocation.accuracy}
+                  heading={trackingLocation?.heading}
+                />
+              )}
+
+              {/* Candidate analysis markers A, B, C */}
+              {(["A", "B", "C"] as CandidateId[]).map((id) => {
+                const cand = candidates[id];
+                if (!cand) return null;
+                return (
+                  <CandidateMarker
+                    key={id}
+                    id={id}
+                    lat={cand.lat}
+                    lng={cand.lng}
+                    radius={cand.radius}
+                    onDragEnd={handleMarkerDragEnd}
+                    onClick={(clickedId) => {
+                      setActiveCandidateId(clickedId);
+                      setActiveTool("analysis");
+                    }}
+                  />
+                );
+              })}
+
+              {/* Spot Jitu analysis area circle & marker */}
+              {activeTool === "routes" && spotJituAnalysisCenter && (
+                <>
+                  <MapMarker
+                    position={[
+                      spotJituAnalysisCenter.lat,
+                      spotJituAnalysisCenter.lng,
+                    ]}
+                    icon={
+                      <div
+                        style={{
+                          backgroundColor: "#4f46e5",
+                          width: "28px",
+                          height: "28px",
+                          borderRadius: "50%",
+                          border: "3px solid white",
+                          boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "white",
+                          fontSize: "13px",
+                        }}
+                      >
+                        ✨
+                      </div>
+                    }
+                    iconAnchor={[14, 14]}
                   >
                     <MapPopup className="lociva-popup-wrapper">
-                      <div className="p-2 space-y-1 max-w-[220px]">
-                        <div className="flex items-center justify-between gap-1">
-                          <span className="text-[9px] font-bold bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded">
-                            Stop #{idx + 1}
-                          </span>
-                          <span className="text-[9px] text-muted">
-                            ~{wp.stop_duration_minutes || 30} mnt
-                          </span>
-                        </div>
-                        <p className="font-bold text-xs text-ink">{wp.name}</p>
-                        <p className="text-[10px] text-muted leading-tight">
-                          {wp.reason}
+                      <div className="p-2 text-center space-y-0.5">
+                        <p className="font-bold text-ink text-xs">
+                          Pusat Area Spot Jitu
+                        </p>
+                        <p className="text-[10px] text-muted">
+                          Radius:{" "}
+                          {spotJituRadius >= 1000
+                            ? `${spotJituRadius / 1000} km`
+                            : `${spotJituRadius} m`}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-mono">
+                          {spotJituAnalysisCenter.lat.toFixed(5)},{" "}
+                          {spotJituAnalysisCenter.lng.toFixed(5)}
                         </p>
                       </div>
                     </MapPopup>
                   </MapMarker>
-                ))}
+                  <MapCircle
+                    center={[
+                      spotJituAnalysisCenter.lat,
+                      spotJituAnalysisCenter.lng,
+                    ]}
+                    radius={spotJituRadius}
+                    pathOptions={{
+                      color: "#6366f1",
+                      fillColor: "#818cf8",
+                      fillOpacity: 0.12,
+                      weight: 2,
+                      dashArray: "6, 6",
+                    }}
+                  />
+                </>
+              )}
 
-                {/* END POINT MARKER */}
-                <MapMarker
-                  position={[
-                    aiAreaResponse.end_point.lat,
-                    aiAreaResponse.end_point.lng,
-                  ]}
-                  icon={
-                    <div
-                      className={cn(
-                        "size-7 rounded-full bg-rose-600 text-white font-extrabold flex items-center justify-center text-[10px] shadow-lg border-2 border-white transition-all duration-200 cursor-pointer",
-                        highlightedStopId === aiAreaResponse.end_point.id &&
-                          "scale-125 ring-4 ring-rose-400 animate-pulse",
-                      )}
-                    >
-                      E
-                    </div>
-                  }
-                  iconAnchor={[14, 14]}
-                >
-                  <MapPopup className="lociva-popup-wrapper">
-                    <div className="p-2 space-y-1 max-w-[220px]">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] font-bold uppercase tracking-wider bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded">
-                          Titik Akhir (End)
-                        </span>
+              {/* Spot Jitu AI Route Preview Markers */}
+              {activeTool === "routes" && aiAreaResponse && (
+                <>
+                  {/* START POINT MARKER */}
+                  <MapMarker
+                    position={[
+                      aiAreaResponse.start_point.lat,
+                      aiAreaResponse.start_point.lng,
+                    ]}
+                    icon={
+                      <div
+                        className={cn(
+                          "size-7 rounded-full bg-emerald-600 text-white font-extrabold flex items-center justify-center text-[10px] shadow-lg border-2 border-white transition-all duration-200 cursor-pointer",
+                          highlightedStopId === aiAreaResponse.start_point.id &&
+                            "scale-125 ring-4 ring-emerald-400 animate-pulse",
+                        )}
+                      >
+                        S
                       </div>
-                      <p className="font-bold text-xs text-ink">
-                        {aiAreaResponse.end_point.name}
-                      </p>
-                      <p className="text-[10px] text-muted leading-tight">
-                        {aiAreaResponse.end_point.reason}
-                      </p>
-                    </div>
-                  </MapPopup>
-                </MapMarker>
-              </>
-            )}
+                    }
+                    iconAnchor={[14, 14]}
+                  >
+                    <MapPopup className="lociva-popup-wrapper">
+                      <div className="p-2 space-y-1 max-w-[220px]">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
+                            Titik Awal (Start)
+                          </span>
+                        </div>
+                        <p className="font-bold text-xs text-ink">
+                          {aiAreaResponse.start_point.name}
+                        </p>
+                        <p className="text-[10px] text-muted leading-tight">
+                          {aiAreaResponse.start_point.reason}
+                        </p>
+                      </div>
+                    </MapPopup>
+                  </MapMarker>
 
-            <RouteLayer
-              activeWaypoints={activeWaypoints}
-              currentCalculation={routeCalculation}
-              publicRoutes={showPublicRoutes ? publicRoutes : []}
-              showPublicRoutes={showPublicRoutes}
-              activeWaypointIndex={trackingLocation?.currentWaypointIndex}
-              completedWaypointKeys={trackingLocation?.completedWaypointKeys}
-            />
+                  {/* INTERMEDIATE WAYPOINTS MARKERS */}
+                  {aiAreaResponse.recommended_waypoints.map((wp, idx) => (
+                    <MapMarker
+                      key={`ai-wp-${wp.id}-${idx}`}
+                      position={[wp.lat, wp.lng]}
+                      icon={
+                        <div
+                          className={cn(
+                            "size-6 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-[10px] shadow-md border-2 border-white transition-all duration-200 cursor-pointer",
+                            highlightedStopId === wp.id &&
+                              "scale-125 ring-4 ring-indigo-400 animate-pulse",
+                          )}
+                        >
+                          {idx + 1}
+                        </div>
+                      }
+                      iconAnchor={[12, 12]}
+                    >
+                      <MapPopup className="lociva-popup-wrapper">
+                        <div className="p-2 space-y-1 max-w-[220px]">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[9px] font-bold bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded">
+                              Stop #{idx + 1}
+                            </span>
+                            <span className="text-[9px] text-muted">
+                              ~{wp.stop_duration_minutes || 30} mnt
+                            </span>
+                          </div>
+                          <p className="font-bold text-xs text-ink">
+                            {wp.name}
+                          </p>
+                          <p className="text-[10px] text-muted leading-tight">
+                            {wp.reason}
+                          </p>
+                        </div>
+                      </MapPopup>
+                    </MapMarker>
+                  ))}
 
-            <MapMarkerClusterGroup
-              spiderfyOnMaxZoom={true}
-              showCoverageOnHover={false}
-            >
-              {/* Internal Map POIs (LocalOSM) */}
-              {filteredLocalPlaces.map((place) => (
-                <PoiMarker
-                  key={`poi-${place.id}`}
-                  place={place}
-                  candidateAssociations={(place as any).candidateAssociations}
-                  activeCandidateId={activeCandidateId}
-                  distanceFromCandidate={
-                    activeCandidate
-                      ? distanceMeters(
-                          activeCandidate.lat,
-                          activeCandidate.lng,
-                          place.lat,
-                          place.lng,
-                        )
-                      : undefined
-                  }
-                  isDuplicateWithInternal={duplicateExternalIds.has(place.id)}
-                />
-              ))}
+                  {/* END POINT MARKER */}
+                  <MapMarker
+                    position={[
+                      aiAreaResponse.end_point.lat,
+                      aiAreaResponse.end_point.lng,
+                    ]}
+                    icon={
+                      <div
+                        className={cn(
+                          "size-7 rounded-full bg-rose-600 text-white font-extrabold flex items-center justify-center text-[10px] shadow-lg border-2 border-white transition-all duration-200 cursor-pointer",
+                          highlightedStopId === aiAreaResponse.end_point.id &&
+                            "scale-125 ring-4 ring-rose-400 animate-pulse",
+                        )}
+                      >
+                        E
+                      </div>
+                    }
+                    iconAnchor={[14, 14]}
+                  >
+                    <MapPopup className="lociva-popup-wrapper">
+                      <div className="p-2 space-y-1 max-w-[220px]">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] font-bold uppercase tracking-wider bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded">
+                            Titik Akhir (End)
+                          </span>
+                        </div>
+                        <p className="font-bold text-xs text-ink">
+                          {aiAreaResponse.end_point.name}
+                        </p>
+                        <p className="text-[10px] text-muted leading-tight">
+                          {aiAreaResponse.end_point.reason}
+                        </p>
+                      </div>
+                    </MapPopup>
+                  </MapMarker>
+                </>
+              )}
 
-              {/* External Map POIs (OSM / Overpass) */}
-              {filteredExternalPlaces.map((place) => (
-                <PoiMarker
-                  key={`ext-poi-${place.id}`}
-                  place={place}
-                  candidateAssociations={(place as any).candidateAssociations}
-                  activeCandidateId={activeCandidateId}
-                  distanceFromCandidate={
-                    activeCandidate
-                      ? distanceMeters(
-                          activeCandidate.lat,
-                          activeCandidate.lng,
-                          place.lat,
-                          place.lng,
-                        )
-                      : undefined
-                  }
-                  isDuplicateWithInternal={duplicateExternalIds.has(place.id)}
-                />
-              ))}
+              <RouteLayer
+                activeWaypoints={activeWaypoints}
+                currentCalculation={routeCalculation}
+                publicRoutes={showPublicRoutes ? publicRoutes : []}
+                showPublicRoutes={showPublicRoutes}
+                activeWaypointIndex={trackingLocation?.currentWaypointIndex}
+                completedWaypointKeys={trackingLocation?.completedWaypointKeys}
+              />
 
-              {showLocivaData &&
-                filteredLocivaBusinesses.map((biz) => (
-                  <InternalBusinessMarker
-                    key={`lociva-${biz.id}`}
-                    business={biz}
+              <MapMarkerClusterGroup
+                spiderfyOnMaxZoom={true}
+                showCoverageOnHover={false}
+              >
+                {/* Internal Map POIs (LocalOSM) */}
+                {filteredLocalPlaces.map((place) => (
+                  <PoiMarker
+                    key={`poi-${place.id}`}
+                    place={place}
+                    candidateAssociations={(place as any).candidateAssociations}
+                    activeCandidateId={activeCandidateId}
                     distanceFromCandidate={
                       activeCandidate
                         ? distanceMeters(
                             activeCandidate.lat,
                             activeCandidate.lng,
-                            biz.latitude,
-                            biz.longitude,
+                            place.lat,
+                            place.lng,
                           )
                         : undefined
                     }
-                    isDuplicateWithExternal={duplicateInternalIds.has(biz.id)}
+                    isDuplicateWithInternal={duplicateExternalIds.has(place.id)}
                   />
                 ))}
 
-              {/* Civic Reports Layer */}
-              {showReportsLayer &&
-                reports.map((report) => (
-                  <ReportMarker
-                    key={`civic-report-${report.id}`}
-                    report={report}
+                {/* External Map POIs (OSM / Overpass) */}
+                {filteredExternalPlaces.map((place) => (
+                  <PoiMarker
+                    key={`ext-poi-${place.id}`}
+                    place={place}
+                    candidateAssociations={(place as any).candidateAssociations}
+                    activeCandidateId={activeCandidateId}
+                    distanceFromCandidate={
+                      activeCandidate
+                        ? distanceMeters(
+                            activeCandidate.lat,
+                            activeCandidate.lng,
+                            place.lat,
+                            place.lng,
+                          )
+                        : undefined
+                    }
+                    isDuplicateWithInternal={duplicateExternalIds.has(place.id)}
                   />
                 ))}
-            </MapMarkerClusterGroup>
-          </MapContainer>
+
+                {showLocivaData &&
+                  filteredLocivaBusinesses.map((biz) => (
+                    <InternalBusinessMarker
+                      key={`lociva-${biz.id}`}
+                      business={biz}
+                      distanceFromCandidate={
+                        activeCandidate
+                          ? distanceMeters(
+                              activeCandidate.lat,
+                              activeCandidate.lng,
+                              biz.latitude,
+                              biz.longitude,
+                            )
+                          : undefined
+                      }
+                      isDuplicateWithExternal={duplicateInternalIds.has(biz.id)}
+                    />
+                  ))}
+
+                {/* Civic Reports Layer */}
+                {showReportsLayer &&
+                  reports.map((report) => (
+                    <ReportMarker
+                      key={`civic-report-${report.id}`}
+                      report={report}
+                    />
+                  ))}
+              </MapMarkerClusterGroup>
+            </MapContainer>
           </div>
 
           {/* Prompt: Candidate placement mode */}
           {clickMode === "candidate" && (
             <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[450] bg-slate-900/95 text-white px-5 py-2.5 rounded-full text-xs font-semibold shadow-xl flex items-center gap-3 border border-white/20 pointer-events-auto">
               <Target size={15} className="text-primary shrink-0" />
-              <span>Klik pada peta untuk menempatkan titik Kandidat {activeCandidateId}</span>
+              <span>
+                Klik pada peta untuk menempatkan titik Kandidat{" "}
+                {activeCandidateId}
+              </span>
               <button
                 type="button"
                 onClick={() => setIsPickingCandidateLocation(false)}
@@ -2606,15 +2741,17 @@ export function MapPage() {
           {/* Prompt: Waypoint placement mode */}
           {isLoggedIn &&
             clickMode === "waypoint" &&
-            (isSelectingStartPoint || isSelectingWaypoint || isSelectingAnalysisArea) && (
+            (isSelectingStartPoint ||
+              isSelectingWaypoint ||
+              isSelectingAnalysisArea) && (
               <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-[400] bg-emerald-800/95 text-white px-5 py-2.5 rounded-full font-medium text-xs shadow-lg pointer-events-none flex items-center gap-2 border border-white/20">
                 <PenLine size={14} />
                 <span>
                   {isSelectingAnalysisArea
                     ? "Klik peta untuk memilih pusat area Spot Jitu"
                     : isSelectingStartPoint
-                    ? "Klik peta untuk menentukan titik awal"
-                    : "Klik peta untuk menambahkan titik singgah"}
+                      ? "Klik peta untuk menentukan titik awal"
+                      : "Klik peta untuk menambahkan titik singgah"}
                 </span>
               </div>
             )}
