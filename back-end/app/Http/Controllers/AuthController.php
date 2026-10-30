@@ -2,55 +2,52 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\Auth\PasswordResetException;
+use App\Exceptions\Auth\InvalidCredentialsException;
+use App\Exceptions\Auth\RoleChangeNotAllowedException;
 use App\Helpers\ApiResponse;
 use App\Http\Requests\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
-use App\Models\User;
+use App\Services\Auth\AuthService;
+use App\Services\Auth\PasswordResetService;
+use App\Services\Auth\UserRoleService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Password;
-use Illuminate\Support\Str;
 use Throwable;
 
 class AuthController extends Controller
 {
+    public function __construct(
+        protected AuthService $service,
+        protected PasswordResetService $passwordService,
+        protected UserRoleService $roleService,
+    ) {}
 
     public function register(RegisterRequest $request)
     {
         try {
-            $user = User::create([
-                'name' => $request->full_name,
-                'email' => $request->email,
-                'password' => $request->password,
-            ]);
-
-            $user->assignRole('user');
-
-            $token = $user
-                ->createToken('auth_token')
-                ->plainTextToken;
+            $user = $this->service->register($request->validated());
 
             return ApiResponse::success(
                 [
-                    'user' => $user,
-                    'token' => $token,
+                    "user" => $user,
+                    "token" => $this->service->createToken($user),
                 ],
-                'Registration successful.',
-                201
+                "Registration successful.",
+                201,
             );
         } catch (Throwable $e) {
-            Log::error('Registration failed.', [
-                'email' => $request->email,
-                'error' => $e->getMessage(),
+            Log::error("Registration failed.", [
+                "email" => $request->email,
+                "error" => $e->getMessage(),
             ]);
 
             return ApiResponse::error(
-                'Registration failed. Please try again later.',
-                500
+                "Registration failed. Please try again later.",
+                500,
             );
         }
     }
@@ -58,47 +55,29 @@ class AuthController extends Controller
     public function login(LoginRequest $request)
     {
         try {
-            $user = User::where(
-                'email',
-                $request->email
-            )->first();
-
-            if (
-                !$user ||
-                !Hash::check(
-                    $request->password,
-                    $user->password
-                )
-            ) {
-                return ApiResponse::unauthorized(
-                    'Invalid email or password.'
-                );
-            }
-
-            $user->tokens()->delete();
-
-            $token = $user
-                ->createToken('auth_token')
-                ->plainTextToken;
-
-            $user->role = $user->getRoleNames()->first() ?? 'user';
+            $user = $this->service->login(
+                $request->email,
+                $request->password,
+            );
 
             return ApiResponse::success(
                 [
-                    'user' => $user,
-                    'token' => $token,
+                    "user" => $user,
+                    "token" => $this->service->createToken($user),
                 ],
-                'Login successful.'
+                "Login successful.",
             );
+        } catch (InvalidCredentialsException $e) {
+            return ApiResponse::unauthorized($e->getMessage());
         } catch (Throwable $e) {
-            Log::error('Login failed.', [
-                'email' => $request->email,
-                'error' => $e->getMessage(),
+            Log::error("Login failed.", [
+                "email" => $request->email,
+                "error" => $e->getMessage(),
             ]);
 
             return ApiResponse::error(
-                'Login failed. Please try again later.',
-                500
+                "Login failed. Please try again later.",
+                500,
             );
         }
     }
@@ -106,122 +85,90 @@ class AuthController extends Controller
     public function user(Request $request)
     {
         try {
-            $user = $request->user();
-
-            $user->role = $user->getRoleNames()->first() ?? 'user';
+            $user = $this->service->withRole($request->user());
 
             return ApiResponse::success(
                 $user,
-                'User data retrieved successfully.'
+                "User data retrieved successfully.",
             );
         } catch (Throwable $e) {
-            Log::error('Failed to retrieve authenticated user.', [
-                'error' => $e->getMessage(),
+            Log::error("Failed to retrieve authenticated user.", [
+                "error" => $e->getMessage(),
             ]);
 
-            return ApiResponse::error(
-                'Failed to retrieve user data.',
-                500
-            );
+            return ApiResponse::error("Failed to retrieve user data.", 500);
         }
     }
 
     public function logout(Request $request)
     {
         try {
-            $request->user()
-                ->currentAccessToken()
-                ->delete();
+            $this->service->logout($request->user());
 
-            return ApiResponse::success(
-                null,
-                'Logout successful.'
-            );
+            return ApiResponse::success(null, "Logout successful.");
         } catch (Throwable $e) {
-            Log::error('Logout failed.', [
-                'error' => $e->getMessage(),
+            Log::error("Logout failed.", [
+                "error" => $e->getMessage(),
             ]);
 
             return ApiResponse::error(
-                'Logout failed. Please try again later.',
-                500
+                "Logout failed. Please try again later.",
+                500,
             );
         }
     }
 
-    public function forgotPassword(
-        ForgotPasswordRequest $request
-    ) {
+    public function forgotPassword(ForgotPasswordRequest $request)
+    {
         try {
-            $status = Password::sendResetLink(
-                $request->only('email')
-            );
-
-            if ($status !== Password::RESET_LINK_SENT) {
-                return ApiResponse::error(
-                    'Email not found or failed to send password reset link.',
-                    400
-                );
-            }
+            $this->passwordService->sendResetLink($request->email);
 
             return ApiResponse::success(
                 null,
-                'Password reset link has been sent to your email.'
+                "Password reset link has been sent to your email.",
             );
+        } catch (PasswordResetException $e) {
+            return ApiResponse::error($e->getMessage(), 400);
         } catch (Throwable $e) {
-            Log::error('Forgot password failed.', [
-                'email' => $request->email,
-                'error' => $e->getMessage(),
+            Log::error("Forgot password failed.", [
+                "email" => $request->email,
+                "error" => $e->getMessage(),
             ]);
 
             return ApiResponse::error(
-                'Failed to send password reset link. Please try again later.',
-                500
+                "Failed to send password reset link. Please try again later.",
+                500,
             );
         }
     }
 
-    public function resetPassword(
-        ResetPasswordRequest $request
-    ) {
+    public function resetPassword(ResetPasswordRequest $request)
+    {
         try {
-            $status = Password::reset(
+            $this->passwordService->reset(
                 $request->only(
-                    'email',
-                    'password',
-                    'password_confirmation',
-                    'token'
+                    "email",
+                    "password",
+                    "password_confirmation",
+                    "token",
                 ),
-                function (User $user, string $password) {
-                    $user->forceFill([
-                        'password' => Hash::make($password),
-                        'remember_token' => Str::random(60),
-                    ])->save();
-
-                    $user->tokens()->delete();
-                }
             );
-
-            if ($status !== Password::PASSWORD_RESET) {
-                return ApiResponse::error(
-                    'The password reset token is invalid or has expired.',
-                    400
-                );
-            }
 
             return ApiResponse::success(
                 null,
-                'Password has been reset successfully.'
+                "Password has been reset successfully.",
             );
+        } catch (PasswordResetException $e) {
+            return ApiResponse::error($e->getMessage(), 400);
         } catch (Throwable $e) {
-            Log::error('Password reset failed.', [
-                'email' => $request->email,
-                'error' => $e->getMessage(),
+            Log::error("Password reset failed.", [
+                "email" => $request->email,
+                "error" => $e->getMessage(),
             ]);
 
             return ApiResponse::error(
-                'Password reset failed. Please try again later.',
-                500
+                "Password reset failed. Please try again later.",
+                500,
             );
         }
     }
@@ -231,19 +178,12 @@ class AuthController extends Controller
      */
     public function usersList(Request $request)
     {
-        $query = User::with('roles:id,name');
+        $users = $this->roleService->list($request->input("search"));
 
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
-            });
-        }
-
-        $users = $query->latest()->paginate(50);
-
-        return ApiResponse::success($users, 'Users directory retrieved successfully');
+        return ApiResponse::success(
+            $users,
+            "Users directory retrieved successfully",
+        );
     }
 
     /**
@@ -251,24 +191,14 @@ class AuthController extends Controller
      */
     public function toggleUserRole(string $id)
     {
-        $user = User::findOrFail($id);
-
-        if ($user->hasRole('admin')) {
-            if (Auth::id() === $user->id) {
-                return ApiResponse::error('Anda tidak dapat mendemosi role akun Anda sendiri.', 400);
-            }
-
-            $adminCount = User::role('admin')->count();
-            if ($adminCount <= 1) {
-                return ApiResponse::error('Tidak dapat mengubah role akun admin terakhir untuk mencegah penguncian sistem.', 400);
-            }
-
-            $user->removeRole('admin');
-            $user->assignRole('user');
-        } else {
-            $user->assignRole('admin');
+        try {
+            $user = $this->roleService->toggleAdmin($id, Auth::id());
+        } catch (RoleChangeNotAllowedException $e) {
+            return ApiResponse::unauthorized($e->getMessage());
+        } catch(Throwable $e){
+            return ApiResponse::error($e->getMessage());
         }
 
-        return ApiResponse::success($user->fresh('roles'), 'User role updated successfully');
+        return ApiResponse::success($user, "User role updated successfully");
     }
 }
