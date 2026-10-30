@@ -2,68 +2,64 @@ import { useState } from "react";
 import { Eyebrow, Section } from "../ui/Section";
 import { MapPreview, type LayerKey } from "./MapPreview";
 import { AlertCircle, Footprints, Navigation, Store, Users, ShieldAlert } from "lucide-react";
+import { useLocale } from "@/lib/useLocale";
+import type { Translations } from "@/lib/locales";
 
 interface FactorDetail {
   id: string;
-  label: string;
+  labelKey: string;
   layer: LayerKey;
   icon: typeof Users;
-  metric: string;
-  realityCheck: string;
+  realityCheckKey: string;
 }
 
 const factors: FactorDetail[] = [
   {
     id: "pedestrian",
-    label: "pedestrian activity",
+    labelKey: "factorPedestrian",
     layer: "poi",
     icon: Footprints,
-    metric: "81 / 100",
-    realityCheck: "High foot traffic may simply be commuters rushing to transit rather than prospective customers.",
+    realityCheckKey: "factorPedestrianCheck",
   },
   {
     id: "population",
-    label: "population",
+    labelKey: "factorPopulation",
     layer: "population",
     icon: Users,
-    metric: "86 / 100",
-    realityCheck: "Dense resident count only matters if purchasing power and lifestyle fit your product price point.",
+    realityCheckKey: "factorPopulationCheck",
   },
   {
     id: "accessibility",
-    label: "accessibility",
+    labelKey: "factorAccessibility",
     layer: "access",
     icon: Navigation,
-    metric: "69 / 100",
-    realityCheck: "Narrow sidewalks and absence of parking or drop-off points create friction for repeat visitors.",
+    realityCheckKey: "factorAccessibilityCheck",
   },
   {
     id: "targetMarket",
-    label: "target market",
+    labelKey: "factorTargetMarket",
     layer: "business",
     icon: Store,
-    metric: "78 / 100",
-    realityCheck: "The crowd passing by must actively seek what you sell at the hours you are open.",
+    realityCheckKey: "factorTargetMarketCheck",
   },
   {
     id: "competition",
-    label: "competition",
+    labelKey: "factorCompetition",
     layer: "business",
     icon: AlertCircle,
-    metric: "52 / 100",
-    realityCheck: "Saturation can quickly cannibalize margins if multiple rivals offer the exact same menu.",
+    realityCheckKey: "factorCompetitionCheck",
   },
   {
     id: "areaCondition",
-    label: "area condition",
+    labelKey: "factorAreaCondition",
     layer: "reports",
     icon: ShieldAlert,
-    metric: "62 / 100",
-    realityCheck: "Repeated flooding and damaged pavements directly disrupt customer access and delivery fleets.",
+    realityCheckKey: "factorAreaConditionCheck",
   },
 ];
 
 export function ProblemSection() {
+  const { t } = useLocale();
   const [activeFactor, setActiveFactor] = useState(factors[0].id);
   const current = factors.find((f) => f.id === activeFactor) ?? factors[0];
 
@@ -71,12 +67,12 @@ export function ProblemSection() {
     <Section>
       <div className="grid items-center gap-10 lg:grid-cols-[0.9fr_1.1fr]">
         <div>
-          <Eyebrow>the problem</Eyebrow>
+          <Eyebrow>{t("problemEyebrow")}</Eyebrow>
           <h2 className="font-display text-[28px] leading-snug font-medium tracking-[-0.02em] text-ink md:text-[32px]">
-            A busy place is not always the right place.
+            {t("problemHeadline")}
           </h2>
           <p className="mt-4 max-w-md text-[15px] leading-7 text-muted">
-            Foot traffic can look promising on the surface while masking steep competition, poor pedestrian accessibility, or recurring civic infrastructure disruptions. Lociva analyzes a location as a composite of signals.
+            {t("problemBody")}
           </p>
 
           {/* Interactive factor chips */}
@@ -94,7 +90,7 @@ export function ProblemSection() {
                       : "clay-soft text-ink"
                   }`}
                 >
-                  {f.label}
+                  {t(f.labelKey as unknown as keyof Translations)}
                 </button>
               );
             })}
@@ -103,13 +99,15 @@ export function ProblemSection() {
           {/* Active factor callout card */}
           <div className="clay-soft mt-5 rounded-[14px] p-4">
             <div className="flex items-center justify-between">
-              <span className="text-[12px] font-medium text-ink">{current.label}</span>
+              <span className="text-[12px] font-medium text-ink">
+                {t(current.labelKey as unknown as keyof Translations)}
+              </span>
               <span className="rounded-[6px] bg-primary-soft px-2 py-0.5 text-[11px] font-medium text-primary">
-                signal weight · {current.metric}
+                {t("problemSignalWeight")} signal
               </span>
             </div>
             <p className="mt-2 text-[13px] leading-6 text-muted">
-              {current.realityCheck}
+              {t(current.realityCheckKey as unknown as keyof Translations)}
             </p>
           </div>
         </div>
@@ -123,6 +121,7 @@ export function ProblemSection() {
             catchment
             layers={["geo", current.layer]}
             selectedLabel="candidate site"
+            sampleData
           />
         </div>
       </div>

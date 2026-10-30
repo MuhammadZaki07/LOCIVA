@@ -2,54 +2,57 @@ import { useState } from "react";
 import { DemoNote, Eyebrow, Section } from "../ui/Section";
 import { MapPreview, type LayerKey } from "./MapPreview";
 import { Map, Users, Compass, Store, Navigation, AlertTriangle } from "lucide-react";
+import { useLocale } from "@/lib/useLocale";
+import type { Translations } from "@/lib/locales";
 
 interface LayerOption {
   id: LayerKey;
-  label: string;
-  desc: string;
+  labelKey: string;
+  descKey: string;
   icon: typeof Map;
 }
 
 const layerOptions: LayerOption[] = [
   {
     id: "geo",
-    label: "geographic data",
-    desc: "Street networks, parcel zoning, green parks, and building footprints.",
+    labelKey: "dataLayerGeo",
+    descKey: "dataLayerGeoDesc",
     icon: Map,
   },
   {
-    id: "population",
-    label: "population statistics",
-    desc: "Census demographics, resident density, and daytime movement patterns.",
-    icon: Users,
-  },
-  {
     id: "poi",
-    label: "points of interest",
-    desc: "Universities, transit hubs, clinics, and anchor neighborhood destinations.",
+    labelKey: "dataLayerPoi",
+    descKey: "dataLayerPoiDesc",
     icon: Compass,
   },
   {
     id: "business",
-    label: "business activity",
-    desc: "Direct competitors, commercial clusters, and retail saturation levels.",
+    labelKey: "dataLayerBusiness",
+    descKey: "dataLayerBusinessDesc",
     icon: Store,
   },
   {
     id: "access",
-    label: "accessibility",
-    desc: "Pedestrian corridors, road hierarchy, transit stops, and parking reach.",
+    labelKey: "dataLayerAccess",
+    descKey: "dataLayerAccessDesc",
     icon: Navigation,
   },
   {
     id: "reports",
-    label: "community reports",
-    desc: "Citizen-verified ground alerts: road damage, flood risk, and street lights.",
+    labelKey: "dataLayerReports",
+    descKey: "dataLayerReportsDesc",
     icon: AlertTriangle,
+  },
+  {
+    id: "population",
+    labelKey: "dataLayerPopulation",
+    descKey: "dataLayerPopulationDesc",
+    icon: Users,
   },
 ];
 
 export function DataIntelligence() {
+  const { t } = useLocale();
   const [activeLayers, setActiveLayers] = useState<LayerKey[]>([
     "geo",
     "poi",
@@ -69,12 +72,12 @@ export function DataIntelligence() {
     <Section id="intelligence">
       <div className="grid items-start gap-8 lg:grid-cols-[0.8fr_1.2fr]">
         <div>
-          <Eyebrow>data intelligence</Eyebrow>
+          <Eyebrow>{t("dataEyebrow")}</Eyebrow>
           <h2 className="font-display text-[28px] leading-snug font-medium tracking-[-0.02em] text-ink md:text-[32px]">
-            Built from multiple signals.
+            {t("dataHeadline")}
           </h2>
           <p className="mt-4 text-[15px] leading-7 text-muted">
-            Lociva reads an area as stacked layers. Toggle individual signals below to see how different data sources enrich the map in real time.
+            {t("dataBody")}
           </p>
 
           {/* Interactive layer toggles list */}
@@ -99,10 +102,10 @@ export function DataIntelligence() {
                       </div>
                       <div>
                         <p className={`text-[13px] font-medium ${isOn ? "text-ink" : "text-muted"}`}>
-                          {layer.label}
+                          {t(layer.labelKey as unknown as keyof Translations)}
                         </p>
                         <p className="mt-0.5 text-[11px] leading-4 text-muted">
-                          {layer.desc}
+                          {t(layer.descKey as unknown as keyof Translations)}
                         </p>
                       </div>
                     </div>
@@ -125,13 +128,12 @@ export function DataIntelligence() {
             layers={activeLayers}
             showScore={activeLayers.includes("business")}
             catchment={activeLayers.includes("access") || activeLayers.includes("population")}
+            sampleData
           />
         </div>
       </div>
 
-      <DemoNote>
-        Layer names describe the architectural model. No third-party corporate logos or unverified API claims are presented.
-      </DemoNote>
+      <DemoNote>{t("dataDemoNote")}</DemoNote>
     </Section>
   );
 }

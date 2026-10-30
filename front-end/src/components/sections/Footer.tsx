@@ -9,13 +9,16 @@ export function Footer() {
   return (
     <footer className="border-t border-[#ececf6] bg-white/40 px-5 py-12 md:px-8">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 md:flex-row md:items-end md:justify-between">
-        <div>
+        <div className="flex gap-2 items-center">
+           <img src="/logo.png" className="w-12 h-12" alt="" />
+           <div>
           <a href="#top" className="font-display text-[22px] font-medium text-ink no-underline">
             lociva
           </a>
           <p className="mt-1 text-[13px] text-muted">
             Location intelligence & civic analytics
           </p>
+        </div>
         </div>
         <nav className="flex flex-wrap gap-x-6 gap-y-2">
           {links.map((link) => (

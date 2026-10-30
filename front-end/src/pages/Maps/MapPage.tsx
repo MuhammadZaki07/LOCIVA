@@ -559,15 +559,32 @@ export function MapPage() {
 
   // ── Onboarding tour ─────────────────────────────────────────────────────
   const [tourRun, setTourRun] = useState(false);
+  const tourAutoStartedRef = useRef(false);
+
+  // Auto-launch exactly once on the first (uncompleted) map visit, after
+  // the component has mounted and tour targets are present. Guarded by a
+  // ref so React StrictMode, rerenders, and route changes cannot relaunch it.
   useEffect(() => {
-    if (!localStorage.getItem("lociva_tour_done")) {
-      const t = setTimeout(() => setTourRun(true), 800);
-      return () => clearTimeout(t);
-    }
+    if (tourAutoStartedRef.current) return;
+    if (localStorage.getItem("lociva_map_tour_completed_v1") === "1") return;
+
+    const timer = setTimeout(() => {
+      tourAutoStartedRef.current = true;
+      setTourRun(true);
+    }, 200);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Mark the tour as completed so it never auto-launches again on later visits.
+  // Manual replay via the "Panduan" button does NOT clear this state.
   const handleTourFinish = useCallback(() => {
     setTourRun(false);
-    localStorage.setItem("lociva_tour_done", "1");
+    try {
+      localStorage.setItem("lociva_map_tour_completed_v1", "1");
+    } catch {
+      /* noop */
+    }
   }, []);
 
   // ── Click mode: either placing candidate, waypoint, or report location ──────

@@ -3,8 +3,6 @@ import {
   averageScore,
   businesses,
   businessFactors,
-  factorLabels,
-  scoreCopy,
   scoreTone,
   type BusinessId,
   type FactorKey,
@@ -14,7 +12,8 @@ import { ClayButton } from "../ui/ClayButton";
 import { DemoNote, Eyebrow, Section } from "../ui/Section";
 import { MapPreview } from "./MapPreview";
 import { Coffee, Scissors, ShoppingBag, Store, UtensilsCrossed } from "lucide-react";
-
+import { useLocale } from "@/lib/useLocale";
+import type { Translations } from "@/lib/locales";
 const radiusOptions = [
   { value: 250, label: "250 m", footWalk: "~3 min walk", modifier: -2 },
   { value: 400, label: "400 m", footWalk: "~5 min walk", modifier: 0 },
@@ -22,6 +21,7 @@ const radiusOptions = [
 ];
 
 export function BusinessSimulation() {
+  const { t } = useLocale();
   const [business, setBusiness] = useState<BusinessId>("cafe");
   const [radiusMeters, setRadiusMeters] = useState(400);
 
@@ -58,12 +58,15 @@ export function BusinessSimulation() {
   return (
     <Section className="pt-4">
       <div className="mb-8 max-w-xl">
-        <Eyebrow>business simulation</Eyebrow>
+        <Eyebrow>{t("simEyebrow")}</Eyebrow>
         <h2 className="font-display text-[28px] leading-snug font-medium tracking-[-0.02em] text-ink md:text-[32px]">
-          Simulate before you invest.
+          {t("simHeadline")}
         </h2>
         <p className="mt-3 text-[15px] leading-7 text-muted">
-          Test different business ideas and locations before committing real resources.
+          {t("simBody")}
+        </p>
+        <p className="mt-2 text-[11px] leading-5 text-muted">
+          {t("simSampleData")}
         </p>
       </div>
 
@@ -73,7 +76,7 @@ export function BusinessSimulation() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#ececf6] bg-white/70 px-4 py-3.5 backdrop-blur-sm sm:px-6">
           {/* Business Type Selector */}
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="mr-1 text-[12px] font-medium text-muted">business:</span>
+            <span className="mr-1 text-[12px] font-medium text-muted">{t("simBusiness")}</span>
             {businesses.map((item) => {
               const isSelected = business === item.id;
               return (
@@ -96,7 +99,7 @@ export function BusinessSimulation() {
 
           {/* Catchment Radius Selector */}
           <div className="flex items-center gap-1.5">
-            <span className="text-[12px] text-muted">radius:</span>
+            <span className="text-[12px] text-muted">{t("simRadius")}</span>
             {radiusOptions.map((opt) => (
               <button
                 key={opt.value}
@@ -120,10 +123,10 @@ export function BusinessSimulation() {
           <div className="p-4 sm:p-5">
             <div className="mb-2.5 flex items-center justify-between text-[12px]">
               <span className="font-medium text-ink">
-                simulated catchment · {activeBusinessMeta.label}
+                {t("simCatchment")} · {activeBusinessMeta.label}
               </span>
               <span className="text-muted">
-                {activeBusinessMeta.competitorCount} competitors in {radiusMeta.label} ({radiusMeta.footWalk})
+                {activeBusinessMeta.competitorCount} {t("simCompetitors")} {radiusMeta.label} ({radiusMeta.footWalk})
               </span>
             </div>
             <MapPreview
@@ -133,6 +136,7 @@ export function BusinessSimulation() {
               catchmentRadiusMeters={radiusMeters}
               selectedLabel={`your ${activeBusinessMeta.label}`}
               compact
+              sampleData
             />
           </div>
 
@@ -140,7 +144,7 @@ export function BusinessSimulation() {
           <div className="border-t border-[#ececf6] p-5 lg:border-l lg:border-t-0 sm:p-6">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-[12px] text-muted">location potential score</p>
+                <p className="text-[12px] text-muted">{t("simScore")}</p>
                 <div className="mt-1 flex items-baseline gap-1.5">
                   <p className="font-display text-[38px] font-medium leading-none text-ink">
                     {displayScore}
@@ -157,16 +161,18 @@ export function BusinessSimulation() {
                       : "bg-[#fbf0ee] text-warning"
                 }`}
               >
-                {scoreCopy[tone]}
+                {t((`simTone_${tone}`) as unknown as keyof Translations)}
               </span>
             </div>
 
-            <p className="mt-5 text-[12px] font-medium text-ink">factor breakdown</p>
+            <p className="mt-5 text-[12px] font-medium text-ink">{t("simFactorBreakdown")}</p>
             <ul className="mt-3 space-y-3">
               {factorRows.map((row) => (
                 <li key={row.key}>
                   <div className="mb-1 flex justify-between text-[12px]">
-                    <span className="text-muted">{factorLabels[row.key]}</span>
+                    <span className="text-muted">
+                      {t((`factorLabels_${row.key}`) as unknown as keyof Translations)}
+                    </span>
                     <span className="font-medium text-ink">{row.value}</span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-primary-soft">
@@ -180,15 +186,13 @@ export function BusinessSimulation() {
             </ul>
 
             <ClayButton href="#score" variant="secondary" className="mt-6 w-full">
-              open why?
+              {t("simOpenWhy")}
             </ClayButton>
           </div>
         </div>
       </div>
 
-      <DemoNote>
-        Scores update interactively based on business category dynamics and catchment walkability models.
-      </DemoNote>
+      <DemoNote>{t("simDemoNote")}</DemoNote>
     </Section>
   );
 }

@@ -73,12 +73,15 @@ export const BusinessCatalogPanel: React.FC<BusinessCatalogPanelProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [activeSourceTab, setActiveSourceTab] = useState<"catalog" | "my_businesses">("catalog");
+  const [activeSourceTab, setActiveSourceTab] = useState<
+    "catalog" | "my_businesses"
+  >("catalog");
   const [userBusinesses, setUserBusinesses] = useState<any[]>([]);
   const [loadingUserBusinesses, setLoadingUserBusinesses] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
   const fetchUserBusinesses = useCallback(async () => {
     if (!token) return;
@@ -259,82 +262,81 @@ export const BusinessCatalogPanel: React.FC<BusinessCatalogPanelProps> = ({
             <h2 className="text-lg sm:text-xl font-display font-bold text-ink">
               Business Catalog
             </h2>
-            <div className="flex items-center gap-2 mt-2">
+          </div>
+          <div className="flex items-center gap-2">
+            {/* View Mode Toggle */}
+            <div className="hidden sm:flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200/60">
               <button
                 type="button"
-                onClick={() => setActiveSourceTab("catalog")}
+                onClick={() => setViewMode("grid")}
                 className={cn(
-                  "px-3 py-1 text-xs rounded-lg font-bold transition-all cursor-pointer",
-                  activeSourceTab === "catalog"
-                    ? "bg-primary text-white shadow-xs"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+                  "p-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                  viewMode === "grid"
+                    ? "bg-white text-primary shadow-xs"
+                    : "text-muted hover:text-ink",
                 )}
+                title="Grid View"
               >
-                Katalog Model Usaha
+                <LayoutGrid size={16} />
               </button>
-              {token && (
-                <button
-                  type="button"
-                  onClick={() => setActiveSourceTab("my_businesses")}
-                  className={cn(
-                    "px-3 py-1 text-xs rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5",
-                    activeSourceTab === "my_businesses"
-                      ? "bg-primary text-white shadow-xs"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200",
-                  )}
-                >
-                  Usaha Terdaftar Saya
-                  {userBusinesses.length > 0 && (
-                    <span className="size-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center">
-                      {userBusinesses.length}
-                    </span>
-                  )}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setViewMode("list")}
+                className={cn(
+                  "p-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                  viewMode === "list"
+                    ? "bg-white text-primary shadow-xs"
+                    : "text-muted hover:text-ink",
+                )}
+                title="List View"
+              >
+                <List size={16} />
+              </button>
             </div>
+
+            {/* Close Button */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-muted hover:text-ink transition-colors cursor-pointer"
+              title="Close (Esc)"
+            >
+              <X size={18} />
+            </button>
           </div>
         </div>
-
-        <div className="flex items-center gap-2">
-          {/* View Mode Toggle */}
-          <div className="hidden sm:flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200/60">
-            <button
-              type="button"
-              onClick={() => setViewMode("grid")}
-              className={cn(
-                "p-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
-                viewMode === "grid"
-                  ? "bg-white text-primary shadow-xs"
-                  : "text-muted hover:text-ink",
-              )}
-              title="Grid View"
-            >
-              <LayoutGrid size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("list")}
-              className={cn(
-                "p-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
-                viewMode === "list"
-                  ? "bg-white text-primary shadow-xs"
-                  : "text-muted hover:text-ink",
-              )}
-              title="List View"
-            >
-              <List size={16} />
-            </button>
-          </div>
-
-          {/* Close Button */}
+        <div className="flex items-center gap-2 mt-2">
           <button
             type="button"
-            onClick={onClose}
-            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-muted hover:text-ink transition-colors cursor-pointer"
-            title="Close (Esc)"
+            onClick={() => setActiveSourceTab("catalog")}
+            className={cn(
+              "px-2 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer",
+              activeSourceTab === "catalog"
+                ? "bg-primary text-white shadow-xs"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+            )}
           >
-            <X size={18} />
+            Katalog Model Usaha
           </button>
+          {token && (
+            <button
+              type="button"
+              onClick={() => setActiveSourceTab("my_businesses")}
+              className={cn(
+                "px-2 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer flex items-center gap-1.5",
+                activeSourceTab === "my_businesses"
+                  ? "bg-primary text-white shadow-xs"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+              )}
+            >
+              Usaha Terdaftar Saya
+              {userBusinesses.length > 0 && (
+                <span className="size-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center">
+                  {userBusinesses.length}
+                </span>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -390,14 +392,20 @@ export const BusinessCatalogPanel: React.FC<BusinessCatalogPanelProps> = ({
           {loadingUserBusinesses ? (
             <div className="flex flex-col items-center justify-center py-20 space-y-3">
               <RefreshCw className="size-7 text-primary animate-spin" />
-              <p className="text-xs text-muted font-medium">Memuat usaha terdaftar Anda...</p>
+              <p className="text-xs text-muted font-medium">
+                Memuat usaha terdaftar Anda...
+              </p>
             </div>
           ) : userBusinesses.length === 0 ? (
             <div className="p-8 text-center space-y-3 max-w-md mx-auto">
               <Store size={36} className="mx-auto text-slate-400" />
-              <p className="text-sm font-bold text-ink">Belum Ada Usaha Terdaftar</p>
+              <p className="text-sm font-bold text-ink">
+                Belum Ada Usaha Terdaftar
+              </p>
               <p className="text-xs text-muted">
-                Anda belum mendaftarkan usaha di akun ini. Anda dapat menggunakan tab Katalog Usaha atau mendaftarkan usaha Anda melalui Dashboard.
+                Anda belum mendaftarkan usaha di akun ini. Anda dapat
+                menggunakan tab Katalog Usaha atau mendaftarkan usaha Anda
+                melalui Dashboard.
               </p>
               <button
                 type="button"
@@ -410,7 +418,9 @@ export const BusinessCatalogPanel: React.FC<BusinessCatalogPanelProps> = ({
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {userBusinesses.map((biz) => {
-                const isSelected = selectedTypeId === biz.id || selectedTypeId === biz.business_type_id;
+                const isSelected =
+                  selectedTypeId === biz.id ||
+                  selectedTypeId === biz.business_type_id;
                 return (
                   <div
                     key={biz.id}
@@ -427,18 +437,27 @@ export const BusinessCatalogPanel: React.FC<BusinessCatalogPanelProps> = ({
                         <span className="p-1.5 rounded-lg bg-primary/10 text-primary">
                           <Store size={16} />
                         </span>
-                        <h3 className="text-sm font-bold text-ink truncate">{biz.name}</h3>
+                        <h3 className="text-sm font-bold text-ink truncate">
+                          {biz.name}
+                        </h3>
                       </div>
                       <p className="text-xs text-muted mb-1">
-                        {biz.business_type?.name || "Usaha Terdaftar"} · {biz.business_type?.category || "UMKM"}
+                        {biz.business_type?.name || "Usaha Terdaftar"} ·{" "}
+                        {biz.business_type?.category || "UMKM"}
                       </p>
                       {biz.address && (
-                        <p className="text-[11px] text-slate-500 line-clamp-2">{biz.address}</p>
+                        <p className="text-[11px] text-slate-500 line-clamp-2">
+                          {biz.address}
+                        </p>
                       )}
                     </div>
                     <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                      <span className="text-primary font-semibold">Pilih untuk Simulasi</span>
-                      <span className="text-slate-400">Radius ~{biz.business_type?.default_radius_m || 500}m</span>
+                      <span className="text-primary font-semibold">
+                        Pilih untuk Simulasi
+                      </span>
+                      <span className="text-slate-400">
+                        Radius ~{biz.business_type?.default_radius_m || 500}m
+                      </span>
                     </div>
                   </div>
                 );
@@ -450,209 +469,208 @@ export const BusinessCatalogPanel: React.FC<BusinessCatalogPanelProps> = ({
 
       {/* Catalog Items Container */}
       {activeSourceTab === "catalog" && (
-      <div className="flex-1 overflow-y-auto p-4 sm:p-5">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 space-y-3">
-            <RefreshCw className="size-7 text-primary animate-spin" />
-            <p className="text-xs text-muted font-medium">
-              Loading verified business models from API...
-            </p>
-          </div>
-        ) : error ? (
-          <div className="p-6 rounded-2xl bg-red-50 border border-red-200 text-center space-y-3 max-w-md mx-auto">
-            <AlertCircle size={24} className="mx-auto text-red-500" />
-            <p className="text-sm text-red-600 font-medium">{error}</p>
-            <button
-              type="button"
-              onClick={() => fetchCatalog(search, selectedCategory)}
-              className="px-4 py-1.5 bg-white text-xs font-bold rounded-xl border border-red-200 text-red-700 hover:bg-red-100 transition-colors cursor-pointer"
-            >
-              Retry Request
-            </button>
-          </div>
-        ) : catalogItems.length === 0 ? (
-          <div className="text-center py-16 text-muted text-xs space-y-2">
-            <Store size={32} className="mx-auto text-slate-300 mb-2" />
-            <p className="font-bold text-ink text-sm">
-              No business models found
-            </p>
-            <p>
-              Try searching for a different keyword or select another category
-              filter.
-            </p>
-          </div>
-        ) : viewMode === "grid" ? (
-          /* Grid View */
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-3.5">
-            {catalogItems.map((item) => {
-              const isSelected =
-                selectedTypeId === item.id || selectedTypeId === item.slug;
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20 space-y-3">
+              <RefreshCw className="size-7 text-primary animate-spin" />
+              <p className="text-xs text-muted font-medium">
+                Loading verified business models from API...
+              </p>
+            </div>
+          ) : error ? (
+            <div className="p-6 rounded-2xl bg-red-50 border border-red-200 text-center space-y-3 max-w-md mx-auto">
+              <AlertCircle size={24} className="mx-auto text-red-500" />
+              <p className="text-sm text-red-600 font-medium">{error}</p>
+              <button
+                type="button"
+                onClick={() => fetchCatalog(search, selectedCategory)}
+                className="px-4 py-1.5 bg-white text-xs font-bold rounded-xl border border-red-200 text-red-700 hover:bg-red-100 transition-colors cursor-pointer"
+              >
+                Retry Request
+              </button>
+            </div>
+          ) : catalogItems.length === 0 ? (
+            <div className="text-center py-16 text-muted text-xs space-y-2">
+              <Store size={32} className="mx-auto text-slate-300 mb-2" />
+              <p className="font-bold text-ink text-sm">
+                No business models found
+              </p>
+              <p>
+                Try searching for a different keyword or select another category
+                filter.
+              </p>
+            </div>
+          ) : viewMode === "grid" ? (
+            /* Grid View */
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-3.5">
+              {catalogItems.map((item) => {
+                const isSelected =
+                  selectedTypeId === item.id || selectedTypeId === item.slug;
 
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => handleItemSelect(item)}
-                  className={cn(
-                    "group cursor-pointer overflow-hidden rounded-2xl border bg-white transition-all duration-200",
-                    isSelected
-                      ? "border-primary bg-primary-soft/40 shadow-sm"
-                      : "border-slate-200/80 hover:border-primary/40 hover:shadow-md",
-                  )}
-                >
-                  {/* Image */}
-                  <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
-                    <img
-                      src={
-                        item.image || `/images/business-types/${item.slug}.jpg`
-                      }
-                      alt={item.name}
-                      loading="lazy"
-                      onError={(e) => {
-                        e.currentTarget.src = "/image-placeholder.png";
-                      }}
-                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                    />
-
-                    <span className="absolute left-3 top-3 rounded-lg border border-white/70 bg-white/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-ink backdrop-blur-sm">
-                      {item.scale || "Business"}
-                    </span>
-
-                    {isSelected && (
-                      <span className="absolute right-3 top-3 rounded-full bg-primary px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm">
-                        Selected
-                      </span>
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => handleItemSelect(item)}
+                    className={cn(
+                      "group cursor-pointer overflow-hidden rounded-2xl border bg-white transition-all duration-200",
+                      isSelected
+                        ? "border-primary bg-primary-soft/40 shadow-sm"
+                        : "border-slate-200/80 hover:border-primary/40 hover:shadow-md",
                     )}
-                  </div>
+                  >
+                    {/* Image */}
+                    <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
+                      <img
+                        src={
+                          item.image ||
+                          `/images/business-types/${item.slug}.jpg`
+                        }
+                        alt={item.name}
+                        loading="lazy"
+                        onError={(e) => {
+                          e.currentTarget.src = "/image-placeholder.png";
+                        }}
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                      />
 
-                  {/* Content */}
-                  <div className="flex items-center justify-between gap-3 p-3.5">
-                    <div className="min-w-0">
-                      <h3 className="truncate text-sm font-semibold text-ink transition-colors group-hover:text-primary">
-                        {item.name}
-                      </h3>
+                      <span className="absolute left-3 top-3 rounded-lg border border-white/70 bg-white/90 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-ink backdrop-blur-sm">
+                        {item.scale || "Business"}
+                      </span>
+
+                      {isSelected && (
+                        <span className="absolute right-3 top-3 rounded-full bg-primary px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm">
+                          Selected
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex items-center justify-between gap-3 p-3.5">
+                      <div className="min-w-0">
+                        <h3 className="truncate text-sm font-semibold text-ink transition-colors group-hover:text-primary">
+                          {item.name}
+                        </h3>
+
+                        <p className="mt-1 truncate text-xs text-muted">
+                          {item.category}
+                          <span className="mx-1.5 text-slate-300">·</span>
+                          Radius {item.default_radius_m} m
+                        </p>
+                      </div>
+
+                      <div
+                        className={cn(
+                          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-all",
+                          isSelected
+                            ? "border-primary bg-primary text-white"
+                            : "border-slate-200 text-muted group-hover:border-primary group-hover:text-primary",
+                        )}
+                      >
+                        <span className="text-base leading-none">
+                          {isSelected ? "✓" : "↗"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* List View */
+
+            <div className="space-y-2">
+              {catalogItems.map((item) => {
+                const isSelected =
+                  selectedTypeId === item.id || selectedTypeId === item.slug;
+
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => handleItemSelect(item)}
+                    className={cn(
+                      "group flex cursor-pointer items-center gap-3 rounded-2xl border p-2.5 transition-all duration-200",
+                      isSelected
+                        ? "border-primary/60 bg-primary-soft/40 shadow-sm"
+                        : "border-slate-200/80 bg-white hover:border-primary/40 hover:shadow-sm",
+                    )}
+                  >
+                    {/* Thumbnail */}
+                    <div
+                      className={cn(
+                        "relative h-[68px] w-[84px] shrink-0 overflow-hidden rounded-xl bg-slate-100",
+                        isSelected && "ring-2 ring-primary/20",
+                      )}
+                    >
+                      <img
+                        src={
+                          item.image ||
+                          `/images/business-types/${item.slug}.jpg`
+                        }
+                        alt={item.name}
+                        loading="lazy"
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = "/image-placeholder.png";
+                        }}
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+
+                      {isSelected && (
+                        <div className="absolute inset-0 bg-primary/10" />
+                      )}
+                    </div>
+
+                    {/* Business information */}
+                    <div className="min-w-0 flex-1 py-1">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <h3
+                          className={cn(
+                            "truncate text-sm font-semibold transition-colors",
+                            isSelected ? "text-primary" : "text-ink",
+                          )}
+                        >
+                          {item.name}
+                        </h3>
+
+                        <span className="hidden shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted sm:inline-flex">
+                          {item.scale || "Business"}
+                        </span>
+                      </div>
 
                       <p className="mt-1 truncate text-xs text-muted">
                         {item.category}
-                        <span className="mx-1.5 text-slate-300">·</span>
-                        Radius {item.default_radius_m} m
                       </p>
+
+                      <div className="mt-2 flex items-center gap-1.5 text-[10px] text-muted">
+                        <span className="rounded-md bg-slate-50 px-2 py-1">
+                          Radius {item.default_radius_m} m
+                        </span>
+                      </div>
                     </div>
 
-                    <div
-                      className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-all",
-                        isSelected
-                          ? "border-primary bg-primary text-white"
-                          : "border-slate-200 text-muted group-hover:border-primary group-hover:text-primary",
-                      )}
-                    >
-                      <span className="text-base leading-none">
-                        {isSelected ? "✓" : "↗"}
-                      </span>
+                    {/* Selection indicator */}
+                    <div className="flex shrink-0 items-center pl-1">
+                      <div
+                        className={cn(
+                          "flex h-7 w-7 items-center justify-center rounded-full border transition-all duration-200",
+                          isSelected
+                            ? "border-primary bg-primary text-white shadow-sm"
+                            : "border-slate-200 text-transparent group-hover:border-primary/50",
+                        )}
+                      >
+                        {isSelected ? (
+                          <span className="text-xs font-semibold">✓</span>
+                        ) : (
+                          <span className="h-1.5 w-1.5 rounded-full bg-slate-300 group-hover:bg-primary/50" />
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          /* List View */
-       
-<div className="space-y-2">
-  {catalogItems.map((item) => {
-    const isSelected =
-      selectedTypeId === item.id || selectedTypeId === item.slug;
-
-    return (
-      <div
-        key={item.id}
-        onClick={() => handleItemSelect(item)}
-        className={cn(
-          "group flex cursor-pointer items-center gap-3 rounded-2xl border p-2.5 transition-all duration-200",
-          isSelected
-            ? "border-primary/60 bg-primary-soft/40 shadow-sm"
-            : "border-slate-200/80 bg-white hover:border-primary/40 hover:shadow-sm"
-        )}
-      >
-        {/* Thumbnail */}
-        <div
-          className={cn(
-            "relative h-[68px] w-[84px] shrink-0 overflow-hidden rounded-xl bg-slate-100",
-            isSelected && "ring-2 ring-primary/20"
-          )}
-        >
-          <img
-            src={
-              item.image ||
-              `/images/business-types/${item.slug}.jpg`
-            }
-            alt={item.name}
-            loading="lazy"
-            onError={(e) => {
-              e.currentTarget.onerror = null;
-              e.currentTarget.src =
-                "/image-placeholder.png";
-            }}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-          />
-
-          {isSelected && (
-            <div className="absolute inset-0 bg-primary/10" />
+                );
+              })}
+            </div>
           )}
         </div>
-
-        {/* Business information */}
-        <div className="min-w-0 flex-1 py-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <h3
-              className={cn(
-                "truncate text-sm font-semibold transition-colors",
-                isSelected ? "text-primary" : "text-ink"
-              )}
-            >
-              {item.name}
-            </h3>
-
-            <span className="hidden shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted sm:inline-flex">
-              {item.scale || "Business"}
-            </span>
-          </div>
-
-          <p className="mt-1 truncate text-xs text-muted">
-            {item.category}
-          </p>
-
-          <div className="mt-2 flex items-center gap-1.5 text-[10px] text-muted">
-            <span className="rounded-md bg-slate-50 px-2 py-1">
-              Radius {item.default_radius_m} m
-            </span>
-          </div>
-        </div>
-
-        {/* Selection indicator */}
-        <div className="flex shrink-0 items-center pl-1">
-          <div
-            className={cn(
-              "flex h-7 w-7 items-center justify-center rounded-full border transition-all duration-200",
-              isSelected
-                ? "border-primary bg-primary text-white shadow-sm"
-                : "border-slate-200 text-transparent group-hover:border-primary/50"
-            )}
-          >
-            {isSelected ? (
-              <span className="text-xs font-semibold">✓</span>
-            ) : (
-              <span className="h-1.5 w-1.5 rounded-full bg-slate-300 group-hover:bg-primary/50" />
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  })}
-</div>
-
-        )}
-      </div>
       )}
 
       {/* Footer Bar */}

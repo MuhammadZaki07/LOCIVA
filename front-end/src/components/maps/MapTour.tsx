@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Joyride,
   ACTIONS,
@@ -16,26 +16,68 @@ export interface MapTourProps {
   hasCandidate?: boolean;
 }
 
+const TOUR_STORAGE_KEY = "lociva_map_tour_completed_v1";
+
+const markTourCompleted = (): void => {
+  try {
+    localStorage.setItem(TOUR_STORAGE_KEY, "1");
+  } catch {
+    /* noop */
+  }
+};
+
 export const MapTour: React.FC<MapTourProps> = ({
   run,
   onFinish,
   isLoggedIn,
 }) => {
   const [stepIndex, setStepIndex] = useState(0);
+  const prevRunRef = useRef(run);
 
-  // Reset to step 0 whenever the tour is launched
+  // Reset to step 0 whenever the tour is (re)launched (run false -> true).
+  // This is an intentional one-time sync so replays start at the first step.
   useEffect(() => {
-    if (run) {
+    if (run && !prevRunRef.current) {
       setStepIndex(0);
     }
+    prevRunRef.current = run;
   }, [run]);
 
-  // Clean unmount safety
-  useEffect(() => {
-    return () => {
-      setStepIndex(0);
-    };
-  }, []);
+  const handleFinishOrSkip = useCallback(() => {
+    markTourCompleted();
+    setStepIndex(0);
+    onFinish();
+  }, [onFinish]);
+
+  const handleJoyrideEvent = useCallback<EventHandler>(
+    (data) => {
+      const { action, index, status, type } = data;
+
+      // Handle tour exit (finish, skip, or close button / ESC)
+      if (
+        status === STATUS.FINISHED ||
+        status === STATUS.SKIPPED ||
+        action === ACTIONS.CLOSE ||
+        action === ACTIONS.SKIP
+      ) {
+        handleFinishOrSkip();
+        return;
+      }
+
+      // Handle controlled step progression
+      if (type === EVENTS.STEP_AFTER) {
+        if (action === ACTIONS.NEXT) {
+          setStepIndex(index + 1);
+        } else if (action === ACTIONS.PREV) {
+          setStepIndex(Math.max(0, index - 1));
+        }
+      } else if (type === EVENTS.TARGET_NOT_FOUND) {
+        // If a target is unexpectedly absent, advance safely to prevent tour freezing
+        setStepIndex((prev) => Math.min(prev + 1, steps.length - 1));
+      }
+    },
+    [handleFinishOrSkip]
+  );
 
   // Stable steps using reliably mounted DOM target selectors
   const steps: Step[] = [
@@ -44,7 +86,6 @@ export const MapTour: React.FC<MapTourProps> = ({
       title: "1. Pilih Model Usaha",
       content:
         "Buka Katalog Usaha untuk memilih jenis UMKM (seperti Warung Kopi, Laundry, Mart) atau pilih dari usaha terdaftar Anda.",
-      disableBeacon: true,
       placement: "right",
     },
     {
@@ -81,37 +122,6 @@ export const MapTour: React.FC<MapTourProps> = ({
     });
   }
 
-  const handleJoyrideEvent = useCallback<EventHandler>(
-    (data) => {
-      const { action, index, status, type } = data;
-
-      // Handle tour exit (finish, skip, or close button / ESC)
-      if (
-        status === STATUS.FINISHED ||
-        status === STATUS.SKIPPED ||
-        action === ACTIONS.CLOSE ||
-        action === ACTIONS.SKIP
-      ) {
-        setStepIndex(0);
-        onFinish();
-        return;
-      }
-
-      // Handle controlled step progression
-      if (type === EVENTS.STEP_AFTER) {
-        if (action === ACTIONS.NEXT) {
-          setStepIndex(index + 1);
-        } else if (action === ACTIONS.PREV) {
-          setStepIndex(Math.max(0, index - 1));
-        }
-      } else if (type === EVENTS.TARGET_NOT_FOUND) {
-        // If a target is unexpectedly absent, advance safely to prevent tour freezing
-        setStepIndex((prev) => Math.min(prev + 1, steps.length - 1));
-      }
-    },
-    [onFinish, steps.length]
-  );
-
   return (
     <Joyride
       steps={steps}
@@ -124,21 +134,36 @@ export const MapTour: React.FC<MapTourProps> = ({
         textColor: "#1e293b",
         backgroundColor: "#ffffff",
         arrowColor: "#ffffff",
-        overlayColor: "rgba(15, 23, 42, 0.65)",
+        overlayColor: "rgba(2, 6, 23, 0.90)",
         zIndex: 10000,
         showProgress: true,
         targetWaitTimeout: 1500,
+        spotlightClicks: true,
       }}
       styles={{
         overlay: {
           zIndex: 10000,
         },
         tooltip: {
+          zIndex: 10001,
           borderRadius: "1rem",
           padding: "1rem",
           maxWidth: "360px",
           boxShadow:
-            "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
+            "0 20px 25px -5px rgb(0 0 0 / 0.2), 0 8px 10px -6px rgb(0 0 0 / 0.15)",
+        },
+        beacon: {
+          zIndex: 10002,
+          width: 14,
+          height: 14,
+          backgroundColor: "#4f46e5",
+          border: "2.5px solid #ffffff",
+          boxShadow:
+            "0 0 0 4px rgba(79, 70, 229, 0.35), 0 2px 8px rgba(0, 0, 0, 0.25)",
+        },
+        highlightElement: {
+          outline: "3px solid #4f46e5",
+          outlineOffset: "3px",
         },
         buttonPrimary: {
           backgroundColor: "#4f46e5",
