@@ -274,7 +274,7 @@ export default function AdminSystemHealth() {
                 {totalAuditPages > 1 && (
                   <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-[11.5px] text-muted">
                     <span>
-                      halaman {auditPage} dari {totalAuditPages} ({auditTotal} total audit log) (total {auditLogs.length} jejak audit)
+                      halaman {auditPage} dari {totalAuditPages} (total {auditLogs.length} jejak audit)
                     </span>
                     <div className="flex items-center gap-1">
                       <ClayButton

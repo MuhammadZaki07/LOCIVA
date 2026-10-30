@@ -335,8 +335,10 @@ export default function UserDashboard() {
       if (typesResult.status === "fulfilled") {
         const data = typesResult.value.data;
 
-        const types: BusinessTypeItem[] = Array.isArray(data?.data?.Data)
-          ? data.data.Data
+        const types: BusinessTypeItem[] = Array.isArray(data?.data?.data)
+          ? data.data.data
+          : Array.isArray(data?.data)
+          ? data.data
           : [];
 
         setBusinessTypes(types);
@@ -1602,11 +1604,12 @@ export default function UserDashboard() {
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
                   {imagePreview ? (
                     <div className="relative mb-3">
-                      <img
-                        src={imagePreview}
-                        alt="Business photo preview"
-                        className="h-48 w-full rounded-xl object-cover"
-                      />
+                       <img
+                         key={imagePreview}
+                         src={imagePreview}
+                         alt="Business photo preview"
+                         className="h-48 w-full rounded-xl object-cover"
+                       />
 
                       <button
                         type="button"
@@ -1661,8 +1664,9 @@ export default function UserDashboard() {
                           URL.revokeObjectURL(imagePreview);
                         }
 
-                        setImageFile(file);
-                        setImagePreview(URL.createObjectURL(file));
+                         setImageFile(file);
+                         setImagePreview(URL.createObjectURL(file));
+                         e.target.value = "";
                       }}
                     />
                   </label>

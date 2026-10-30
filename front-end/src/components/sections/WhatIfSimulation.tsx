@@ -3,6 +3,7 @@ import { locations, type LocationId } from "../../data/mock";
 import { useCountUp } from "../../hooks/useCountUp";
 import { DemoNote, Eyebrow, Section } from "../ui/Section";
 import { Sliders } from "lucide-react";
+import { useLocale } from "@/lib/useLocale";
 
 type BusinessOption = "cafe" | "food cart" | "retail";
 type MarketOption = "mixed" | "students" | "office workers";
@@ -10,13 +11,14 @@ type HoursOption = "daytime (07-17)" | "evening rush (16-23)" | "late night (18-
 type RadiusOption = "300 m" | "500 m" | "800 m";
 
 export function WhatIfSimulation() {
+  const { t } = useLocale();
   const [selectedPlace, setSelectedPlace] = useState<LocationId>("a");
   const [businessType, setBusinessType] = useState<BusinessOption>("cafe");
   const [market, setMarket] = useState<MarketOption>("mixed");
   const [hours, setHours] = useState<HoursOption>("daytime (07-17)");
   const [radius, setRadius] = useState<RadiusOption>("500 m");
 
-  // Multiplier logic for levers
+  // Multiplier logic for levers (frontend demonstration model only)
   const extraModifier = useMemo(() => {
     let mod = 0;
     if (businessType === "food cart") mod += 4;
@@ -49,12 +51,15 @@ export function WhatIfSimulation() {
   return (
     <Section>
       <div className="max-w-xl">
-        <Eyebrow>what-if simulation</Eyebrow>
+        <Eyebrow>{t("whatifEyebrow")}</Eyebrow>
         <h2 className="font-display text-[28px] leading-snug font-medium tracking-[-0.02em] text-ink md:text-[32px]">
-          What if you changed the location?
+          {t("whatifHeadline")}
         </h2>
         <p className="mt-3 text-[15px] leading-7 text-muted">
-          same business, different area. Compare candidate sites side-by-side or adjust operational parameters to see how the score recalculates.
+          {t("whatifBody")}
+        </p>
+        <p className="mt-2 text-[11px] leading-5 text-muted">
+          {t("whatifSampleData")}
         </p>
       </div>
 
@@ -93,13 +98,13 @@ export function WhatIfSimulation() {
       <div className="clay mt-6 rounded-[16px] p-5">
         <div className="flex items-center gap-2 border-b border-[#ececf6] pb-3 text-[13px] font-medium text-ink">
           <Sliders size={14} className="text-primary" />
-          <span>recalculate variables</span>
+          <span>{t("whatifRecalculate")}</span>
         </div>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 text-[12px]">
           {/* Business Type */}
           <div>
-            <p className="mb-1.5 font-medium text-muted">business type</p>
+            <p className="mb-1.5 font-medium text-muted">{t("whatifBusinessType")}</p>
             <div className="flex flex-col gap-1">
               {(["cafe", "food cart", "retail"] as BusinessOption[]).map((val) => (
                 <button
@@ -120,7 +125,7 @@ export function WhatIfSimulation() {
 
           {/* Target Market */}
           <div>
-            <p className="mb-1.5 font-medium text-muted">target market</p>
+            <p className="mb-1.5 font-medium text-muted">{t("whatifTargetMarket")}</p>
             <div className="flex flex-col gap-1">
               {(["mixed", "students", "office workers"] as MarketOption[]).map((val) => (
                 <button
@@ -141,28 +146,30 @@ export function WhatIfSimulation() {
 
           {/* Operating Hours */}
           <div>
-            <p className="mb-1.5 font-medium text-muted">operating hours</p>
+            <p className="mb-1.5 font-medium text-muted">{t("whatifOperatingHours")}</p>
             <div className="flex flex-col gap-1">
-              {(["daytime (07-17)", "evening rush (16-23)", "late night (18-02)"] as HoursOption[]).map((val) => (
-                <button
-                  key={val}
-                  type="button"
-                  onClick={() => setHours(val)}
-                  className={`clay-press rounded-[8px] px-2.5 py-1.5 text-left ${
-                    hours === val
-                      ? "clay-primary text-white"
-                      : "clay-soft text-ink"
-                  }`}
-                >
-                  {val}
-                </button>
-              ))}
+              {(["daytime (07-17)", "evening rush (16-23)", "late night (18-02)"] as HoursOption[]).map(
+                (val) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setHours(val)}
+                    className={`clay-press rounded-[8px] px-2.5 py-1.5 text-left ${
+                      hours === val
+                        ? "clay-primary text-white"
+                        : "clay-soft text-ink"
+                    }`}
+                  >
+                    {val}
+                  </button>
+                ),
+              )}
             </div>
           </div>
 
           {/* Radius */}
           <div>
-            <p className="mb-1.5 font-medium text-muted">radius</p>
+            <p className="mb-1.5 font-medium text-muted">{t("whatifRadius")}</p>
             <div className="flex flex-col gap-1">
               {(["300 m", "500 m", "800 m"] as RadiusOption[]).map((val) => (
                 <button
@@ -183,9 +190,7 @@ export function WhatIfSimulation() {
         </div>
       </div>
 
-      <DemoNote>
-        Demonstration model: altering levers dynamically updates estimated scores for all three locations simultaneously.
-      </DemoNote>
+      <DemoNote>{t("whatifDemoNote")}</DemoNote>
     </Section>
   );
 }

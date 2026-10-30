@@ -63,7 +63,7 @@ export default function MainLayout() {
             </Link>
 
             <Link
-              to="/"
+              to="/view-maps"
               className="flex items-center gap-1.5 whitespace-nowrap text-[13px] font-medium text-muted no-underline transition-colors hover:text-ink"
             >
               <Compass size={14} className="text-primary" />

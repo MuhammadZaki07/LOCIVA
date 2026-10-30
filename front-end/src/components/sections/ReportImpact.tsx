@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useCountUp } from "../../hooks/useCountUp";
 import { DemoNote, Eyebrow, Section } from "../ui/Section";
+import { useLocale } from "@/lib/useLocale";
 
 export function ReportImpact() {
+  const { t } = useLocale();
   const [includeCivicSignals, setIncludeCivicSignals] = useState(true);
   const score = includeCivicSignals ? 74 : 82;
   const animatedScore = useCountUp(score);
@@ -11,12 +13,12 @@ export function ReportImpact() {
     <Section>
       <div className="grid items-center gap-10 lg:grid-cols-2">
         <div>
-          <Eyebrow>area condition as a signal</Eyebrow>
+          <Eyebrow>{t("impactEyebrow")}</Eyebrow>
           <h2 className="font-display text-[28px] leading-snug font-medium tracking-[-0.02em] text-ink md:text-[32px]">
-            Local problems can change local decisions.
+            {t("impactHeadline")}
           </h2>
           <p className="mt-4 max-w-md text-[15px] leading-7 text-muted">
-            Community reports do not automatically decide whether a business succeeds or fails. Instead, they act as an area-condition factor — an empirical signal highlighting recurring accessibility or drainage issues before you sign a commercial lease.
+            {t("impactBody")}
           </p>
 
           {/* Before / After toggle controls */}
@@ -30,7 +32,7 @@ export function ReportImpact() {
                   : "clay text-ink"
               }`}
             >
-              before area condition signals
+              {t("impactBefore")}
             </button>
             <button
               type="button"
@@ -41,7 +43,7 @@ export function ReportImpact() {
                   : "clay text-ink"
               }`}
             >
-              after area condition signals
+              {t("impactAfter")}
             </button>
           </div>
         </div>
@@ -50,7 +52,9 @@ export function ReportImpact() {
         <div className="clay rounded-[18px] p-6 sm:p-7">
           <div className="flex items-center justify-between border-b border-[#ececf6] pb-3.5">
             <p className="text-[12px] font-medium text-muted">
-              {includeCivicSignals ? "composite score · civic signals factored" : "baseline market score · raw commercial data"}
+              {includeCivicSignals
+                ? t("impactComposite")
+                : t("impactBaseline")}
             </p>
             <span
               className={`rounded-[6px] px-2 py-0.5 text-[11px] font-medium ${
@@ -59,7 +63,7 @@ export function ReportImpact() {
                   : "bg-[#e8f6ee] text-potential"
               }`}
             >
-              {includeCivicSignals ? "consideration" : "potential"}
+              {includeCivicSignals ? t("simTone_consideration") : t("simTone_potential")}
             </span>
           </div>
 
@@ -73,36 +77,41 @@ export function ReportImpact() {
           {/* Factor Breakdown Grid */}
           <div className="mt-5 grid grid-cols-2 gap-3 text-[13px]">
             <div className="clay-soft rounded-[12px] p-3.5">
-              <p className="text-[11px] font-medium text-muted">market potential</p>
+              <p className="text-[11px] font-medium text-muted">{t("impactMarketPotential")}</p>
               <p className="mt-1 text-[13px] font-medium text-potential">
                 strong (86 / 100)
               </p>
-              <p className="mt-1 text-[11px] text-muted">footfall & population remain intact</p>
+              <p className="mt-1 text-[11px] text-muted">
+                footfall & population remain intact
+              </p>
             </div>
             <div className="clay-soft rounded-[12px] p-3.5">
-              <p className="text-[11px] font-medium text-muted">area condition signal</p>
+              <p className="text-[11px] font-medium text-muted">{t("impactAreaCondition")}</p>
               <p className={`mt-1 text-[13px] font-medium ${includeCivicSignals ? "text-warning" : "text-ink"}`}>
-                {includeCivicSignals ? "recurring reports (-8 pts)" : "not yet factored"}
+                {includeCivicSignals ? "active reports (-8 pts)" : "not yet factored"}
               </p>
               <p className="mt-1 text-[11px] text-muted">
-                {includeCivicSignals ? "road crack & drainage overflow" : "standard infrastructure assumed"}
+                {includeCivicSignals
+                  ? "recurring road & drainage reports lower the opportunity score"
+                  : "standard infrastructure assumed"}
               </p>
             </div>
           </div>
 
           {/* Synthesis Note */}
           <div className="clay-soft mt-5 rounded-[12px] p-4">
-            <p className="text-[11px] font-medium text-primary">lociva synthesis</p>
+            <p className="text-[11px] font-medium text-primary">{t("impactSynthesis")}</p>
             <p className="mt-1 text-[13.5px] leading-relaxed text-ink">
               {includeCivicSignals
-                ? "Market potential remains strong, but recurring infrastructure reports may affect accessibility."
+                ? "Market potential remains strong, but recurring infrastructure reports reduce the opportunity score (up to -20 pts)."
                 : "Demographic signals alone indicate an attractive market opportunity without ground verification."}
             </p>
           </div>
 
-          <DemoNote>
-            The shift from 82 to 74 demonstrates how citizen data serves as an empirical signal in location analysis.
-          </DemoNote>
+          <DemoNote>{t("impactDemoNote")}</DemoNote>
+          <p className="mt-1 text-[11px] leading-5 text-muted">
+            {t("impactSampleData")}
+          </p>
         </div>
       </div>
     </Section>

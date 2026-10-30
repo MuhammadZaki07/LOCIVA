@@ -133,6 +133,11 @@ class UserController extends Controller
 
         DB::beginTransaction();
         try {
+            // Safely remove related records before deleting the user
+            $data->reports()->delete();
+            $data->vendorRoutes()->delete();
+            $data->businesses()->delete();
+
             $delete = $this->userRepo->delete($id);
 
             DB::commit();

@@ -273,7 +273,7 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             {candidateExists && onAnalyze && (
               <button
                 type="button"
-                data-tour="analyze-btn"
+                data-tour="analysis-btn"
                 onClick={onAnalyze}
                 disabled={isAnalyzing || result?.isValidLocation === false}
                 className={cn(

@@ -5,6 +5,9 @@ import {
   buildAreaAnalysisSystemMessage,
   buildAreaAnalysisPrompt,
   convertAiAreaResponseToWaypoints,
+  convertCandidateToRouteCalculation,
+  convertCandidateToWaypoints,
+  type AiRouteCandidateItem,
   type AiRouteCandidate,
   type AiAreaRouteResponse,
 } from "../aiRoutePlanner";
@@ -284,5 +287,74 @@ describe("AI Route Planner", () => {
     expect(waypoints[3].lat).toBe(-7.961);
     expect(waypoints[3].lng).toBe(112.608);
     expect(waypoints[3].stop_duration).toBe(15);
+  });
+
+  it("converts AiRouteCandidateItem to RouteCalculationResult and RouteWaypoint[]", () => {
+    const candidate: AiRouteCandidateItem = {
+      id: "route_opportunity",
+      name: "Rute Peluang Maksimal",
+      profile: "opportunity",
+      distance_km: 6.8,
+      duration_minutes: 65,
+      scores: {
+        business_relevance: 90,
+        activity_potential: 85,
+        road_accessibility: 88,
+        competition_opportunity: 75,
+        route_efficiency: 80,
+        total_score: 84.7,
+      },
+      stops: [
+        {
+          id: "start",
+          name: "Titik Awal (Pangkalan)",
+          latitude: -7.9797,
+          longitude: 112.6304,
+          category: "start",
+          reason: "Pusat operasi",
+          wait_duration_minutes: 0,
+          order: 1,
+        },
+        {
+          id: "poi-1",
+          name: "Pasar Klojen",
+          latitude: -7.9750,
+          longitude: 112.6350,
+          category: "market",
+          reason: "Ramai pembeli pagi-siang",
+          wait_duration_minutes: 30,
+          order: 2,
+        },
+        {
+          id: "end",
+          name: "Titik Awal (Pangkalan)",
+          latitude: -7.9797,
+          longitude: 112.6304,
+          category: "end",
+          reason: "Rute kembali ke pangkalan",
+          wait_duration_minutes: 0,
+          order: 3,
+        },
+      ],
+      route_coordinates: [
+        [-7.9797, 112.6304],
+        [-7.9750, 112.6350],
+        [-7.9797, 112.6304],
+      ],
+    };
+
+    const calcResult = convertCandidateToRouteCalculation(candidate);
+    expect(calcResult.coordinates).toEqual(candidate.route_coordinates);
+    expect(calcResult.distanceKm).toBe(6.8);
+    expect(calcResult.durationMinutes).toBe(65);
+    expect(calcResult.summary).toContain("Rute Peluang Maksimal");
+
+    const waypoints = convertCandidateToWaypoints(candidate);
+    expect(waypoints.length).toBe(3);
+    expect(waypoints[0].name).toBe("Titik Awal (Pangkalan)");
+    expect(waypoints[0].lat).toBe(-7.9797);
+    expect(waypoints[1].name).toBe("Pasar Klojen");
+    expect(waypoints[1].stop_duration).toBe(30);
+    expect(waypoints[2].lat).toBe(-7.9797);
   });
 });

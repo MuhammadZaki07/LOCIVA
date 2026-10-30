@@ -8,6 +8,7 @@ use App\Helpers\ApiResponse;
 use App\Helpers\PaginationHelper;
 use App\Http\Requests\BusinessMapQueryRequest;
 use App\Http\Requests\SaveCandidateLocationRequest;
+use App\Http\Requests\SimulationSessionListRequest;
 use App\Http\Requests\UpdateBusinessRequest;
 use App\Http\Resources\BusinessMapResource;
 use App\Http\Resources\BusinessResource;
@@ -97,7 +98,11 @@ class BusinessController extends Controller
                 201,
             );
         } catch (Throwable $th) {
-            return ApiResponse::error($th->getMessage());
+            $code = ($th instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface)
+                ? $th->getStatusCode()
+                : (is_numeric($th->getCode()) && $th->getCode() >= 400 && $th->getCode() < 600 ? (int) $th->getCode() : 400);
+
+            return ApiResponse::error($th->getMessage(), $code);
         }
     }
 
@@ -118,7 +123,11 @@ class BusinessController extends Controller
                 "Business details retrieved successfully",
             );
         } catch (Throwable $th) {
-            return ApiResponse::error($th->getMessage());
+            $code = ($th instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface)
+                ? $th->getStatusCode()
+                : (is_numeric($th->getCode()) && $th->getCode() >= 400 && $th->getCode() < 600 ? (int) $th->getCode() : 400);
+
+            return ApiResponse::error($th->getMessage(), $code);
         }
     }
 
@@ -155,7 +164,11 @@ class BusinessController extends Controller
                 "Data bisnis berhasil diperbarui",
             );
         } catch (Throwable $th) {
-            return ApiResponse::error($th->getMessage());
+            $code = ($th instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface)
+                ? $th->getStatusCode()
+                : (is_numeric($th->getCode()) && $th->getCode() >= 400 && $th->getCode() < 600 ? (int) $th->getCode() : 400);
+
+            return ApiResponse::error($th->getMessage(), $code);
         }
     }
 
@@ -188,7 +201,11 @@ class BusinessController extends Controller
                 "Bisnis berhasil dihapus dari sistem",
             );
         } catch (Throwable $th) {
-            return ApiResponse::error($th->getMessage());
+            $code = ($th instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface)
+                ? $th->getStatusCode()
+                : (is_numeric($th->getCode()) && $th->getCode() >= 400 && $th->getCode() < 600 ? (int) $th->getCode() : 400);
+
+            return ApiResponse::error($th->getMessage(), $code);
         }
     }
 
@@ -208,7 +225,11 @@ class BusinessController extends Controller
                 "Candidate location simulation saved successfully",
             );
         } catch (Throwable $th) {
-            return ApiResponse::error($th->getMessage());
+            $code = ($th instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface)
+                ? $th->getStatusCode()
+                : (is_numeric($th->getCode()) && $th->getCode() >= 400 && $th->getCode() < 600 ? (int) $th->getCode() : 400);
+
+            return ApiResponse::error($th->getMessage(), $code);
         }
     }
 
@@ -223,6 +244,9 @@ class BusinessController extends Controller
                 (string) Auth::id(),
                 $validated["search"] ?? "",
                 (int) ($validated["per_page"] ?? 10),
+                $validated["business_id"] ?? null,
+                $validated["business_type_id"] ?? null,
+                $validated["status"] ?? null,
             );
 
             return ApiResponse::success(
@@ -230,7 +254,11 @@ class BusinessController extends Controller
                 "Saved simulation sessions retrieved successfully",
             );
         } catch (Throwable $th) {
-            return ApiResponse::error($th->getMessage());
+            $code = ($th instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface)
+                ? $th->getStatusCode()
+                : (is_numeric($th->getCode()) && $th->getCode() >= 400 && $th->getCode() < 600 ? (int) $th->getCode() : 400);
+
+            return ApiResponse::error($th->getMessage(), $code);
         }
     }
 
@@ -244,7 +272,11 @@ class BusinessController extends Controller
 
             return ApiResponse::success(null, "Sesi simulasi berhasil dihapus");
         } catch (Throwable $th) {
-            return ApiResponse::error($th->getMessage());
+            $code = ($th instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface)
+                ? $th->getStatusCode()
+                : (is_numeric($th->getCode()) && $th->getCode() >= 400 && $th->getCode() < 600 ? (int) $th->getCode() : 400);
+
+            return ApiResponse::error($th->getMessage(), $code);
         }
     }
 
@@ -268,7 +300,11 @@ class BusinessController extends Controller
                 "Data" => BusinessResource::collection($fetch),
             ]);
         } catch (Throwable $th) {
-            return ApiResponse::error($th->getMessage());
+            $code = ($th instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface)
+                ? $th->getStatusCode()
+                : (is_numeric($th->getCode()) && $th->getCode() >= 400 && $th->getCode() < 600 ? (int) $th->getCode() : 400);
+
+            return ApiResponse::error($th->getMessage(), $code);
         }
     }
 }

@@ -1,94 +1,118 @@
-import { useState } from "react";
-import { Eyebrow, Section } from "../ui/Section";
-import { aiScenarios } from "../../data/mock";
-import { MessageSquare } from "lucide-react";
+import { Eyebrow, Section, DemoNote } from "../ui/Section";
+import { Route, Compass, Target, CheckCircle2 } from "lucide-react";
+import { useLocale } from "@/lib/useLocale";
 
 export function AISection() {
-  const [activeScenarioIdx, setActiveScenarioIdx] = useState(0);
-  const scenario = aiScenarios[activeScenarioIdx];
+  const { t } = useLocale();
+
+  const aiFeatures = [
+    {
+      number: t("aiRouteNumber"),
+      title: t("aiRouteTitle"),
+      badge: t("aiRouteBadge"),
+      body: t("aiRouteBody"),
+      icon: Route,
+      points: [
+        t("aiRoutePoint1"),
+        t("aiRoutePoint2"),
+        t("aiRoutePoint3"),
+      ],
+      example: t("aiRouteExample"),
+    },
+    {
+      number: t("aiBusinessNumber"),
+      title: t("aiBusinessTitle"),
+      badge: t("aiBusinessBadge"),
+      body: t("aiBusinessBody"),
+      icon: Compass,
+      points: [
+        t("aiBusinessPoint1"),
+        t("aiBusinessPoint2"),
+        t("aiBusinessPoint3"),
+      ],
+      example: t("aiBusinessExample"),
+    },
+    {
+      number: t("aiDiffNumber"),
+      title: t("aiDiffTitle"),
+      badge: t("aiDiffBadge"),
+      body: t("aiDiffBody"),
+      icon: Target,
+      points: [
+        t("aiDiffPoint1"),
+        t("aiDiffPoint2"),
+        t("aiDiffPoint3"),
+      ],
+      example: t("aiDiffExample"),
+    },
+  ];
 
   return (
-    <Section>
-      <div className="grid items-start gap-10 lg:grid-cols-[1fr_1fr]">
-        <div>
-          <Eyebrow>strategic enhancement</Eyebrow>
-          <h2 className="font-display text-[28px] leading-snug font-medium tracking-[-0.02em] text-ink md:text-[32px]">
-            Turn analysis into action.
-          </h2>
-          <p className="mt-4 max-w-md text-[15px] leading-7 text-muted">
-            LOCIVA uses AI strictly as an interpretive enhancement after hard geospatial metrics and community reports are gathered. It helps entrepreneurs explore tactical adaptations rather than replacing raw ground data.
-          </p>
-
-          <div className="mt-6">
-            <p className="font-display text-[22px] font-medium text-ink">
-              Data first. AI second.
-            </p>
-            <p className="mt-1 text-[13px] text-muted">
-              AI interprets and suggests strategic differentiation; empirical data provides the baseline truth.
-            </p>
-          </div>
-
-          {/* Interactive query buttons */}
-          <div className="mt-6">
-            <p className="text-[12px] font-medium text-muted">test user inquiries:</p>
-            <div className="mt-2 flex flex-col gap-1.5">
-              {aiScenarios.map((item, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setActiveScenarioIdx(idx)}
-                  className={`clay-press rounded-[10px] p-2.5 text-left text-[12.5px] transition-all ${
-                    activeScenarioIdx === idx
-                      ? "clay-primary text-white"
-                      : "clay-soft text-ink"
-                  }`}
-                >
-                  "{item.query}"
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* AI Dialogue & Tactical Advice Card in Claymorphism */}
-        <div className="clay rounded-[18px] p-5 sm:p-6">
-          <div className="flex items-center justify-between border-b border-[#ececf6] pb-3">
-            <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-soft text-primary">
-                <MessageSquare size={13} />
-              </span>
-              <p className="text-[12px] font-medium text-ink">strategy assist · simulated consultation</p>
-            </div>
-            <span className="text-[11px] text-muted">grounded model</span>
-          </div>
-
-          {/* User query bubble */}
-          <div className="clay-soft mt-4 rounded-[14px] p-3.5">
-            <p className="text-[11px] font-medium text-muted">you</p>
-            <p className="mt-1 text-[14px] font-medium text-ink">"{scenario.query}"</p>
-            <p className="mt-1 text-[11px] text-primary">{scenario.context}</p>
-          </div>
-
-          {/* AI Response Bullet List */}
-          <div className="mt-4 space-y-2.5">
-            <p className="text-[12px] font-medium text-muted">lociva tactical adaptations:</p>
-            {scenario.strategies.map((strat, i) => (
-              <div
-                key={i}
-                className="clay-soft rounded-[12px] p-3 text-[13px] leading-relaxed text-ink"
-              >
-                <div className="flex items-center gap-1.5 font-medium text-ink">
-                  <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                  <span>{strat.title}</span>
-                </div>
-                <p className="mt-1 pl-3 text-[12px] leading-5 text-muted">
-                  {strat.detail}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
+    <Section id="ai">
+      <div className="max-w-2xl">
+        <Eyebrow>{t("aiEyebrow")}</Eyebrow>
+        <h2 className="font-display text-[28px] leading-snug font-medium tracking-[-0.02em] text-ink md:text-[32px]">
+          {t("aiHeadline")}
+        </h2>
+        <p className="mt-3 text-[15px] leading-7 text-muted">
+          {t("aiBody")}
+        </p>
       </div>
+
+      <div className="mt-8 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {aiFeatures.map((feature) => {
+          const Icon = feature.icon;
+          return (
+            <article
+              key={feature.number}
+              className="clay clay-lift flex flex-col justify-between rounded-[20px] p-6 transition-all duration-200"
+            >
+              <div>
+                {/* Header: Number, Category Badge, and Icon */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-primary text-[12px] font-semibold text-white shadow-sm">
+                      {feature.number}
+                    </span>
+                    <span className="rounded-[6px] bg-canvas px-2.5 py-1 text-[11px] font-medium text-muted border border-[#ececf6]">
+                      {feature.badge}
+                    </span>
+                  </div>
+                  <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-primary-soft text-primary">
+                    <Icon size={18} />
+                  </div>
+                </div>
+
+                {/* Title & Description */}
+                <h3 className="mt-5 font-display text-[20px] font-medium tracking-[-0.01em] text-ink">
+                  {feature.title}
+                </h3>
+                <p className="mt-2.5 text-[13.5px] leading-6 text-muted">
+                  {feature.body}
+                </p>
+
+                {/* Key Points */}
+                <ul className="mt-5 space-y-2.5 border-t border-[#ececf6] pt-4">
+                  {feature.points.map((point, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-[12.5px] leading-5 text-muted">
+                      <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-primary" />
+                      <span>{point}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Practical Example Note */}
+              <div className="mt-6 rounded-[12px] bg-canvas/80 p-3 border border-[#ececf6] text-[12px] leading-5">
+                <span className="font-medium text-ink">{t("aiExampleLabel")}: </span>
+                <span className="text-muted">{feature.example}</span>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      <DemoNote>{t("aiDemoNote")}</DemoNote>
     </Section>
   );
 }

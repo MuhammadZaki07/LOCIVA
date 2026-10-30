@@ -1,0 +1,33 @@
+# LOCIVA — Location Intelligence & Civic Analytics
+
+> LOCIVA is a web platform that combines interactive maps, spatial data, business analysis, and community reports to help users evaluate business locations and understand area conditions before making decisions.
+
+## About
+- [Homepage](https://lociva.vercel.app/): Overview of LOCIVA's location intelligence platform, features, and how it works.
+- [Interactive Map](https://lociva.vercel.app/view-maps): Explore the interactive map with POI layers, business analysis, and community reports.
+
+## Key Features
+- Location potential scoring based on population, pedestrian activity, accessibility, target market, competition, and area compatibility.
+- Interactive business simulator: drag-and-drop business types on the map to evaluate locations.
+- What-if simulation: compare multiple locations side by side.
+- Civic reports: community-submitted infrastructure issues that feed into area-condition signals.
+- Vendor routes: plan multi-stop selling routes on real OSM road networks via OSRM.
+- Saved candidates: save and compare candidate locations.
+- BPS demographic data integration for supported administrative regions.
+- AI-assisted business differentiation suggestions.
+
+## Data Sources
+- OpenStreetMap (POI, roads, land use) — public map data, coverage varies by region.
+- OSRM (Open Source Routing Machine) — real road routing via public demo server.
+- Nominatim — place search and geocoding.
+- Badan Pusat Statistik (BPS) — official population and density statistics for supported regions.
+- LOCIVA internal database — registered businesses and internal POIs.
+- Community reports — citizen-submitted infrastructure reports with photos and verification.
+
+## Limitations
+- Scores are decision-support indices, not revenue guarantees.
+- No real-time traffic data.
+- OSM coverage varies by region and is not complete.
+- BPS data available only for supported administrative regions (Malang, Bandung, Jakarta, and surrounding regencies).
+- AI suggestions are enhancement layer, not the score producer.
+- Routes are private by default; sharing is explicit opt-in. No real-time tracking.

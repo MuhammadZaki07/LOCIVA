@@ -33,6 +33,7 @@ interface Props {
   className?: string;
   compact?: boolean;
   onSelectMarker?: (id: string) => void;
+  sampleData?: boolean;
 }
 
 interface MarkerData {

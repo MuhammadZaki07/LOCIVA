@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Joyride,
   ACTIONS,
@@ -16,36 +16,33 @@ export interface MapTourProps {
   hasCandidate?: boolean;
 }
 
-export const MapTour: React.FC<MapTourProps> = ({
-  run,
-  onFinish,
-  isLoggedIn,
-}) => {
-  const [stepIndex, setStepIndex] = useState(0);
+export const TOUR_STORAGE_KEY = "lociva_map_tour_completed_v1";
 
-  // Reset to step 0 whenever the tour is launched
-  useEffect(() => {
-    if (run) {
-      setStepIndex(0);
-    }
-  }, [run]);
+export const isTourCompleted = (): boolean => {
+  try {
+    return localStorage.getItem(TOUR_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
 
-  // Clean unmount safety
-  useEffect(() => {
-    return () => {
-      setStepIndex(0);
-    };
-  }, []);
+export const markTourCompleted = (): void => {
+  try {
+    localStorage.setItem(TOUR_STORAGE_KEY, "1");
+  } catch {
+    /* noop */
+  }
+};
 
-  // Stable steps using reliably mounted DOM target selectors
+export const buildTourSteps = (isLoggedIn: boolean): Step[] => {
   const steps: Step[] = [
     {
       target: '[data-tour="catalog-btn"]',
       title: "1. Pilih Model Usaha",
       content:
         "Buka Katalog Usaha untuk memilih jenis UMKM (seperti Warung Kopi, Laundry, Mart) atau pilih dari usaha terdaftar Anda.",
-      disableBeacon: true,
       placement: "right",
+      skipBeacon: true,
     },
     {
       target: '[data-tour="layers-btn"]',
@@ -53,6 +50,7 @@ export const MapTour: React.FC<MapTourProps> = ({
       content:
         "Aktifkan layer fasilitas umum (POI lokal), demografi BPS, serta laporan warga langsung pada peta interaktif.",
       placement: "right",
+      skipBeacon: true,
     },
     {
       target: '[data-tour="map-canvas"]',
@@ -60,6 +58,7 @@ export const MapTour: React.FC<MapTourProps> = ({
       content:
         "Tentukan titik lokasi kandidat usaha Anda di peta. Anda dapat menempatkan dan membandingkan hingga 8 titik kandidat lokasi untuk evaluasi komparatif.",
       placement: "center",
+      skipBeacon: true,
     },
     {
       target: '[data-tour="analysis-btn"]',
@@ -68,6 +67,7 @@ export const MapTour: React.FC<MapTourProps> = ({
         ? "Buka panel Analisis Lokasi untuk menjalankan kalkulasi backend LOCIVA, melihat skor potensi pasar, kepadatan kompetitor, dan kesesuaian wilayah."
         : "Masuk atau buat akun untuk menjalankan kalkulasi backend LOCIVA, melihat skor potensi pasar, dan menguji kelayakan lokasi.",
       placement: "right",
+      skipBeacon: true,
     },
   ];
 
@@ -78,8 +78,37 @@ export const MapTour: React.FC<MapTourProps> = ({
       content:
         "Lihat dan kelola seluruh riwayat simulasi kandidat lokasi yang telah tersimpan di akun Anda dengan filter usaha aktif dan pencarian server-side.",
       placement: "right",
+      skipBeacon: true,
     });
   }
+
+  return steps;
+};
+
+export const MapTour: React.FC<MapTourProps> = ({
+  run,
+  onFinish,
+  isLoggedIn,
+}) => {
+  const [stepIndex, setStepIndex] = useState(0);
+  const prevRunRef = useRef(run);
+
+  // Reset to step 0 whenever the tour is (re)launched (run false -> true).
+  // This is an intentional one-time sync so replays start at the first step.
+  useEffect(() => {
+    if (run && !prevRunRef.current) {
+      setStepIndex(0);
+    }
+    prevRunRef.current = run;
+  }, [run]);
+
+  const handleFinishOrSkip = useCallback(() => {
+    markTourCompleted();
+    setStepIndex(0);
+    onFinish();
+  }, [onFinish]);
+
+  const steps = buildTourSteps(isLoggedIn);
 
   const handleJoyrideEvent = useCallback<EventHandler>(
     (data) => {
@@ -92,8 +121,7 @@ export const MapTour: React.FC<MapTourProps> = ({
         action === ACTIONS.CLOSE ||
         action === ACTIONS.SKIP
       ) {
-        setStepIndex(0);
-        onFinish();
+        handleFinishOrSkip();
         return;
       }
 
@@ -109,7 +137,7 @@ export const MapTour: React.FC<MapTourProps> = ({
         setStepIndex((prev) => Math.min(prev + 1, steps.length - 1));
       }
     },
-    [onFinish, steps.length]
+    [handleFinishOrSkip]
   );
 
   return (
@@ -124,21 +152,36 @@ export const MapTour: React.FC<MapTourProps> = ({
         textColor: "#1e293b",
         backgroundColor: "#ffffff",
         arrowColor: "#ffffff",
-        overlayColor: "rgba(15, 23, 42, 0.65)",
+        overlayColor: "rgba(15, 23, 42, 0.85)",
         zIndex: 10000,
         showProgress: true,
         targetWaitTimeout: 1500,
+        spotlightClicks: true,
       }}
       styles={{
         overlay: {
           zIndex: 10000,
         },
         tooltip: {
+          zIndex: 10001,
           borderRadius: "1rem",
           padding: "1rem",
           maxWidth: "360px",
           boxShadow:
-            "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
+            "0 20px 25px -5px rgb(0 0 0 / 0.2), 0 8px 10px -6px rgb(0 0 0 / 0.15)",
+        },
+        beacon: {
+          zIndex: 10002,
+          width: 36,
+          height: 36,
+          backgroundColor: "#4f46e5",
+          border: "3px solid #ffffff",
+          boxShadow:
+            "0 0 0 4px rgba(79, 70, 229, 0.35), 0 2px 8px rgba(0, 0, 0, 0.25)",
+        },
+        highlightElement: {
+          outline: "3px solid #6366f1",
+          outlineOffset: "3px",
         },
         buttonPrimary: {
           backgroundColor: "#4f46e5",

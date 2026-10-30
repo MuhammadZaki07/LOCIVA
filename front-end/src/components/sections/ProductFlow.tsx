@@ -7,56 +7,60 @@ import {
   SlidersHorizontal,
   CheckCircle2,
 } from "lucide-react";
+import { useLocale } from "@/lib/useLocale";
+import type { Translations } from "@/lib/locales";
 
 const steps = [
   {
     n: "01",
-    title: "choose a business",
-    body: "Select the business category you plan to launch, from grab-and-go carts to sit-down venues.",
+    titleKey: "stepChoose",
+    bodyKey: "stepChooseBody",
     icon: Store,
   },
   {
     n: "02",
-    title: "place it on the map",
-    body: "Pin candidate locations and define custom walkable catchment radiuses.",
+    titleKey: "stepPlace",
+    bodyKey: "stepPlaceBody",
     icon: MapPin,
   },
   {
     n: "03",
-    title: "analyze the area",
-    body: "Read population density, access corridors, competitor clusters, and civic signals.",
+    titleKey: "stepAnalyze",
+    bodyKey: "stepAnalyzeBody",
     icon: BarChart3,
   },
   {
     n: "04",
-    title: "understand the score",
-    body: "Open 'why?' to unpack what lifted or lowered your Location Potential Score.",
+    titleKey: "stepUnderstand",
+    bodyKey: "stepUnderstandBody",
     icon: HelpCircle,
   },
   {
     n: "05",
-    title: "simulate another scenario",
-    body: "Tweak operating hours, target demographics, or test an alternate street corner.",
+    titleKey: "stepSimulate",
+    bodyKey: "stepSimulateBody",
     icon: SlidersHorizontal,
   },
   {
     n: "06",
-    title: "make a better decision",
-    body: "Commit real capital with clear eyes and verifiable location ground truth.",
+    titleKey: "stepDecide",
+    bodyKey: "stepDecideBody",
     icon: CheckCircle2,
   },
 ];
 
 export function ProductFlow() {
+  const { t } = useLocale();
+
   return (
     <Section id="product">
       <div className="max-w-xl">
-        <Eyebrow>core product</Eyebrow>
+        <Eyebrow>{t("productEyebrow")}</Eyebrow>
         <h2 className="font-display text-[28px] leading-snug font-medium tracking-[-0.02em] text-ink md:text-[32px]">
-          From a location to a decision.
+          {t("productHeadline")}
         </h2>
         <p className="mt-3 text-[15px] leading-7 text-muted">
-          A methodical, data-backed pathway that eliminates blind intuition when evaluating physical spaces.
+          {t("productBody")}
         </p>
       </div>
 
@@ -76,10 +80,10 @@ export function ProductFlow() {
                   <Icon size={16} className="text-muted" />
                 </div>
                 <h3 className="mt-4 text-[15px] font-medium text-ink">
-                  {step.title}
+                  {t(step.titleKey as unknown as keyof Translations)}
                 </h3>
                 <p className="mt-1.5 text-[13px] leading-6 text-muted">
-                  {step.body}
+                  {t(step.bodyKey as unknown as keyof Translations)}
                 </p>
               </div>
             </article>

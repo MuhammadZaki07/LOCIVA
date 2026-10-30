@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import {
+  Gauge,
+  Compass,
+  ShieldCheck,
+  Scale,
+  TrendingUp,
+  Zap,
   Search,
   Navigation,
   Plus,
@@ -46,7 +52,12 @@ import {
   validateAndMapAiResponse,
   requestAreaRoutePlan,
   convertAiAreaResponseToWaypoints,
+  requestAiRouteRecommendations,
+  convertCandidateToRouteCalculation,
+  convertCandidateToWaypoints,
   type AiAreaRouteResponse,
+  type AiRouteRecommendationResponseData,
+  type AiRouteCandidateItem,
   type AiRoutePoint,
   type AiRouteCandidate,
   type AiRouteRecommendation,
@@ -857,6 +868,20 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
     }
   };
 
+  // AI Circular Route Recommendation state (Groq + OSRM)
+  const [businessTypes, setBusinessTypes] = useState<{ id: string; name: string; slug?: string; category?: string }[]>([]);
+  const [selectedBusinessTypeId, setSelectedBusinessTypeId] = useState<string>("");
+  const [loadingBusinessTypes, setLoadingBusinessTypes] = useState(false);
+  const [maxDistanceKm, setMaxDistanceKm] = useState<number>(8);
+  const [maxDurationMinutes, setMaxDurationMinutes] = useState<number>(120);
+  const [travelMode, setTravelMode] = useState<"motorcycle" | "driving" | "bike" | "foot">("motorcycle");
+  const [aiRouteData, setAiRouteData] = useState<AiRouteRecommendationResponseData | null>(null);
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+  const [isCalculatingAiRoute, setIsCalculatingAiRoute] = useState(false);
+  const [aiRouteStage, setAiRouteStage] = useState<"idle" | "collecting_pois" | "routing_osrm" | "evaluating_ai">("idle");
+  const [aiRouteError, setAiRouteError] = useState<string | null>(null);
+  const [showScoreDetails, setShowScoreDetails] = useState(true);
+
   // Recommendations state
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [loadingRecs, setLoadingRecs] = useState(false);
@@ -1166,6 +1191,188 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
   useEffect(() => {
     fetchBusinesses();
   }, [fetchBusinesses]);
+
+  const fetchBusinessTypes = useCallback(async () => {
+    setLoadingBusinessTypes(true);
+    try {
+      const res = await api.get("/business-types");
+      const data = res.data?.data;
+      const items: any[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.data)
+          ? data.data
+          : [];
+      setBusinessTypes(items);
+      if (items.length > 0) {
+        const cilok = items.find((b: any) =>
+          b.slug?.includes("cilok") || b.name?.toLowerCase().includes("cilok")
+        );
+        setSelectedBusinessTypeId((prev) => prev || (cilok ? cilok.id : items[0].id));
+      }
+    } catch (error) {
+      console.warn("Gagal mengambil tipe bisnis:", error);
+    } finally {
+      setLoadingBusinessTypes(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBusinessTypes();
+  }, [fetchBusinessTypes]);
+
+  const handleSelectCandidate = useCallback((candidate: AiRouteCandidateItem) => {
+    setSelectedCandidateId(candidate.id);
+
+    // Update map route geometry instantly without refetching
+    const calculation = convertCandidateToRouteCalculation(candidate);
+    onRouteCalculated(calculation);
+
+    // Update waypoints list
+    const waypoints = convertCandidateToWaypoints(candidate);
+    onWaypointsChange(waypoints);
+
+    setRouteName(`Rute AI: ${candidate.name}`);
+  }, [onRouteCalculated, onWaypointsChange]);
+
+  const handleGenerateAiRouteRecommendations = async () => {
+    if (!selectedBusinessTypeId) {
+      toast({
+        title: "Pilih Tipe Usaha",
+        description: "Silakan pilih tipe usaha (misal: Gerobak Cilok) untuk memulai analisis rute.",
+        variant: "error",
+      });
+      return;
+    }
+
+    let startLat = analysisAreaCenter?.lat ?? (userLocation ? userLocation.lat : mapCenter[0]);
+    let startLng = analysisAreaCenter?.lng ?? (userLocation ? userLocation.lng : mapCenter[1]);
+
+    if (!startLat || !startLng) {
+      toast({
+        title: "Pilih Titik Awal",
+        description: "Silakan pilih titik awal / pangkalan di peta.",
+        variant: "error",
+      });
+      return;
+    }
+
+    onAnalysisAreaCenterChange?.({ lat: startLat, lng: startLng });
+
+    setIsCalculatingAiRoute(true);
+    setAiRouteError(null);
+    setAiRouteStage("collecting_pois");
+
+    try {
+      setAiRouteStage("routing_osrm");
+      const data = await requestAiRouteRecommendations({
+        business_type_id: selectedBusinessTypeId,
+        starting_point: {
+          latitude: startLat,
+          longitude: startLng,
+        },
+        constraints: {
+          max_distance_km: maxDistanceKm,
+          max_duration_minutes: maxDurationMinutes,
+          travel_mode: travelMode,
+        },
+      });
+
+      setAiRouteStage("evaluating_ai");
+      setAiRouteData(data);
+
+      const initialId = data.ai_interpretation?.recommended_route_id || data.candidates[0]?.id;
+      setSelectedCandidateId(initialId);
+
+      const activeCand = data.candidates.find((c) => c.id === initialId) || data.candidates[0];
+      if (activeCand) {
+        handleSelectCandidate(activeCand);
+      }
+
+      toast({
+        title: "Rekomendasi Rute Berhasil",
+        description: `Ditemukan ${data.candidates.length} alternatif rute sirkular untuk ${data.business_type.name}.`,
+        variant: "success",
+      });
+    } catch (err: any) {
+      console.error("Gagal rekomendasi rute:", err);
+      const msg = err?.response?.data?.message || err?.message || "Gagal mendapatkan rekomendasi rute AI.";
+      setAiRouteError(msg);
+      toast({
+        title: "Gagal Merancang Rute",
+        description: msg,
+        variant: "error",
+      });
+    } finally {
+      setIsCalculatingAiRoute(false);
+      setAiRouteStage("idle");
+    }
+  };
+
+  const handleSaveSelectedAiRoute = async () => {
+    if (!aiRouteData || !selectedCandidateId) return;
+    const candidate = aiRouteData.candidates.find((c) => c.id === selectedCandidateId);
+    if (!candidate) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast({
+        title: "Masuk Akun Dibutuhkan",
+        description: "Silakan masuk untuk menyimpan rute ke database.",
+        variant: "error",
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const waypoints = convertCandidateToWaypoints(candidate);
+      const payload = {
+        business_id: selectedBusinessId || null,
+        name: `Rute Sirkular: ${aiRouteData.business_type.name} (${candidate.name})`,
+        start_location_name: waypoints[0]?.name || "Pangkalan Awal",
+        end_location_name: waypoints[waypoints.length - 1]?.name || "Pangkalan Awal",
+        waypoints: waypoints,
+        route_coordinates: candidate.route_coordinates,
+        distance: candidate.distance_km,
+        estimated_duration: candidate.duration_minutes,
+        status: "active",
+        is_shared: false,
+        notes: `Skor Total: ${candidate.scores.total_score}. ${aiRouteData.ai_interpretation.overall_summary || ""}`,
+      };
+
+      const res = await api.post("/vendor-routes", payload);
+      if (res.data?.success) {
+        toast({
+          title: "Rute Tersimpan!",
+          description: "Rute berhasil disimpan ke database rute Anda.",
+          variant: "success",
+        });
+        fetchSavedRoutes();
+      }
+    } catch (err: any) {
+      toast({
+        title: "Gagal Menyimpan",
+        description: err?.response?.data?.message || "Terjadi kesalahan saat menyimpan rute.",
+        variant: "error",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleApplyAiRouteToPlanner = () => {
+    if (!aiRouteData || !selectedCandidateId) return;
+    const candidate = aiRouteData.candidates.find((c) => c.id === selectedCandidateId);
+    if (!candidate) return;
+
+    handleSelectCandidate(candidate);
+    setActiveTab("planner");
+    toast({
+      title: "Rute Diterapkan",
+      description: "Rute sirkular siap dipantau dan dinavigasi di mode rute.",
+      variant: "success",
+    });
+  };
 
   const fetchRecommendations = useCallback(async () => {
     setLoadingRecs(true);
@@ -2603,429 +2810,554 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
           {/* TAB 2: SPOT JITU — Area-based AI Route Analysis */}
           {activeTab === "recommendations" && (
             <div className="space-y-4">
-              {/* ── STEP 1: Pilih Bisnis Konteks ──────────────────────── */}
-              <div className="p-3 bg-gradient-to-br from-indigo-50/90 via-purple-50/70 to-emerald-50/60 rounded-2xl border border-indigo-200/80 shadow-xs space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="size-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
-                    <Sparkles size={14} className="text-amber-300" />
+              {/* ── AI CIRCULAR ROUTE RECOMMENDATION SECTION ────────── */}
+              {!aiRouteData ? (
+                /* ── FORM CONFIGURATION VIEW ────────────────────────── */
+                <div className="p-3 bg-gradient-to-br from-indigo-50/90 via-purple-50/70 to-emerald-50/60 rounded-2xl border border-indigo-200/80 shadow-xs space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="size-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                      <Sparkles size={16} className="text-amber-300 animate-pulse" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-xs text-indigo-950 flex items-center gap-1.5">
+                        Rekomendasi Rute Sirkular AI
+                        <span className="text-[9.5px] uppercase tracking-wider font-extrabold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">
+                          Groq AI
+                        </span>
+                      </h4>
+                      <p className="text-[10.5px] text-indigo-800/80">
+                        Rute memutar (circular) jalan nyata berbasis potensi pembeli & anti-kompetisi
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-bold text-xs text-indigo-950 flex items-center gap-1.5">
-                      Spot Jitu AI
-                      <span className="text-[9.5px] uppercase tracking-wider font-extrabold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">
-                        DeepSeek
-                      </span>
-                    </h4>
-                    <p className="text-[10.5px] text-indigo-800/80">
-                      Analisis area & rancang rute optimal dengan AI
+
+                  {/* 1. Pilih Tipe Usaha */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10.5px] font-semibold text-indigo-900/80 block">
+                        1. Tipe Usaha Keliling
+                      </label>
+                      {loadingBusinessTypes && (
+                        <span className="text-[9.5px] text-indigo-600 animate-pulse flex items-center gap-1">
+                          <Loader2 size={10} className="animate-spin" /> Memuat katalog...
+                        </span>
+                      )}
+                    </div>
+                    <select
+                      value={selectedBusinessTypeId}
+                      onChange={(e) => setSelectedBusinessTypeId(e.target.value)}
+                      disabled={isCalculatingAiRoute}
+                      className="w-full text-xs p-2 rounded-xl border border-indigo-200 bg-white/95 text-ink focus:outline-none focus:ring-2 focus:ring-indigo-500/40 font-medium"
+                    >
+                      <option value="">— Pilih Tipe Usaha —</option>
+                      {businessTypes.map((bt) => (
+                        <option key={bt.id} value={bt.id}>
+                          {bt.name} {bt.category ? `(${bt.category})` : ""}
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Quick profile business sync if user has businesses */}
+                    {businesses.length > 0 && (
+                      <div className="pt-0.5">
+                        <select
+                          value={selectedBusinessId}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSelectedBusinessId(val);
+                            const biz = businesses.find((b) => String(b.id) === val);
+                            if (biz) {
+                              const bLat = Number(biz.latitude ?? biz.lat);
+                              const bLng = Number(biz.longitude ?? biz.lng);
+                              if (!isNaN(bLat) && !isNaN(bLng)) {
+                                onAnalysisAreaCenterChange?.({ lat: bLat, lng: bLng });
+                              }
+                              // Match business type if available
+                              const matchedBt = businessTypes.find(
+                                (bt) =>
+                                  (biz as any).business_type_id === bt.id ||
+                                  bt.name.toLowerCase() === (biz as any).business_type?.name?.toLowerCase()
+                              );
+                              if (matchedBt) {
+                                setSelectedBusinessTypeId(matchedBt.id);
+                              }
+                            }
+                          }}
+                          disabled={isCalculatingAiRoute}
+                          className="w-full text-[10.5px] py-1 px-2 rounded-lg border border-indigo-100 bg-indigo-50/50 text-indigo-900 focus:outline-none"
+                        >
+                          <option value="">Pilih dari Profil Usaha Anda (opsional)...</option>
+                          {businesses.map((b) => (
+                            <option key={b.id} value={String(b.id)}>
+                              🏢 {b.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. Titik Pangkalan (Mulai & Kembali) */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10.5px] font-semibold text-indigo-900/80 block">
+                      2. Titik Pangkalan (Berangkat & Pulang)
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={isCalculatingAiRoute}
+                        onClick={() => onSelectAnalysisArea?.()}
+                        className="flex-1 py-2 px-3 rounded-xl border-2 border-dashed border-indigo-300 bg-white/80 text-indigo-800 font-semibold text-xs hover:bg-indigo-50 hover:border-indigo-400 transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      >
+                        <CircleDot size={14} className="text-indigo-600" />
+                        {analysisAreaCenter
+                          ? `📍 ${analysisAreaCenter.lat.toFixed(4)}, ${analysisAreaCenter.lng.toFixed(4)}`
+                          : userLocation
+                            ? `📍 ${userLocation.lat.toFixed(4)}, ${userLocation.lng.toFixed(4)} (Lokasi Anda)`
+                            : "Klik Titik di Peta"}
+                      </button>
+
+                      {userLocation && (
+                        <button
+                          type="button"
+                          disabled={isCalculatingAiRoute}
+                          onClick={() => onAnalysisAreaCenterChange?.(userLocation)}
+                          title="Gunakan koordinat lokasi saya saat ini"
+                          className="p-2 rounded-xl border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 transition-colors cursor-pointer shrink-0"
+                        >
+                          <MapPin size={15} />
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-indigo-700/70 italic">
+                      Rute sirkular akan dimulai dari titik ini, menyusuri spot potensial, dan kembali ke titik ini.
                     </p>
                   </div>
-                </div>
 
-                {/* Pilih bisnis konteks */}
-                <div className="space-y-1.5">
-                  <label className="text-[10.5px] font-semibold text-indigo-900/80 block">
-                    1. Konteks Usaha (opsional)
-                  </label>
-                  <select
-                    value={selectedBusinessId}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setSelectedBusinessId(val);
-                      const biz = businesses.find((b) => String(b.id) === val);
-                      const bLat = Number(biz?.latitude ?? biz?.lat);
-                      const bLng = Number(biz?.longitude ?? biz?.lng);
-                      if (!isNaN(bLat) && !isNaN(bLng) && !analysisAreaCenter) {
-                        onAnalysisAreaCenterChange?.({ lat: bLat, lng: bLng });
-                      }
-                    }}
-                    className="w-full text-xs p-2 rounded-xl border border-indigo-200 bg-white/95 text-ink focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                    disabled={isAiPlanning || spotJituStreaming}
-                  >
-                    <option value="">— Tanpa konteks spesifik —</option>
-                    {businesses.map((b) => (
-                      <option key={b.id} value={String(b.id)}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  {/* 3. Batasan Operasional */}
+                  <div className="space-y-2 pt-1 border-t border-indigo-100/80">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10.5px] font-semibold text-indigo-900/80">
+                        <span>3. Jarak Maksimal Rute:</span>
+                        <span className="font-extrabold text-indigo-700">{maxDistanceKm} km</span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {[5, 8, 12, 15].map((km) => (
+                          <button
+                            key={km}
+                            type="button"
+                            disabled={isCalculatingAiRoute}
+                            onClick={() => setMaxDistanceKm(km)}
+                            className={cn(
+                              "py-1.5 rounded-xl text-[10.5px] font-bold transition-all cursor-pointer border text-center",
+                              maxDistanceKm === km
+                                ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                                : "bg-white text-indigo-800 border-indigo-200 hover:bg-indigo-50",
+                            )}
+                          >
+                            {km} km
+                          </button>
+                        ))}
+                      </div>
+                    </div>
 
-                {/* ── STEP 2: Pilih Area di Peta ────────────────────────── */}
-                <div className="space-y-1.5">
-                  <label className="text-[10.5px] font-semibold text-indigo-900/80 block">
-                    2. Pilih Area Analisis di Peta
-                  </label>
-                  <div className="flex items-center gap-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10.5px] font-semibold text-indigo-900/80">
+                        <span>Durasi Maksimal Keliling:</span>
+                        <span className="font-extrabold text-indigo-700">{maxDurationMinutes} mnt ({Math.round(maxDurationMinutes / 60)} jam)</span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {[60, 90, 120, 180].map((mins) => (
+                          <button
+                            key={mins}
+                            type="button"
+                            disabled={isCalculatingAiRoute}
+                            onClick={() => setMaxDurationMinutes(mins)}
+                            className={cn(
+                              "py-1.5 rounded-xl text-[10.5px] font-bold transition-all cursor-pointer border text-center",
+                              maxDurationMinutes === mins
+                                ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                                : "bg-white text-indigo-800 border-indigo-200 hover:bg-indigo-50",
+                            )}
+                          >
+                            {mins} mnt
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Moda Transportasi */}
+                    <div className="space-y-1">
+                      <label className="text-[10.5px] font-semibold text-indigo-900/80 block">
+                        Moda Transportasi:
+                      </label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {[
+                          { id: "motorcycle", label: "🛵 Sepeda Motor / Gerobak Motor" },
+                          { id: "driving", label: "🚗 Mobil / Pickup" },
+                          { id: "bike", label: "🚲 Sepeda Gowes" },
+                          { id: "foot", label: "🚶 Jalan Kaki" },
+                        ].map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            disabled={isCalculatingAiRoute}
+                            onClick={() => setTravelMode(m.id as any)}
+                            className={cn(
+                              "py-1.5 px-2 rounded-xl text-[10px] font-semibold text-left transition-all cursor-pointer border truncate",
+                              travelMode === m.id
+                                ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                                : "bg-white text-indigo-900 border-indigo-200 hover:bg-indigo-50",
+                            )}
+                          >
+                            {m.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Error Alert */}
+                  {aiRouteError && (
+                    <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-rose-800 text-[11px]">
+                      <AlertCircle size={14} className="shrink-0 text-rose-600 mt-0.5" />
+                      <span className="flex-1">{aiRouteError}</span>
+                    </div>
+                  )}
+
+                  {/* Stage Progress Feedback */}
+                  {isCalculatingAiRoute && (
+                    <div className="p-2.5 bg-indigo-50/90 border border-indigo-200 rounded-xl flex items-center gap-2 text-indigo-950 text-xs animate-pulse">
+                      <Loader2 size={15} className="animate-spin text-indigo-600 shrink-0" />
+                      <span className="text-[11px] font-semibold">
+                        {aiRouteStage === "collecting_pois" && "🔍 Menghimpun fasilitas umum, keramaian, & kompetitor..."}
+                        {aiRouteStage === "routing_osrm" && "🚗 Mengkalkulasi topologi rute jalan sirkular (OSRM)..."}
+                        {aiRouteStage === "evaluating_ai" && "🤖 Groq AI mengevaluasi scoring & penjelasan rute..."}
+                        {aiRouteStage === "idle" && "Memproses data rute..."}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Submit Button */}
+                  <div className="pt-2 border-t border-indigo-100 flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-muted flex items-center gap-1">
+                      <Sparkles size={11} className="text-amber-500 shrink-0" />
+                      OSRM + 5-Faktor Skoring + Groq
+                    </span>
+
                     <button
                       type="button"
-                      disabled={isAiPlanning || spotJituStreaming}
-                      onClick={() => onSelectAnalysisArea?.()}
-                      className="flex-1 py-2 px-3 rounded-xl border-2 border-dashed border-indigo-300 bg-white/80 text-indigo-800 font-semibold text-xs hover:bg-indigo-50 hover:border-indigo-400 transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      disabled={isCalculatingAiRoute || !selectedBusinessTypeId}
+                      onClick={() => void handleGenerateAiRouteRecommendations()}
+                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 transition-all cursor-pointer"
                     >
-                      <CircleDot size={14} className="text-indigo-600" />
-                      {analysisAreaCenter
-                        ? `📍 ${analysisAreaCenter.lat.toFixed(4)}, ${analysisAreaCenter.lng.toFixed(4)}`
-                        : "Klik Lokasi di Peta"}
+                      {isCalculatingAiRoute ? (
+                        <>
+                          <Loader2 size={13} className="animate-spin" />
+                          <span>Menganalisis Rute...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Radar size={13} />
+                          <span>Rancang Rute Sirkular AI</span>
+                        </>
+                      )}
                     </button>
                   </div>
-                  {!analysisAreaCenter && (
-                    <p className="text-[10px] text-indigo-700/60 italic">
-                      Klik tombol di atas, lalu klik titik di peta sebagai pusat area
-                    </p>
-                  )}
                 </div>
-
-                {/* ── STEP 3: Pilih Radius ──────────────────────────────── */}
-                <div className="space-y-1.5">
-                  <label className="text-[10.5px] font-semibold text-indigo-900/80 block">
-                    3. Radius Analisis
-                  </label>
-                  <div className="flex items-center gap-2">
-                    {[1000, 2000, 3000, 5000].map((r) => (
-                      <button
-                        key={r}
-                        type="button"
-                        disabled={isAiPlanning || spotJituStreaming}
-                        onClick={() => setSpotJituRadius(r)}
-                        className={cn(
-                          "flex-1 py-1.5 rounded-xl text-[10.5px] font-bold transition-all cursor-pointer border",
-                          spotJituRadius === r
-                            ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-                            : "bg-white text-indigo-800 border-indigo-200 hover:bg-indigo-50",
-                        )}
-                      >
-                        {r >= 1000 ? `${r / 1000} km` : `${r}m`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* ── STEP 4: Preferensi Tambahan (opsional) ─────────────── */}
-                <div className="space-y-1.5">
-                  <label className="text-[10.5px] font-semibold text-indigo-900/80 block">
-                    4. Catatan Preferensi Rute (opsional)
-                  </label>
-                  <input
-                    type="text"
-                    value={customPromptNotes}
-                    onChange={(e) => setCustomPromptNotes(e.target.value)}
-                    disabled={isAiPlanning || spotJituStreaming}
-                    placeholder="Contoh: Fokus dekat kampus saat jam siang, hindari tanjakan..."
-                    className="w-full text-xs p-2 rounded-xl border border-indigo-200 bg-white/95 text-ink placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
-                  />
-                </div>
-
-                {/* ── Tombol Analisis Area AI Lengkap ─────────────────── */}
-                <div className="flex items-center justify-between gap-2 pt-2 border-t border-indigo-100">
-                  <span className="text-[10.5px] text-muted flex items-center gap-1">
-                    <Lightbulb size={12} className="text-amber-500 shrink-0" />
-                    DeepSeek + OpenStreetMap + OSRM
-                  </span>
-
-                  <button
-                    type="button"
-                    disabled={isAiPlanning || (!analysisAreaCenter && !selectedBusinessId)}
-                    onClick={() => void handleStartAiAreaPlan()}
-                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 transition-all cursor-pointer"
-                  >
-                    {isAiPlanning ? (
-                      <>
-                        <Loader2 size={13} className="animate-spin" />
-                        <span>Menganalisis...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Radar size={13} />
-                        <span>Rancang Rute AI</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* ── Status Tahapan AI ───────────────────────────────── */}
-                {isAiPlanning && (
-                  <div className="p-2.5 bg-indigo-50/80 border border-indigo-200 rounded-xl flex items-center gap-2 text-indigo-900 text-xs animate-pulse">
-                    <Loader2 size={14} className="animate-spin text-indigo-600 shrink-0" />
-                    <span className="text-[11px] font-medium">
-                      {aiPlanStage === "fetching_osm" && "📡 Mengumpulkan fasilitas umum sekitar (OpenStreetMap)..."}
-                      {aiPlanStage === "analyzing_ai" && "🤖 AI menganalisis area & merancang alur rute optimal..."}
-                      {aiPlanStage === "calculating_route" && "🚗 Menghitung jalur jaringan jalan & durasi (OSRM)..."}
-                      {aiPlanStage === "idle" && "Memproses rute..."}
-                    </span>
-                  </div>
-                )}
-
-                {/* ── Error alert ────────────────────────────────────── */}
-                {aiError && (
-                  <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-rose-800 text-[11px]">
-                    <AlertCircle size={14} className="shrink-0 text-rose-600 mt-0.5" />
-                    <span className="flex-1">{aiError}</span>
-                  </div>
-                )}
-
-                {/* ── COMPLETE AI ROUTE RECOMMENDATION CARD ──────────── */}
-                {currentAreaResponse && !isAiPlanning && (
-                  <div className="p-3 bg-white rounded-xl border-2 border-emerald-500/80 shadow-md space-y-3 animate-in fade-in slide-in-from-top-2">
-                    {/* Header */}
-                    <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2">
+              ) : (
+                /* ── RESULTS VIEW: 3 ALTERNATIVES & GROQ INTERPRETATION ── */
+                <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                  {/* Header info */}
+                  <div className="p-3 bg-white rounded-2xl border border-indigo-200/90 shadow-xs space-y-2">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                       <div className="min-w-0">
-                        <span className="text-[9.5px] uppercase font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full inline-block mb-1">
-                          Rekomendasi Rute Lengkap
+                        <span className="text-[9.5px] uppercase font-extrabold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full inline-block mb-1 border border-indigo-100">
+                          Rekomendasi Rute Sirkular
                         </span>
-                        <h4 className="font-bold text-ink text-sm truncate">
-                          {currentAreaResponse.route_name}
+                        <h4 className="font-extrabold text-sm text-ink truncate">
+                          {aiRouteData.business_type.name}
                         </h4>
                         <p className="text-[10px] text-muted truncate">
-                          Konteks Usaha: {currentAreaResponse.selected_business.name} (
-                          {currentAreaResponse.selected_business.business_type || "Usaha Keliling"})
+                          Pangkalan: {aiRouteData.starting_point.latitude.toFixed(4)}, {aiRouteData.starting_point.longitude.toFixed(4)} • Batas: {aiRouteData.constraints.max_distance_km} km / {aiRouteData.constraints.max_duration_minutes} mnt
                         </p>
                       </div>
+
                       <button
                         type="button"
-                        onClick={() => setAreaResponse(null)}
-                        className="text-muted hover:text-ink cursor-pointer p-0.5 shrink-0"
-                        title="Tutup pratinjau"
+                        onClick={() => setAiRouteData(null)}
+                        className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 cursor-pointer shrink-0"
                       >
-                        <X size={15} />
+                        Ubah Parameter
                       </button>
                     </div>
 
-                    {/* Metrics Banner */}
-                    <div className="grid grid-cols-3 gap-1.5 p-2 bg-slate-50 rounded-xl border border-slate-100 text-center">
-                      <div>
-                        <span className="text-[9.5px] text-muted block">Jarak Total</span>
-                        <span className="text-xs font-extrabold text-ink">
-                          {currentAreaResponse.route_metrics.distance_km != null
-                            ? `${currentAreaResponse.route_metrics.distance_km} km`
-                            : currentAreaResponse.route_metrics.distance_meters != null
-                              ? `${(currentAreaResponse.route_metrics.distance_meters / 1000).toFixed(1)} km`
-                              : "-"}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[9.5px] text-muted block">Estimasi Waktu</span>
-                        <span className="text-xs font-extrabold text-ink">
-                          {currentAreaResponse.route_metrics.duration_minutes != null
-                            ? `${currentAreaResponse.route_metrics.duration_minutes} mnt`
-                            : currentAreaResponse.route_metrics.duration_seconds != null
-                              ? `${Math.round(currentAreaResponse.route_metrics.duration_seconds / 60)} mnt`
-                              : "-"}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[9.5px] text-muted block">Total Titik</span>
-                        <span className="text-xs font-extrabold text-indigo-700">
-                          {currentAreaResponse.recommended_waypoints.length + 2} titik
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Timeline Titik Perjalanan */}
-                    <div className="space-y-2">
-                      <p className="text-[10.5px] font-bold text-muted uppercase tracking-wider">
-                        Runtutan Perjalanan Rute:
+                    {/* ── 3 ALTERNATIVE ROUTE SELECTOR CARDS ── */}
+                    <div className="space-y-1.5 pt-1">
+                      <p className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+                        <span>Pilih Opsi Rute ({aiRouteData.candidates.length}):</span>
+                        <span className="text-[9.5px] font-medium text-muted lowercase">klik untuk ganti di peta</span>
                       </p>
 
-                      <div className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
-                        {/* 1. START POINT */}
-                        <div
-                          onClick={() => setHighlightedStop(currentAreaResponse.start_point.id)}
-                          className={cn(
-                            "p-2 rounded-xl text-xs border transition-all cursor-pointer space-y-1",
-                            currentHighlightedStopId === currentAreaResponse.start_point.id
-                              ? "bg-emerald-50/80 border-emerald-400 ring-2 ring-emerald-300"
-                              : "bg-slate-50/80 border-slate-200/80 hover:bg-slate-100/70",
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            <div className="size-5 rounded-full bg-emerald-600 text-white font-extrabold text-[9px] flex items-center justify-center shrink-0">
-                              <Play size={10} className="fill-white translate-x-0.5" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded">
-                                  START
+                      <div className="grid grid-cols-1 gap-2">
+                        {aiRouteData.candidates.map((cand) => {
+                          const isSelected = selectedCandidateId === cand.id;
+                          const isAiRecommended = cand.id === aiRouteData.ai_interpretation?.recommended_route_id;
+
+                          return (
+                            <button
+                              key={cand.id}
+                              type="button"
+                              onClick={() => handleSelectCandidate(cand)}
+                              className={cn(
+                                "p-2.5 rounded-xl border-2 text-left transition-all cursor-pointer relative space-y-1.5",
+                                isSelected
+                                  ? "bg-gradient-to-r from-indigo-50/90 to-purple-50/70 border-indigo-600 shadow-sm ring-1 ring-indigo-500/30"
+                                  : "bg-white border-slate-200/80 hover:bg-slate-50/80 hover:border-slate-300",
+                              )}
+                            >
+                              <div className="flex items-center justify-between gap-1">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className={cn(
+                                    "size-6 rounded-lg flex items-center justify-center shrink-0 font-extrabold text-[10px]",
+                                    cand.profile === "opportunity"
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : cand.profile === "balanced"
+                                        ? "bg-indigo-100 text-indigo-800"
+                                        : "bg-amber-100 text-amber-800",
+                                  )}>
+                                    {cand.profile === "opportunity" ? "🌟" : cand.profile === "balanced" ? "⚖️" : "🛡️"}
+                                  </span>
+                                  <h5 className="font-extrabold text-xs text-ink truncate">
+                                    {cand.name}
+                                  </h5>
+                                </div>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {isAiRecommended && (
+                                    <span className="text-[9px] font-black uppercase bg-purple-600 text-white px-2 py-0.5 rounded-full shadow-2xs animate-pulse">
+                                      Pilihan AI
+                                    </span>
+                                  )}
+                                  <span className={cn(
+                                    "text-[10px] font-extrabold px-2 py-0.5 rounded-lg border",
+                                    cand.scores.total_score >= 80
+                                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                      : "bg-indigo-50 text-indigo-700 border-indigo-200",
+                                  )}>
+                                    {cand.scores.total_score} pts
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3 text-[10.5px] text-slate-600 font-medium pl-8">
+                                <span className="flex items-center gap-1">
+                                  <Navigation size={11} className="text-indigo-600" />
+                                  {cand.distance_km} km
                                 </span>
-                                <p className="text-xs font-bold text-ink truncate">
-                                  {currentAreaResponse.start_point.name}
-                                </p>
-                              </div>
-                            </div>
-                            <span className="text-[9px] font-semibold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-100 shrink-0">
-                              {currentAreaResponse.start_point.source === "business"
-                                ? "Bisnis"
-                                : currentAreaResponse.start_point.source === "internal_poi"
-                                  ? "POI"
-                                  : "Fasum"}
-                            </span>
-                          </div>
-                          <p className="text-[10.5px] text-slate-600 leading-snug pl-7">
-                            {currentAreaResponse.start_point.reason}
-                          </p>
-                        </div>
-
-                        {/* 2. INTERMEDIATE WAYPOINTS */}
-                        {currentAreaResponse.recommended_waypoints.map((wp, idx) => (
-                          <div
-                            key={`wp-${wp.id}-${idx}`}
-                            onClick={() => setHighlightedStop(wp.id)}
-                            className={cn(
-                              "p-2 rounded-xl text-xs border transition-all cursor-pointer space-y-1",
-                              currentHighlightedStopId === wp.id
-                                ? "bg-indigo-50/80 border-indigo-400 ring-2 ring-indigo-300"
-                                : "bg-slate-50/80 border-slate-200/80 hover:bg-slate-100/70",
-                            )}
-                          >
-                            <div className="flex items-center gap-2">
-                              <div className="size-5 rounded-full bg-indigo-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
-                                {idx + 1}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <p className="text-xs font-bold text-ink truncate">
-                                    {wp.name}
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2 text-[10px] text-muted">
-                                  <span className="capitalize">{wp.category || "Fasilitas"}</span>
-                                  <span>•</span>
-                                  <span>Mangkal ~{wp.stop_duration_minutes || 30} mnt</span>
-                                </div>
-                              </div>
-                              <span className="text-[9px] font-semibold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-100 shrink-0">
-                                {wp.source === "business"
-                                  ? "Bisnis"
-                                  : wp.source === "internal_poi"
-                                    ? "POI"
-                                    : "Fasum"}
-                              </span>
-                            </div>
-                            <p className="text-[10.5px] text-slate-600 leading-snug pl-7">
-                              {wp.reason}
-                            </p>
-                          </div>
-                        ))}
-
-                        {/* 3. END POINT */}
-                        <div
-                          onClick={() => setHighlightedStop(currentAreaResponse.end_point.id)}
-                          className={cn(
-                            "p-2 rounded-xl text-xs border transition-all cursor-pointer space-y-1",
-                            currentHighlightedStopId === currentAreaResponse.end_point.id
-                              ? "bg-rose-50/80 border-rose-400 ring-2 ring-rose-300"
-                              : "bg-slate-50/80 border-slate-200/80 hover:bg-slate-100/70",
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            <div className="size-5 rounded-full bg-rose-600 text-white font-extrabold text-[9px] flex items-center justify-center shrink-0">
-                              <Flag size={10} className="fill-white" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[9px] font-bold bg-rose-100 text-rose-800 px-1.5 py-0.2 rounded">
-                                  END
+                                <span>•</span>
+                                <span className="flex items-center gap-1">
+                                  <Clock size={11} className="text-purple-600" />
+                                  {cand.duration_minutes} mnt
                                 </span>
-                                <p className="text-xs font-bold text-ink truncate">
-                                  {currentAreaResponse.end_point.name}
-                                </p>
+                                <span>•</span>
+                                <span className="flex items-center gap-1">
+                                  <MapPin size={11} className="text-emerald-600" />
+                                  {cand.stops.length} titik singgah
+                                </span>
                               </div>
-                            </div>
-                            <span className="text-[9px] font-semibold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-100 shrink-0">
-                              {currentAreaResponse.end_point.source === "business"
-                                ? "Bisnis"
-                                : currentAreaResponse.end_point.source === "internal_poi"
-                                  ? "POI"
-                                  : "Fasum"}
-                            </span>
-                          </div>
-                          <p className="text-[10.5px] text-slate-600 leading-snug pl-7">
-                            {currentAreaResponse.end_point.reason}
-                          </p>
-                        </div>
+                            </button>
+                          );
+                        })}
                       </div>
-                    </div>
-
-                    {/* Faktor Analisis Geografis (Collapsible) */}
-                    {Array.isArray(currentAreaResponse.analysis_factors) &&
-                      currentAreaResponse.analysis_factors.length > 0 && (
-                        <div className="rounded-xl border border-indigo-200/80 bg-white overflow-hidden shadow-2xs">
-                          <button
-                            type="button"
-                            onClick={() => setShowAnalysisFactors((prev) => !prev)}
-                            className="w-full p-2.5 flex items-center justify-between text-left hover:bg-indigo-50/50 transition-colors cursor-pointer"
-                          >
-                            <div className="flex items-center gap-1.5">
-                              <Layers size={13} className="text-indigo-600" />
-                              <span className="text-xs font-bold text-indigo-950">
-                                Faktor Pertimbangan Geografis (
-                                {currentAreaResponse.analysis_factors.length})
-                              </span>
-                            </div>
-                            {showAnalysisFactors ? (
-                              <ChevronUp size={14} className="text-indigo-600" />
-                            ) : (
-                              <ChevronDown size={14} className="text-indigo-600" />
-                            )}
-                          </button>
-                          {showAnalysisFactors && (
-                            <div className="p-2 pt-0 space-y-1.5 border-t border-indigo-100 mt-1 max-h-48 overflow-y-auto">
-                              {currentAreaResponse.analysis_factors.map((factor, idx) => (
-                                <div
-                                  key={idx}
-                                  className="p-2 rounded-lg bg-indigo-50/40 border border-indigo-100/70 text-[11px] space-y-0.5"
-                                >
-                                  <div className="font-bold text-indigo-900 flex items-center gap-1">
-                                    <span className="size-1.5 rounded-full bg-indigo-500 shrink-0" />
-                                    <span>{factor.factor}</span>
-                                  </div>
-                                  <p className="text-slate-700 pl-2.5">
-                                    <span className="font-semibold text-slate-900">Temuan: </span>
-                                    {factor.finding}
-                                  </p>
-                                  <p className="text-indigo-800 pl-2.5">
-                                    <span className="font-semibold text-indigo-950">Dampak: </span>
-                                    {factor.impact_on_route}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                    {/* Penjelasan Rute AI */}
-                    <div className="p-2.5 bg-gradient-to-br from-indigo-50/60 to-purple-50/60 rounded-xl border border-indigo-100 space-y-1">
-                      <div className="flex items-center gap-1.5 text-indigo-950 font-bold text-xs">
-                        <Info size={13} className="text-indigo-600" />
-                        <span>Penjelasan & Rasional Rute AI</span>
-                      </div>
-                      <p className="text-[11px] text-slate-700 leading-relaxed whitespace-pre-line">
-                        {currentAreaResponse.explanation}
-                      </p>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setAreaResponse(null)}
-                        className="flex-1 py-2 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 transition-colors cursor-pointer text-center"
-                      >
-                        Rancang Ulang
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleApplyAiAreaRoute}
-                        className="flex-[2] py-2 px-3 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <Check size={14} />
-                        <span>Terapkan Rute ke Peta</span>
-                      </button>
                     </div>
                   </div>
-                )}
-              </div>
+
+                  {/* ── DETAIL OF THE CURRENTLY SELECTED ROUTE CANDIDATE ── */}
+                  {(() => {
+                    const activeCandidate =
+                      aiRouteData.candidates.find((c) => c.id === selectedCandidateId) ||
+                      aiRouteData.candidates[0];
+
+                    const activeAnalysis =
+                      aiRouteData.ai_interpretation?.routes_analysis?.find((a) => a.id === activeCandidate?.id) ||
+                      aiRouteData.ai_interpretation?.routes_analysis?.[0];
+
+                    if (!activeCandidate) return null;
+
+                    return (
+                      <div className="space-y-3">
+                        {/* 1. Groq AI Interpretation & Trade-offs */}
+                        <div className="p-3 bg-gradient-to-br from-indigo-50/80 via-purple-50/60 to-white rounded-2xl border border-indigo-200 shadow-xs space-y-2.5">
+                          <div className="flex items-center justify-between border-b border-indigo-100 pb-1.5">
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-950">
+                              <Bot size={15} className="text-indigo-600" />
+                              <span>Interpretasi AI & Trade-offs</span>
+                            </div>
+                            <span className={cn(
+                              "text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full border",
+                              aiRouteData.ai_interpretation.is_ai_explained
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                : "bg-amber-50 text-amber-800 border-amber-200",
+                            )}>
+                              {aiRouteData.ai_interpretation.is_ai_explained ? "Groq AI (gpt-oss-120b)" : "Deterministik Spasial"}
+                            </span>
+                          </div>
+
+                          {/* Overall summary */}
+                          <p className="text-[11px] text-slate-700 leading-relaxed font-medium bg-white/70 p-2 rounded-xl border border-indigo-100/60">
+                            {aiRouteData.ai_interpretation.overall_summary}
+                          </p>
+
+                          {/* Candidate highlight & trade-offs */}
+                          {activeAnalysis && (
+                            <div className="space-y-1.5 pt-1 text-[11px]">
+                              {activeAnalysis.highlight && (
+                                <div className="p-2 rounded-xl bg-indigo-100/40 border border-indigo-200/50">
+                                  <span className="font-bold text-indigo-900 block mb-0.5">💡 Keunggulan Rute Ini:</span>
+                                  <p className="text-slate-800">{activeAnalysis.highlight}</p>
+                                </div>
+                              )}
+
+                              {activeAnalysis.explanation && (
+                                <div className="p-2 rounded-xl bg-purple-50/50 border border-purple-200/50">
+                                  <span className="font-bold text-purple-900 block mb-0.5">🎯 Strategi & Sasaran:</span>
+                                  <p className="text-slate-800">{activeAnalysis.explanation}</p>
+                                </div>
+                              )}
+
+                              {activeAnalysis.trade_offs && (
+                                <div className="p-2 rounded-xl bg-amber-50/60 border border-amber-200/60">
+                                  <span className="font-bold text-amber-900 block mb-0.5">⚠️ Pertimbangan / Trade-offs:</span>
+                                  <p className="text-slate-800">{activeAnalysis.trade_offs}</p>
+                                </div>
+                              )}
+
+                              {activeAnalysis.best_time_window && (
+                                <div className="flex items-center gap-1.5 text-indigo-900 bg-white/80 p-2 rounded-xl border border-indigo-100">
+                                  <Clock size={13} className="text-indigo-600 shrink-0" />
+                                  <span><strong>Waktu Efektif:</strong> {activeAnalysis.best_time_window}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 2. 5-Dimension Deterministic Scoring Card */}
+                        <div className="p-3 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                              <Gauge size={14} className="text-indigo-600" />
+                              Evaluasi 5 Dimensi Skoring
+                            </span>
+                            <span className="text-xs font-extrabold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                              Total: {activeCandidate.scores.total_score} / 100
+                            </span>
+                          </div>
+
+                          <div className="space-y-1.5 pt-1">
+                            {[
+                              { label: "Relevansi Bisnis (30%)", score: activeCandidate.scores.business_relevance, color: "bg-emerald-500" },
+                              { label: "Potensi Aktivitas & Keramaian (20%)", score: activeCandidate.scores.activity_potential, color: "bg-indigo-500" },
+                              { label: "Aksesibilitas Jaringan Jalan (20%)", score: activeCandidate.scores.road_accessibility, color: "bg-blue-500" },
+                              { label: "Peluang Minim Kompetisi (15%)", score: activeCandidate.scores.competition_opportunity, color: "bg-amber-500" },
+                              { label: "Efisiensi Topologi Rute (15%)", score: activeCandidate.scores.route_efficiency, color: "bg-purple-500" },
+                            ].map((dim, idx) => (
+                              <div key={idx} className="space-y-0.5">
+                                <div className="flex items-center justify-between text-[10px]">
+                                  <span className="text-slate-700 font-medium">{dim.label}</span>
+                                  <span className="font-extrabold text-slate-900">{dim.score}</span>
+                                </div>
+                                <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                  <div
+                                    className={cn("h-full rounded-full transition-all duration-500", dim.color)}
+                                    style={{ width: `${Math.min(100, Math.max(0, dim.score))}%` }}
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* 3. Circular Timeline of Stops */}
+                        <div className="p-3 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-2">
+                          <p className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+                            <span>Runtutan Perjalanan Sirkular ({activeCandidate.stops.length} Titik):</span>
+                            <span className="text-[9.5px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-100">
+                              Loop Tertutup
+                            </span>
+                          </p>
+
+                          <div className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
+                            {activeCandidate.stops.map((stop, idx) => {
+                              const isStart = idx === 0;
+                              const isEnd = idx === activeCandidate.stops.length - 1;
+
+                              return (
+                                <div
+                                  key={idx}
+                                  className={cn(
+                                    "p-2 rounded-xl text-xs border transition-all space-y-0.5",
+                                    isStart
+                                      ? "bg-emerald-50/70 border-emerald-300"
+                                      : isEnd
+                                        ? "bg-rose-50/70 border-rose-300"
+                                        : "bg-slate-50/80 border-slate-200",
+                                  )}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className={cn(
+                                      "size-5 rounded-full text-white font-extrabold text-[9px] flex items-center justify-center shrink-0",
+                                      isStart ? "bg-emerald-600" : isEnd ? "bg-rose-600" : "bg-indigo-600",
+                                    )}>
+                                      {isStart ? "S" : isEnd ? "E" : idx}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-xs font-bold text-ink truncate">
+                                        {stop.name}
+                                      </p>
+                                    </div>
+                                    <span className="text-[9px] font-semibold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200 shrink-0 capitalize">
+                                      {stop.category || "Fasilitas"}
+                                    </span>
+                                  </div>
+                                  {stop.reason && (
+                                    <p className="text-[10px] text-slate-600 pl-7 leading-snug">
+                                      {stop.reason}
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* 4. Action Buttons */}
+                        <div className="pt-1 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleSaveSelectedAiRoute}
+                            disabled={isSaving}
+                            className="flex-1 py-2.5 px-2 rounded-xl bg-white border border-slate-200 text-ink font-bold text-xs hover:bg-slate-50 transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                          >
+                            <Save size={14} className="text-indigo-600 shrink-0" />
+                            <span>Simpan Rute</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleApplyAiRouteToPlanner}
+                            className="flex-[2] py-2.5 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-xs hover:from-indigo-700 hover:to-purple-700 transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Check size={14} />
+                            <span>Terapkan ke Mode Navigasi</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
 
               {/* ── MANUAL POI RECOMMENDATION CARDS (TERDEKAT) ───────────── */}
               <div className="space-y-3 pt-1">
