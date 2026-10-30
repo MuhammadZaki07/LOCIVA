@@ -87,6 +87,13 @@ Route::prefix('routing')->group(function () {
     Route::post('/calculate', [\App\Http\Controllers\OsrmRouteController::class, 'calculate']);
     Route::get('/places', [\App\Http\Controllers\OsrmRouteController::class, 'places']);
 });
+// AI
+Route::post('/ai/recommend', [AiRecommendController::class, 'recommend'])
+    ->middleware('throttle:ai-recommend');
+
+// give the bulk analysis its own, higher limiter
+Route::post('/analysis/location', [LocationAnalysisController::class, 'analyze'])
+    ->middleware('throttle:analysis');
 
 /*
 |--------------------------------------------------------------------------
@@ -94,13 +101,6 @@ Route::prefix('routing')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth:sanctum')->group(function () {
-    // AI
-    Route::post('/ai/recommend', [AiRecommendController::class, 'recommend'])
-        ->middleware('throttle:ai-recommend');
-    
-    // give the bulk analysis its own, higher limiter
-    Route::post('/analysis/location', [LocationAnalysisController::class, 'analyze'])
-        ->middleware('throttle:analysis');
 
     // Reports (write)
     Route::post('/reports', [ReportController::class, 'store']);
