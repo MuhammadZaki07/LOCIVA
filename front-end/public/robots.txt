@@ -1,0 +1,28 @@
+# robots.txt for LOCIVA
+# https://lociva.vercel.app
+
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /profile
+Disallow: /candidate-statistics
+Disallow: /api/
+
+# AI crawlers - allow public content
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+Sitemap: https://lociva.vercel.app/sitemap.xml

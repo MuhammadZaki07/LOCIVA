@@ -4,6 +4,7 @@ import { CTA } from "@/components/sections/CTA";
 import { CivicReport } from "@/components/sections/CivicReport";
 import { DataIntelligence } from "@/components/sections/DataIntelligence";
 import { DataTransparency } from "@/components/sections/DataTransparency";
+import { FAQ } from "@/components/sections/FAQ";
 import { Footer } from "@/components/sections/Footer";
 import { Hero } from "@/components/sections/Hero";
 import { HowItWorks } from "@/components/sections/HowItWorks";
@@ -45,6 +46,7 @@ function LandingPage() {
         <DataIntelligence />
         <HowItWorks />
         <UseCases />
+        <FAQ />
         <CTA />
       </main>
       <Footer />

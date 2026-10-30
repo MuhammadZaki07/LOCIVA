@@ -2,6 +2,7 @@ const links = [
   { href: "#product", label: "product" },
   { href: "#how-it-works", label: "how it works" },
   { href: "#reports", label: "reports" },
+  { href: "#faq", label: "faq" },
   { href: "#about", label: "about" },
 ];
 

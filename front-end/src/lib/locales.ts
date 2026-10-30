@@ -448,6 +448,12 @@ export const en = {
   dataSourcesAttribution:
     "Attribution: map data © OpenStreetMap contributors · routing via OSRM · BPS data via Badan Pusat Statistik.",
 
+  // FAQ
+  faqEyebrow: "Frequently asked questions",
+  faqHeadline: "Common questions about LOCIVA",
+  faqBody:
+    "Answers to the most common questions about location intelligence, data sources, and how LOCIVA works.",
+
   // Footer
   footerBuilt: "Built for better decisions, one area at a time.",
   footerPrototype:
@@ -1019,6 +1025,12 @@ export const id = {
     "Cakupan OSM bervariasi menurut wilayah dan tidak dapat dianggap lengkap. Skor adalah indeks dukungan keputusan, bukan jaminan pendapatan atau data lalu lintas live. Tidak ada lalu lintas real-time.",
   dataSourcesAttribution:
     "Atribusi: data peta © kontributor OpenStreetMap · routing via OSRM · data BPS melalui Badan Pusat Statistik.",
+
+  // FAQ
+  faqEyebrow: "Pertanyaan yang sering diajukan",
+  faqHeadline: "Pertanyaan umum tentang LOCIVA",
+  faqBody:
+    "Jawaban atas pertanyaan paling umum tentang intelijen lokasi, sumber data, dan cara kerja LOCIVA.",
 
   // Footer
   footerBuilt: "Dibangun untuk keputusan yang lebih baik, satu daerah pada satu waktu.",

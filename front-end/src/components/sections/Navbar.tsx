@@ -10,6 +10,7 @@ const links = [
   { href: "#intelligence", label: "intelligence" },
   { href: "/view-maps", label: "peta" },
   { href: "#reports", label: "reports" },
+  { href: "#faq", label: "faq" },
   { href: "#about", label: "about" },
 ];
 
