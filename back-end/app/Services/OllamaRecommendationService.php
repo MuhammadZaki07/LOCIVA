@@ -57,8 +57,9 @@ class OllamaRecommendationService
         
         Balas hanya JSON valid dengan format:
         {"reasons":["alasan 1","alasan 2"]}
-        
-        Jumlah alasan harus sama dengan jumlah usaha yang diberikan, yaitu {$count}.
+
+        KRITIKAL:
+        Jumlah alasan harus sama dengan jumlah usaha yang diberikan, yaitu {$count} alasan.
 TXT;
 
         $user = "Data rekomendasi (urut dari peringkat 1):\n"
