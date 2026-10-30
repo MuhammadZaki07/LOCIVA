@@ -1,4 +1,3 @@
-
 import { useLocation, useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import {
@@ -35,7 +34,7 @@ import {
   CardTitle,
   CardDescription,
   CardContent,
-} from "@/components/ui/card";
+} from "@/components/ui/Card";
 
 import { cn } from "@/lib/utils";
 
@@ -113,9 +112,7 @@ const INDICATOR_CONFIG = [
   },
 ] as const;
 
-const isValidScore = (
-  value: ScoreValue | undefined,
-): value is number =>
+const isValidScore = (value: ScoreValue | undefined): value is number =>
   typeof value === "number" && Number.isFinite(value);
 
 const formatScore = (value: number | null | undefined) =>
@@ -204,9 +201,7 @@ export default function CandidateStatistics() {
   const hasIndicatorData = indicators.length > 0;
 
   // Gauge menggunakan total skor dan sisa skala sampai 100.
-  const gaugeValue = hasTotalScore
-    ? Math.max(0, Math.min(100, totalScore))
-    : 0;
+  const gaugeValue = hasTotalScore ? Math.max(0, Math.min(100, totalScore)) : 0;
 
   const gaugeData = hasTotalScore
     ? [
@@ -221,12 +216,13 @@ export default function CandidateStatistics() {
       ]
     : [];
 
-  const estimatedArea = (
-    Math.PI * Math.pow(radius / 1000, 2)
-  ).toLocaleString("id-ID", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  const estimatedArea = (Math.PI * Math.pow(radius / 1000, 2)).toLocaleString(
+    "id-ID",
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    },
+  );
 
   const handleOpenSimulationOnMap = () => {
     navigate("/view-maps", {
@@ -240,7 +236,6 @@ export default function CandidateStatistics() {
   return (
     <div className="min-h-screen bg-[#f8f9fc] text-ink">
       <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
-
         {/* HEADER */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
@@ -264,9 +259,7 @@ export default function CandidateStatistics() {
                 </span>
               </div>
 
-              <p className="mt-1 text-sm text-muted">
-                Sesi: {session.name}
-              </p>
+              <p className="mt-1 text-sm text-muted">Sesi: {session.name}</p>
 
               <p className="mt-1 text-xs text-muted">
                 Analisis kelayakan dan indikator spasial lokasi usaha.
@@ -308,15 +301,11 @@ export default function CandidateStatistics() {
                   <span
                     className={cn(
                       "mr-2 size-1.5 rounded-full",
-                      hasTotalScore
-                        ? "bg-emerald-500"
-                        : "bg-amber-500",
+                      hasTotalScore ? "bg-emerald-500" : "bg-amber-500",
                     )}
                   />
 
-                  {hasTotalScore
-                    ? "Analisis Selesai"
-                    : "Belum Dianalisis"}
+                  {hasTotalScore ? "Analisis Selesai" : "Belum Dianalisis"}
                 </span>
               </div>
             </div>
@@ -375,7 +364,6 @@ export default function CandidateStatistics() {
 
         {/* GAUGE DAN RADAR CHART */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-
           {/* GAUGE CHART */}
           <Card className={cardClass}>
             <SectionHeader
@@ -407,9 +395,7 @@ export default function CandidateStatistics() {
                           <Cell fill="#eef0f6" />
                         </Pie>
 
-                        <Tooltip
-                          formatter={(value) => [`${value}`, "Skor"]}
-                        />
+                        <Tooltip formatter={(value) => [`${value}`, "Skor"]} />
                       </PieChart>
                     </ResponsiveContainer>
 
@@ -418,9 +404,7 @@ export default function CandidateStatistics() {
                         {formatScore(totalScore)}
                       </span>
 
-                      <span className="mt-1 text-xs text-muted">
-                        dari 100
-                      </span>
+                      <span className="mt-1 text-xs text-muted">dari 100</span>
                     </div>
                   </div>
 
@@ -502,9 +486,8 @@ export default function CandidateStatistics() {
 
                   <div className="rounded-xl bg-slate-50 p-3">
                     <p className="text-xs leading-relaxed text-muted">
-                      Radar membantu melihat pola ant indikator.
-                      Interpretasi skor persaingan harus mengikuti definisi
-                      penilaian LOCIVA.
+                      Radar membantu melihat pola ant indikator. Interpretasi
+                      skor persaingan harus mengikuti definisi penilaian LOCIVA.
                     </p>
                   </div>
                 </>
@@ -583,10 +566,7 @@ export default function CandidateStatistics() {
                         maxBarSize={28}
                       >
                         {indicators.map((item) => (
-                          <Cell
-                            key={item.name}
-                            fill={item.color}
-                          />
+                          <Cell key={item.name} fill={item.color} />
                         ))}
                       </Bar>
                     </BarChart>
@@ -705,10 +685,10 @@ export default function CandidateStatistics() {
 
             <div className="mt-4 rounded-xl bg-slate-50 p-4">
               <p className="text-xs leading-relaxed text-muted">
-                Estimasi luas dihitung dengan rumus luas lingkaran,
-                π × radius². Nilai ini bukan pengukuran luas wilayah
-                terbangun atau batas administratif. Analisis penduduk,
-                POI, dan pesaing memerlukan data spasial tambahan.
+                Estimasi luas dihitung dengan rumus luas lingkaran, π × radius².
+                Nilai ini bukan pengukuran luas wilayah terbangun atau batas
+                administratif. Analisis penduduk, POI, dan pesaing memerlukan
+                data spasial tambahan.
               </p>
             </div>
           </CardContent>
@@ -754,16 +734,12 @@ function SectionHeader({
 }) {
   return (
     <CardHeader className="mb-5 flex items-start gap-3">
-      <div className={iconContainerClass}>
-        {icon}
-      </div>
+      <div className={iconContainerClass}>{icon}</div>
 
       <div className="min-w-0">
         <CardTitle>{title}</CardTitle>
 
-        <CardDescription>
-          {description}
-        </CardDescription>
+        <CardDescription>{description}</CardDescription>
       </div>
     </CardHeader>
   );
@@ -787,11 +763,14 @@ function SummaryCard({
   valueColor: string;
 }) {
   return (
-    <Card className={cn(cardClass, "transition duration-200 hover:-translate-y-0.5 hover:shadow-md")}>
+    <Card
+      className={cn(
+        cardClass,
+        "transition duration-200 hover:-translate-y-0.5 hover:shadow-md",
+      )}
+    >
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-medium text-muted">
-          {label}
-        </span>
+        <span className="text-sm font-medium text-muted">{label}</span>
 
         <div
           className={cn(
@@ -814,24 +793,16 @@ function SummaryCard({
         </span>
 
         {suffix && (
-          <span className="text-xs font-medium text-muted">
-            {suffix}
-          </span>
+          <span className="text-xs font-medium text-muted">{suffix}</span>
         )}
       </div>
 
-      <p className="mt-2 text-xs text-muted">
-        {description}
-      </p>
+      <p className="mt-2 text-xs text-muted">{description}</p>
     </Card>
   );
 }
 
-function ChartEmptyState({
-  message,
-}: {
-  message: string;
-}) {
+function ChartEmptyState({ message }: { message: string }) {
   return (
     <div className="flex min-h-[240px] flex-col items-center justify-center rounded-xl bg-slate-50/70 px-5 text-center">
       <div className="flex size-12 items-center justify-center rounded-xl bg-white text-slate-300 shadow-sm">
@@ -859,17 +830,13 @@ function IndicatorCard({
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-[#ececf6] bg-slate-50/60 p-4 transition hover:bg-slate-50">
       <div className="min-w-0">
-        <span className="text-xs font-medium text-muted">
-          {label}
-        </span>
+        <span className="text-xs font-medium text-muted">{label}</span>
       </div>
 
       <span
         className={cn(
           "shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold tabular-nums",
-          valid
-            ? "bg-primary/10 text-primary"
-            : "bg-slate-100 text-muted",
+          valid ? "bg-primary/10 text-primary" : "bg-slate-100 text-muted",
         )}
       >
         {valid ? formatScore(value) : fallback}
