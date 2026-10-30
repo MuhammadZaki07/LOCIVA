@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Helpers\ApiResponse;
+use App\Helpers\PaginationHelper;
 use App\Models\Area;
 use App\Models\Business;
 use App\Models\BusinessType;
@@ -188,13 +189,56 @@ class AdminManagementController extends Controller
     public function auditLogs(Request $request)
     {
         try {
-            $logs = ReportVerification::with([
+            $request->validate([
+                'search'     => 'nullable|string|max:200',
+                'action'     => 'nullable|string|max:50',
+                'from'       => 'nullable|date',
+                'to'         => 'nullable|date',
+                'sort_by'    => 'nullable|in:created_at,action,id',
+                'sort_order' => 'nullable|in:asc,desc',
+                'per_page'   => 'nullable|integer|min:1|max:100',
+            ]);
+
+            $query = ReportVerification::with([
                 'moderator:id,name,email',
                 'report:id,title,status,category_id',
                 'report.category:id,name',
-            ])
-                ->latest('created_at')
-                ->paginate((int) $request->query('per_page', 20));
+            ]);
+
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('note', 'like', "%{$search}%")
+                        ->orWhere('action', 'like', "%{$search}%")
+                        ->orWhereHas('moderator', function ($mq) use ($search) {
+                            $mq->where('name', 'like', "%{$search}%")
+                                ->orWhere('email', 'like', "%{$search}%");
+                        })
+                        ->orWhereHas('report', function ($rq) use ($search) {
+                            $rq->where('title', 'like', "%{$search}%");
+                        });
+                });
+            }
+
+            if ($request->filled('action') && $request->action !== 'all') {
+                $actionFilter = str_replace('report_status_', '', $request->action);
+                $query->where('action', $actionFilter);
+            }
+
+            if ($request->filled('from')) {
+                $query->whereDate('created_at', '>=', $request->from);
+            }
+
+            if ($request->filled('to')) {
+                $query->whereDate('created_at', '<=', $request->to);
+            }
+
+            $sortBy = $request->input('sort_by', 'created_at');
+            $sortOrder = $request->input('sort_order', 'desc');
+            $query->orderBy($sortBy, $sortOrder);
+
+            $perPage = min(max((int) $request->input('per_page', 20), 1), 100);
+            $logs = $query->paginate($perPage);
 
             $formatted = $logs->getCollection()->map(fn ($item) => [
                 'id'             => $item->id,
@@ -214,12 +258,7 @@ class AdminManagementController extends Controller
 
             return ApiResponse::success([
                 'data' => $formatted,
-                'meta' => [
-                    'current_page' => $logs->currentPage(),
-                    'last_page'    => $logs->lastPage(),
-                    'per_page'     => $logs->perPage(),
-                    'total'        => $logs->total(),
-                ],
+                'meta' => PaginationHelper::meta($logs),
             ], 'Audit trail retrieved successfully');
         } catch (\Throwable $e) {
             return ApiResponse::error('Failed to load audit logs: ' . $e->getMessage(), 500);
@@ -464,18 +503,56 @@ class AdminManagementController extends Controller
     public function dataSyncLogs(Request $request)
     {
         try {
-            $logs = DataSyncLog::with('dataSource:id,name,type')
-                ->latest('started_at')
-                ->paginate((int) $request->query('per_page', 20));
+            $request->validate([
+                'search'         => 'nullable|string|max:200',
+                'status'         => 'nullable|string|max:50',
+                'data_source_id' => 'nullable|string|max:50',
+                'from'           => 'nullable|date',
+                'to'             => 'nullable|date',
+                'sort_by'        => 'nullable|in:started_at,records_processed,status,id',
+                'sort_order'     => 'nullable|in:asc,desc',
+                'per_page'       => 'nullable|integer|min:1|max:100',
+            ]);
+
+            $query = DataSyncLog::with('dataSource:id,name,type');
+
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('entity_type', 'like', "%{$search}%")
+                        ->orWhere('error_message', 'like', "%{$search}%")
+                        ->orWhereHas('dataSource', function ($dq) use ($search) {
+                            $dq->where('name', 'like', "%{$search}%");
+                        });
+                });
+            }
+
+            if ($request->filled('status') && $request->status !== 'all') {
+                $query->where('status', $request->status);
+            }
+
+            if ($request->filled('data_source_id') && $request->data_source_id !== 'all') {
+                $query->where('data_source_id', $request->data_source_id);
+            }
+
+            if ($request->filled('from')) {
+                $query->whereDate('started_at', '>=', $request->from);
+            }
+
+            if ($request->filled('to')) {
+                $query->whereDate('started_at', '<=', $request->to);
+            }
+
+            $sortBy = $request->input('sort_by', 'started_at');
+            $sortOrder = $request->input('sort_order', 'desc');
+            $query->orderBy($sortBy, $sortOrder);
+
+            $perPage = min(max((int) $request->input('per_page', 20), 1), 100);
+            $logs = $query->paginate($perPage);
 
             return ApiResponse::success([
                 'data' => $logs->items(),
-                'meta' => [
-                    'current_page' => $logs->currentPage(),
-                    'last_page'    => $logs->lastPage(),
-                    'per_page'     => $logs->perPage(),
-                    'total'        => $logs->total(),
-                ],
+                'meta' => PaginationHelper::meta($logs),
             ], 'Sync logs retrieved successfully');
         } catch (\Throwable $e) {
             return ApiResponse::error('Failed to retrieve sync logs: ' . $e->getMessage(), 500);

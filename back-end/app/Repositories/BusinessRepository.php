@@ -99,11 +99,30 @@ class BusinessRepository extends BaseRepository implements BusinessRepositoryInt
 
     public function paginateUserBusinesses(
         string $userId,
-        int $perPage = 10
+        int $perPage = 10,
+        array $filters = []
     ) {
-        return $this->model->with(['businessType:id,name,slug'])
-            ->where('user_id', $userId)
-            ->latest()
-            ->paginate($perPage);
+        $query = $this->model->with(['businessType:id,name,slug'])
+            ->where('user_id', $userId);
+
+        if (!empty($filters['search'])) {
+            $search = $filters['search'];
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhere('address', 'like', "%{$search}%");
+            });
+        }
+
+        if (!empty($filters['business_type_id']) && $filters['business_type_id'] !== 'all') {
+            $query->where('business_type_id', $filters['business_type_id']);
+        }
+
+        $allowedSorts = ['name', 'created_at', 'address'];
+        $sortBy = in_array($filters['sort_by'] ?? null, $allowedSorts, true) ? $filters['sort_by'] : 'created_at';
+        $sortOrder = ($filters['sort_order'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortBy, $sortOrder);
+
+        return $query->paginate($perPage);
     }
 }

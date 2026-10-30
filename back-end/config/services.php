@@ -51,4 +51,10 @@ return [
         'base_url' => env('OSRMROUTE_BASE_URL', 'https://api.osrmroute.com/v1'),
     ],
 
+    'ai' => [
+        'url'     => env('AI_CHAT_URL', 'https://breakfast-investigator-incoming-grant.trycloudflare.com/api/chat'),
+        'model'   => env('AI_MODEL', 'erwan2/DeepSeek-R1-Distill-Qwen-1.5B'),
+        'timeout' => (int) env('AI_TIMEOUT_SECONDS', 95),
+    ],
+
 ];

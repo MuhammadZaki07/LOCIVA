@@ -67,6 +67,7 @@ Route::get('/business-types/{id}/weights', [BusinessTypeWeightController::class,
 // Public Vendor Routes on Map
 Route::get('/vendor-routes/public', [VendorRouteController::class, 'publicRoutes']);
 Route::get('/vendor-routes/recommendations', [VendorRouteController::class, 'recommendations']);
+Route::post('/vendor-routes/ai-plan', [VendorRouteController::class, 'aiPlanRoute']);
 
 // Location Analysis (core UMKM feature — public, no auth needed)
 Route::post('/analysis/location', [LocationAnalysisController::class, 'analyze']);

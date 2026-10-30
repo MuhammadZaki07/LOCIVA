@@ -206,20 +206,24 @@ class BusinessController extends Controller
     public function getSimulationSessions(Request $request)
     {
         $validated = $request->validate([
-            'search' => ['nullable', 'string', 'max:255'],
+            'search'   => ['nullable', 'string', 'max:255'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'page'     => ['nullable', 'integer', 'min:1'],
         ]);
 
+        $perPage = min(max((int) ($validated['per_page'] ?? 10), 1), 100);
         $sessions = $this->simulationService->getUserSimulationSessions(
             (string) Auth::id(),
             $validated['search'] ?? '',
-            (int) ($validated['per_page'] ?? 10)
+            $perPage
         );
 
-        return ApiResponse::success(
-            SimulationSessionResource::collection($sessions),
-            'Saved simulation sessions retrieved successfully'
-        );
+        $resource = SimulationSessionResource::collection($sessions);
+
+        return ApiResponse::success([
+            'data' => $resource->resolve(),
+            'meta' => PaginationHelper::meta($sessions),
+        ], 'Saved simulation sessions retrieved successfully');
     }
 
     /**
@@ -237,9 +241,25 @@ class BusinessController extends Controller
 
     public function indexUser(Request $request)
     {
+        $validated = $request->validate([
+            'search'           => 'nullable|string|max:200',
+            'business_type_id' => 'nullable|string|max:50',
+            'sort_by'          => 'nullable|in:name,created_at,address',
+            'sort_order'       => 'nullable|in:asc,desc',
+            'per_page'         => 'nullable|integer|min:1|max:100',
+        ]);
+
         try {
-            $fetch = $this->businessRepository->paginateUserBusinesses($request->user()->id, $request->query('per_page', 10));
-            return ApiResponse::success(["meta" => PaginationHelper::meta($fetch), "Data" => BusinessResource::collection($fetch)]);
+            $perPage = min(max((int) ($validated['per_page'] ?? $request->query('per_page', 10)), 1), 100);
+            $fetch = $this->businessRepository->paginateUserBusinesses(
+                $request->user()->id,
+                $perPage,
+                $validated
+            );
+            return ApiResponse::success([
+                "meta" => PaginationHelper::meta($fetch),
+                "Data" => BusinessResource::collection($fetch),
+            ]);
         } catch (\Throwable $th) {
             return ApiResponse::error($th->getMessage());
         }

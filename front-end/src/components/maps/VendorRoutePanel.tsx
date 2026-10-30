@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import {
+  Search,
   Navigation,
   Plus,
   Trash2,
@@ -16,14 +17,40 @@ import {
   X,
   Check,
   Target,
+  Bot,
+  Loader2,
+  AlertCircle,
+  Lightbulb,
+  Radar,
+  CircleDot,
+  Play,
+  Flag,
+  ChevronDown,
+  ChevronUp,
+  Info,
+  Layers,
 } from "lucide-react";
 import api from "@/context/apiClient";
+import { useDebounce } from "@/hooks/useDebounce";
 import { RouteLocationSearch } from "./RouteLocationSearch";
+import { fetchPlacesAround } from "@/lib/Osm";
 import {
   calculateRoute,
   type RouteWaypoint,
   type RouteCalculationResult,
 } from "@/lib/routing";
+import {
+  streamAiAnalysis,
+  buildAreaAnalysisSystemMessage,
+  buildAreaAnalysisPrompt,
+  validateAndMapAiResponse,
+  requestAreaRoutePlan,
+  convertAiAreaResponseToWaypoints,
+  type AiAreaRouteResponse,
+  type AiRoutePoint,
+  type AiRouteCandidate,
+  type AiRouteRecommendation,
+} from "@/lib/aiRoutePlanner";
 import { useToast } from "@/components/ui/Toast";
 
 export interface SavedRouteItem {
@@ -76,6 +103,24 @@ interface VendorRoutePanelProps {
   onSelectStartPoint: () => void;
   onTrackingLocationChange?: (location: TrackingLocationUpdate | null) => void;
   onSelectWaypoint: () => void;
+  /** Spot Jitu: callback untuk memilih area di peta */
+  onSelectAnalysisArea?: () => void;
+  /** Spot Jitu: callback saat titik pusat area diubah */
+  onAnalysisAreaCenterChange?: (center: { lat: number; lng: number } | null) => void;
+  /** Spot Jitu: koordinat area yang dipilih dari peta */
+  analysisAreaCenter?: { lat: number; lng: number } | null;
+  /** Spot Jitu: radius analisis dalam meter */
+  spotJituRadius?: number;
+  /** Spot Jitu: callback saat radius analisis berubah */
+  onSpotJituRadiusChange?: (radius: number) => void;
+  /** Spot Jitu: hasil rekomendasi rute area lengkap dari AI */
+  aiAreaResponse?: AiAreaRouteResponse | null;
+  /** Spot Jitu: callback saat hasil rekomendasi rute area berubah */
+  onAiAreaResponseChange?: (res: AiAreaRouteResponse | null) => void;
+  /** Spot Jitu: ID titik yang sedang disorot/diinspeksi */
+  highlightedStopId?: string | number | null;
+  /** Spot Jitu: callback untuk menyorot titik tertentu */
+  onHighlightStopId?: (id: string | number | null) => void;
 }
 
 function haversineDistance(
@@ -130,6 +175,15 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
   onSelectStartPoint,
   onTrackingLocationChange,
   onSelectWaypoint,
+  onSelectAnalysisArea,
+  onAnalysisAreaCenterChange,
+  analysisAreaCenter,
+  spotJituRadius: propSpotJituRadius,
+  onSpotJituRadiusChange,
+  aiAreaResponse: propAiAreaResponse,
+  onAiAreaResponseChange,
+  highlightedStopId: propHighlightedStopId,
+  onHighlightStopId,
 }) => {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<
@@ -146,8 +200,134 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
 
   // Loading states
   const [isCalculating, setIsCalculating] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const isLocatingRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedRoutes, setSavedRoutes] = useState<SavedRouteItem[]>([]);
+  const [savedRoutesSearch, setSavedRoutesSearch] = useState("");
+  const [savedRoutesPage, setSavedRoutesPage] = useState(1);
+  const [savedRoutesTotalPages, setSavedRoutesTotalPages] = useState(1);
+  const [savedRoutesTotal, setSavedRoutesTotal] = useState(0);
+  const debouncedSavedRoutesSearch = useDebounce(savedRoutesSearch, 400);
+
+  // Mobile Bottom Sheet Snap State (diangkat ke atas / ke bawah pada handphone)
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+  const [windowHeight, setWindowHeight] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      return window.innerHeight;
+    }
+    return 800;
+  });
+  const [sheetSnap, setSheetSnap] = useState<"collapsed" | "half" | "expanded">("half");
+  const [dragHeight, setDragHeight] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+      setWindowHeight(window.innerHeight);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const getMobileSnapHeight = (
+    snap: "collapsed" | "half" | "expanded",
+    h: number,
+  ) => {
+    if (snap === "collapsed") return 140;
+    if (snap === "half") return Math.round(h * 0.55);
+    return Math.round(h * 0.88);
+  };
+
+  const isDraggingRef = useRef(false);
+  const startYRef = useRef(0);
+  const startHeightRef = useRef(0);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (typeof window === "undefined" || window.innerWidth >= 768) return;
+    const target = e.target as HTMLElement;
+    if (
+      target.closest("button") ||
+      target.closest("input") ||
+      target.closest("select") ||
+      target.closest("a")
+    ) {
+      return;
+    }
+
+    isDraggingRef.current = true;
+    setIsDragging(true);
+    startYRef.current = e.clientY;
+    const currentH = dragHeight ?? getMobileSnapHeight(sheetSnap, windowHeight);
+    startHeightRef.current = currentH;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (_) {}
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current) return;
+    const deltaY = startYRef.current - e.clientY; // drag UP is positive
+    const minH = 120;
+    const maxH = Math.round(windowHeight * 0.90);
+    const nextH = Math.max(minH, Math.min(maxH, startHeightRef.current + deltaY));
+    setDragHeight(nextH);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+    setIsDragging(false);
+
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch (_) {}
+
+    const finalH = dragHeight ?? startHeightRef.current;
+    const delta = finalH - startHeightRef.current;
+
+    const collapsedH = 140;
+    const halfH = Math.round(windowHeight * 0.55);
+    const expandedH = Math.round(windowHeight * 0.88);
+
+    if (delta > 35) {
+      if (startHeightRef.current <= collapsedH + 30) {
+        setSheetSnap("half");
+      } else {
+        setSheetSnap("expanded");
+      }
+    } else if (delta < -35) {
+      if (startHeightRef.current >= expandedH - 30) {
+        setSheetSnap("half");
+      } else {
+        setSheetSnap("collapsed");
+      }
+    } else {
+      const dCollapsed = Math.abs(finalH - collapsedH);
+      const dHalf = Math.abs(finalH - halfH);
+      const dExpanded = Math.abs(finalH - expandedH);
+      const min = Math.min(dCollapsed, dHalf, dExpanded);
+      if (min === dCollapsed) setSheetSnap("collapsed");
+      else if (min === dHalf) setSheetSnap("half");
+      else setSheetSnap("expanded");
+    }
+
+    setDragHeight(null);
+  };
+
+  const handleToggleSnap = () => {
+    setSheetSnap((prev) => {
+      if (prev === "collapsed") return "half";
+      if (prev === "half") return "expanded";
+      return "collapsed";
+    });
+  };
   const [loadingSaved, setLoadingSaved] = useState(false);
   const [showRouteSettings, setShowRouteSettings] = useState(false);
 
@@ -590,7 +770,7 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
                       variant: "info",
                     });
                   })
-                  .catch(() => {});
+                  .catch(() => { });
               }
             }
           }
@@ -680,6 +860,53 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
   // Recommendations state
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [loadingRecs, setLoadingRecs] = useState(false);
+
+  // AI Route Assistant state ("Spot Jitu" AI route planner)
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiRecommendation, setAiRecommendation] =
+    useState<AiRouteRecommendation | null>(null);
+  const aiAbortControllerRef = useRef<AbortController | null>(null);
+
+  // Spot Jitu: Area-based AI analysis state
+  const [localSpotJituRadius, setLocalSpotJituRadius] = useState<number>(2000);
+  const spotJituRadius = propSpotJituRadius ?? localSpotJituRadius;
+  const setSpotJituRadius = useCallback((r: number) => {
+    setLocalSpotJituRadius(r);
+    onSpotJituRadiusChange?.(r);
+  }, [onSpotJituRadiusChange]);
+  const [spotJituNearbyBusinesses, setSpotJituNearbyBusinesses] = useState<AiRouteCandidate[]>([]);
+  const [spotJituLoadingNearby, setSpotJituLoadingNearby] = useState(false);
+  const [spotJituStreamText, setSpotJituStreamText] = useState<string>("");
+  const [spotJituStreaming, setSpotJituStreaming] = useState(false);
+  const spotJituStreamRef = useRef<AbortController | null>(null);
+
+  // Spot Jitu: Area-based Complete AI Route state
+  const [localAiAreaResponse, setLocalAiAreaResponse] = useState<AiAreaRouteResponse | null>(null);
+  const currentAreaResponse = propAiAreaResponse !== undefined ? propAiAreaResponse : localAiAreaResponse;
+  const setAreaResponse = useCallback((res: AiAreaRouteResponse | null) => {
+    setLocalAiAreaResponse(res);
+    onAiAreaResponseChange?.(res);
+  }, [onAiAreaResponseChange]);
+
+  const [localHighlightedStopId, setLocalHighlightedStopId] = useState<string | number | null>(null);
+  const currentHighlightedStopId = propHighlightedStopId !== undefined ? propHighlightedStopId : localHighlightedStopId;
+  const setHighlightedStop = useCallback((id: string | number | null) => {
+    setLocalHighlightedStopId(id);
+    onHighlightStopId?.(id);
+  }, [onHighlightStopId]);
+
+  const [isAiPlanning, setIsAiPlanning] = useState(false);
+  const [aiPlanStage, setAiPlanStage] = useState<"idle" | "fetching_osm" | "analyzing_ai" | "calculating_route">("idle");
+  const [showAnalysisFactors, setShowAnalysisFactors] = useState(true);
+  const [customPromptNotes, setCustomPromptNotes] = useState("");
+
+  // Cleanup AI request on unmount
+  useEffect(() => {
+    return () => {
+      aiAbortControllerRef.current?.abort();
+      spotJituStreamRef.current?.abort();
+    };
+  }, []);
 
   const [selectedStart, setSelectedStart] = useState<{
     lat: number;
@@ -783,57 +1010,125 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
   }, [isLoggedIn, onWaypointsChange, onRouteCalculated]);
 
   const handleUseCurrentLocation = () => {
-    if (!userLocation) {
+    // Collapse to peek height on mobile when using current location
+    if (window.innerWidth < 768) {
+      setSheetSnap("collapsed");
+    }
+    if (isLocatingRef.current) return;
+
+    if (!navigator.geolocation) {
       toast({
-        title: "Lokasi Tidak Tersedia",
-        description:
-          "Lokasi Anda belum terdeteksi. Aktifkan izin lokasi atau pilih titik awal melalui peta.",
+        title: "GPS Tidak Didukung",
+        description: "Browser Anda tidak mendukung fitur lokasi.",
         variant: "error",
       });
       return;
     }
 
-    const start = {
-      lat: userLocation.lat,
-      lng: userLocation.lng,
-      name: "Lokasi Saya (Titik Awal)",
-      stop_duration: 0,
-    };
+    isLocatingRef.current = true;
+    setIsLocating(true);
 
-    const end = selectedEnd
-      ? {
-        lat: selectedEnd.lat,
-        lng: selectedEnd.lng,
-        name: selectedEnd.name,
-        stop_duration: 0,
-      }
-      : null;
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude: lat, longitude: lng } = position.coords;
 
-    if (trackingWatchId.current !== null) {
-      stopTracking();
-    } else {
-      setIsRouteStarted(false);
-    }
+        const start = {
+          lat,
+          lng,
+          name: "Lokasi Saya (Titik Awal)",
+          stop_duration: 0,
+        };
 
-    onWaypointsChange([start, ...(end ? [end] : [])]);
-    onRouteCalculated(null);
-    setSelectedStart({
-      lat: userLocation.lat,
-      lng: userLocation.lng,
-      name: start.name,
-      displayName: start.name,
-    });
+        // Pertahankan titik singgah yang sudah ada.
+        const stops = activeWaypoints.slice(1);
+        const end = selectedEnd;
+
+        const updatedStops = end
+          ? [
+            ...stops.filter(
+              (wp) => wp.lat !== end.lat || wp.lng !== end.lng,
+            ),
+            {
+              lat: end.lat,
+              lng: end.lng,
+              name: end.name,
+              stop_duration: 0,
+            },
+          ]
+          : stops;
+
+        if (trackingWatchId.current !== null) {
+          stopTracking();
+        } else {
+          setIsRouteStarted(false);
+        }
+
+        setSelectedStart({
+          lat,
+          lng,
+          name: start.name,
+          displayName: start.name,
+        });
+
+        onWaypointsChange([start, ...updatedStops]);
+        onRouteCalculated(null);
+
+        toast({
+          title: "Lokasi Berhasil Didapatkan",
+          description: "Lokasi Anda ditetapkan sebagai titik awal rute.",
+          variant: "success",
+        });
+
+        isLocatingRef.current = false;
+        setIsLocating(false);
+      },
+      (error) => {
+        let description = "Gagal mendapatkan lokasi Anda.";
+
+        if (error.code === error.PERMISSION_DENIED) {
+          description = "Izinkan akses lokasi melalui pengaturan browser.";
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          description = "Informasi lokasi tidak tersedia.";
+        } else if (error.code === error.TIMEOUT) {
+          description = "Permintaan lokasi terlalu lama. Coba lagi.";
+        }
+
+        toast({
+          title: "Gagal Mendapatkan Lokasi",
+          description,
+          variant: "error",
+        });
+
+        isLocatingRef.current = false;
+        setIsLocating(false);
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 20000,
+      },
+    );
   };
 
-  const fetchSavedRoutes = useCallback(async () => {
+  const fetchSavedRoutes = useCallback(async (page = 1, search = "") => {
     const token = localStorage.getItem("token");
     if (!token) return;
 
     setLoadingSaved(true);
     try {
-      const res = await api.get("/vendor-routes");
+      const res = await api.get("/vendor-routes", {
+        params: {
+          page,
+          per_page: 8,
+          search: search.trim() || undefined,
+        },
+      });
       if (res.data?.success && res.data?.data?.data) {
         setSavedRoutes(res.data.data.data);
+        if (res.data.data.meta) {
+          setSavedRoutesTotalPages(res.data.data.meta.last_page || 1);
+          setSavedRoutesTotal(res.data.data.meta.total || 0);
+        }
       } else if (res.data?.success && Array.isArray(res.data?.data)) {
         setSavedRoutes(res.data.data);
       }
@@ -892,11 +1187,11 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
 
   useEffect(() => {
     if (activeTab === "saved") {
-      fetchSavedRoutes();
+      fetchSavedRoutes(savedRoutesPage, debouncedSavedRoutesSearch);
     } else if (activeTab === "recommendations") {
       fetchRecommendations();
     }
-  }, [activeTab, fetchSavedRoutes, fetchRecommendations]);
+  }, [activeTab, savedRoutesPage, debouncedSavedRoutesSearch, fetchSavedRoutes, fetchRecommendations]);
 
   const [showAddStopNotice, setShowAddStopNotice] = useState(false);
 
@@ -1096,6 +1391,368 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
     setActiveTab("planner");
   };
 
+  const handleApplyAiRoute = async () => {
+    if (!aiRecommendation || aiRecommendation.waypoints.length < 2) return;
+
+    // Pastikan session tracking nonaktif, jangan memulai tracking otomatis (persyaratan #8)
+    if (trackingWatchId.current !== null) {
+      stopTracking();
+    } else {
+      setIsRouteStarted(false);
+    }
+
+    const newWaypoints = aiRecommendation.waypoints;
+    onWaypointsChange(newWaypoints);
+    setRouteName(aiRecommendation.routeName);
+    setActiveTab("planner");
+
+    toast({
+      title: "Menerapkan Rute AI...",
+      description: "Menghitung jaringan jalan nyata dengan OSRM...",
+    });
+
+    try {
+      const calcResult = await calculateRoute(newWaypoints);
+      onRouteCalculated(calcResult);
+      toast({
+        title: "Rute Rekomendasi AI Diterapkan",
+        description: `${newWaypoints.length} titik (${calcResult.distanceKm.toFixed(1)} km) siap dijalankan.`,
+        variant: "success",
+      });
+    } catch (err: any) {
+      console.warn("Kalkulasi rute OSRM gagal:", err);
+      toast({
+        title: "Titik Rute AI Diterapkan",
+        description:
+          "Titik singgah berhasil diterapkan, namun jalur jalan raya otomatis gagal dihitung.",
+        variant: "warning",
+      });
+    }
+  };
+
+  const handleApplyAiAreaRoute = async () => {
+    if (!currentAreaResponse) return;
+
+    // Pastikan session tracking nonaktif, jangan memulai tracking otomatis (persyaratan #8)
+    if (trackingWatchId.current !== null) {
+      stopTracking();
+    } else {
+      setIsRouteStarted(false);
+    }
+
+    const waypoints = convertAiAreaResponseToWaypoints(currentAreaResponse);
+    onWaypointsChange(waypoints);
+    setRouteName(currentAreaResponse.route_name);
+    setActiveTab("planner");
+
+    if (
+      currentAreaResponse.route_coordinates &&
+      currentAreaResponse.route_coordinates.length > 0
+    ) {
+      const metrics = currentAreaResponse.route_metrics;
+      onRouteCalculated({
+        coordinates: currentAreaResponse.route_coordinates,
+        distanceKm:
+          metrics.distance_km ??
+          (metrics.distance_meters ? metrics.distance_meters / 1000 : 0),
+        durationMinutes:
+          metrics.duration_minutes ??
+          (metrics.duration_seconds ? Math.round(metrics.duration_seconds / 60) : 0),
+        summary: currentAreaResponse.route_name,
+      });
+      toast({
+        title: "Rute Rekomendasi AI Diterapkan",
+        description: `${waypoints.length} titik (${(metrics.distance_km ?? (metrics.distance_meters ? metrics.distance_meters / 1000 : 0)).toFixed(1)} km) aktif di peta.`,
+        variant: "success",
+      });
+    } else {
+      try {
+        const calcResult = await calculateRoute(waypoints);
+        onRouteCalculated(calcResult);
+        toast({
+          title: "Rute Rekomendasi AI Diterapkan",
+          description: `${waypoints.length} titik (${calcResult.distanceKm.toFixed(1)} km) aktif di peta.`,
+          variant: "success",
+        });
+      } catch (err: any) {
+        console.warn("Kalkulasi rute OSRM gagal:", err);
+      }
+    }
+  };
+
+  // ── SPOT JITU: Fetch bisnis terdekat berdasarkan area yang dipilih ──
+  const fetchNearbyForSpotJitu = useCallback(async (
+    center: { lat: number; lng: number },
+    radius: number,
+  ) => {
+    setSpotJituLoadingNearby(true);
+    setSpotJituNearbyBusinesses([]);
+    setAiError(null);
+
+    const candidates: AiRouteCandidate[] = [];
+    const seenIds = new Set<string>();
+
+    try {
+      // Ambil rekomendasi POI dari backend
+      const recRes = await api.get("/vendor-routes/recommendations", {
+        params: { lat: center.lat, lng: center.lng, radius },
+      });
+      if (recRes.data?.success && Array.isArray(recRes.data.data?.recommendations)) {
+        for (const rec of recRes.data.data.recommendations) {
+          const key = String(rec.id);
+          if (!seenIds.has(key)) {
+            seenIds.add(key);
+            candidates.push({
+              id: rec.id,
+              name: rec.name,
+              category: rec.category,
+              lat: Number(rec.lat),
+              lng: Number(rec.lng),
+              address: rec.address,
+              footfall_score: rec.footfall_score,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Gagal mengambil POI recommendations:", err);
+    }
+
+    try {
+      // Ambil bisnis terdaftar LOCIVA dalam radius
+      const bizRes = await api.get("/businesses/map", {
+        params: { lat: center.lat, lng: center.lng, radius },
+      });
+      const bizData = bizRes.data?.data;
+      const bizItems = Array.isArray(bizData) ? bizData : [];
+      for (const b of bizItems) {
+        const bLat = Number(b.latitude ?? b.lat);
+        const bLng = Number(b.longitude ?? b.lng);
+        if (!isNaN(bLat) && !isNaN(bLng)) {
+          const key = `biz-${b.id}`;
+          if (!seenIds.has(key)) {
+            seenIds.add(key);
+            candidates.push({
+              id: key,
+              name: b.name,
+              category: b.business_type_name || b.category || "usaha",
+              lat: bLat,
+              lng: bLng,
+              address: b.address,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Gagal mengambil bisnis peta:", err);
+    }
+
+    // Tambahkan bisnis user jika dalam radius
+    if (Array.isArray(businesses)) {
+      for (const b of businesses) {
+        const bLat = Number(b.latitude ?? b.lat);
+        const bLng = Number(b.longitude ?? b.lng);
+        if (!isNaN(bLat) && !isNaN(bLng)) {
+          const dist = haversineDistance(center.lat, center.lng, bLat, bLng);
+          if (dist <= radius) {
+            const key = `user-biz-${b.id}`;
+            if (!seenIds.has(key)) {
+              seenIds.add(key);
+              candidates.push({
+                id: key,
+                name: b.name,
+                category: "user_business",
+                lat: bLat,
+                lng: bLng,
+                is_user_business: true,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    setSpotJituNearbyBusinesses(candidates);
+    setSpotJituLoadingNearby(false);
+    return candidates;
+  }, [businesses]);
+
+  // ── SPOT JITU: Jalankan analisis AI streaming ──
+  const handleSpotJituAnalysis = async () => {
+    const center = analysisAreaCenter;
+    if (!center) {
+      toast({
+        title: "Pilih Area Dulu",
+        description: "Klik lokasi di peta untuk menentukan pusat area analisis.",
+        variant: "error",
+      });
+      return;
+    }
+
+    // Fetch nearby jika belum ada
+    let candidates = spotJituNearbyBusinesses;
+    if (candidates.length === 0) {
+      candidates = await fetchNearbyForSpotJitu(center, spotJituRadius);
+    }
+
+    if (candidates.length < 2) {
+      setAiError(
+        "Ditemukan kurang dari 2 lokasi terverifikasi di area ini. Coba perbesar radius atau pilih lokasi di kawasan kota.",
+      );
+      return;
+    }
+
+    // Tentukan konteks bisnis (dari bisnis user yang dipilih, jika ada)
+    const selectedBiz = businesses.find((b) => String(b.id) === selectedBusinessId);
+    const bizContext = selectedBiz
+      ? { name: selectedBiz.name, category: "usaha_keliling" }
+      : null;
+
+    // Abort previous stream
+    spotJituStreamRef.current?.abort();
+    const controller = new AbortController();
+    spotJituStreamRef.current = controller;
+
+    setSpotJituStreaming(true);
+    setSpotJituStreamText("");
+    setAiError(null);
+    setAiRecommendation(null);
+
+    try {
+      const systemMsg = buildAreaAnalysisSystemMessage();
+      const userMsg = buildAreaAnalysisPrompt(bizContext, candidates, spotJituRadius);
+
+      const fullText = await streamAiAnalysis(systemMsg, userMsg, {
+        signal: controller.signal,
+        onToken: (_token, accumulated) => {
+          setSpotJituStreamText(accumulated);
+        },
+        onDone: (text) => {
+          setSpotJituStreamText(text);
+        },
+        onError: (err) => {
+          setAiError(err.message);
+        },
+      });
+
+      // Coba parse rekomendasi rute dari teks yang dihasilkan
+      try {
+        const recommendation = validateAndMapAiResponse(fullText, candidates);
+        setAiRecommendation(recommendation);
+      } catch {
+        // AI mungkin tidak menghasilkan JSON valid — tidak apa, teks analisis tetap ditampilkan
+        console.warn("AI tidak menghasilkan rekomendasi rute JSON yang valid, tapi analisis teks tersedia.");
+      }
+    } catch (err: any) {
+      if (err?.name === "AbortError") return;
+      const msg =
+        err?.message || "Gagal menghubungi layanan AI. Silakan coba kembali.";
+      setAiError(msg);
+    } finally {
+      setSpotJituStreaming(false);
+    }
+  };
+
+  // ── SPOT JITU: Jalankan perancangan rute area AI lengkap (Backend + Overpass + OSRM) ──
+  const handleStartAiAreaPlan = async () => {
+    let center = analysisAreaCenter;
+    if (!center && selectedBusinessId) {
+      const biz = businesses.find((b) => String(b.id) === selectedBusinessId);
+      const bLat = Number(biz?.latitude ?? biz?.lat);
+      const bLng = Number(biz?.longitude ?? biz?.lng);
+      if (!isNaN(bLat) && !isNaN(bLng)) {
+        center = { lat: bLat, lng: bLng };
+        onAnalysisAreaCenterChange?.(center);
+      }
+    }
+
+    if (!center) {
+      toast({
+        title: "Pilih Area Dulu",
+        description: "Klik lokasi di peta atau pilih bisnis yang memiliki titik koordinat sebagai acuan area analisis.",
+        variant: "error",
+      });
+      return;
+    }
+
+    setAiError(null);
+    setIsAiPlanning(true);
+    setAiPlanStage("fetching_osm");
+
+    try {
+      // 1. Ambil data tempat sekitar dari OpenStreetMap
+      let externalPlaces: any[] = [];
+      try {
+        externalPlaces = await fetchPlacesAround(center.lat, center.lng, spotJituRadius);
+      } catch (osmErr) {
+        console.warn("Gagal mengambil data OpenStreetMap, melanjutkan dengan data lokal:", osmErr);
+      }
+
+      setAiPlanStage("analyzing_ai");
+
+      const selectedBiz = businesses.find((b) => String(b.id) === selectedBusinessId);
+
+      // 2. Kirim permintaan perancangan rute area lengkap ke backend Laravel
+      const response = await requestAreaRoutePlan({
+        business_id: selectedBiz ? selectedBiz.id : undefined,
+        business_name: selectedBiz?.name,
+        center,
+        radius_meters: spotJituRadius,
+        external_places: externalPlaces,
+        prompt: customPromptNotes.trim() || undefined,
+      });
+
+      setAiPlanStage("calculating_route");
+      setAreaResponse(response);
+      toast({
+        title: "Rekomendasi Rute Siap",
+        description: `AI berhasil merancang ${response.route_name} dengan ${response.recommended_waypoints.length + 2} titik perjalanan.`,
+        variant: "success",
+      });
+    } catch (err: any) {
+      const isInsufficient = Boolean(
+        err?.response?.data?.errors?.insufficient_data ||
+        err?.response?.data?.insufficient_data
+      );
+      // Axios timeout: err.code === 'ECONNABORTED' or err.message includes 'timeout'
+      const isClientTimeout =
+        err?.code === "ECONNABORTED" ||
+        (typeof err?.message === "string" && err.message.toLowerCase().includes("timeout"));
+      // Server-side 504/524 (Cloudflare tunnel or upstream AI slow)
+      const isServerTimeout =
+        err?.response?.status === 504 ||
+        err?.response?.status === 524;
+
+      const errorMsg = isInsufficient
+        ? "Data geografis tidak mencukupi di radius ini (< 2 lokasi terverifikasi). Coba perbesar radius atau pilih kawasan perkotaan yang lebih ramai."
+        : isClientTimeout
+          ? "Koneksi ke server melebihi batas waktu. Server AI mungkin sedang sibuk — coba lagi dalam beberapa saat, atau kurangi radius analisis agar data lebih sedikit."
+          : isServerTimeout
+            ? (err?.response?.data?.message ||
+               "Server AI terlalu lama merespons (timeout 504/524). Coba kurangi radius analisis atau coba kembali dalam beberapa menit.")
+            : err?.response?.data?.message ||
+              err?.message ||
+              "Gagal merancang rute dengan AI. Silakan coba kembali.";
+      setAiError(errorMsg);
+      toast({
+        title: "Gagal Merancang Rute",
+        description: errorMsg,
+        variant: "error",
+      });
+    } finally {
+      setIsAiPlanning(false);
+      setAiPlanStage("idle");
+    }
+  };
+
+  // ── SPOT JITU: Auto-fetch nearby saat area/radius berubah ──
+  useEffect(() => {
+    if (analysisAreaCenter && activeTab === "recommendations") {
+      fetchNearbyForSpotJitu(analysisAreaCenter, spotJituRadius);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysisAreaCenter, spotJituRadius]);
+
   const handleLoadSavedRoute = (route: SavedRouteItem) => {
     if (Array.isArray(route.waypoints) && route.waypoints.length > 0) {
       if (trackingWatchId.current !== null) {
@@ -1193,12 +1850,62 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
   return (
     <div
       className={cn(
-        "fixed md:static inset-y-0 left-0 z-[500] w-full h-full min-h-0 bg-surface border-r border-slate-200 flex flex-col overflow-hidden transition-transform duration-300 shadow-xl md:shadow-none",
-        !isOpen && "-translate-x-full md:translate-x-0 md:hidden",
+        // Desktop: floating panel anchored left next to nav pill (IDENTICAL to previous desktop layout)
+        "md:fixed md:z-[430] md:left-20 md:top-6 md:bottom-6 md:w-[28rem] md:rounded-3xl md:bg-white md:shadow-2xl md:border md:border-slate-200/80 md:overflow-hidden md:flex md:flex-col",
+        // Mobile: draggable bottom sheet anchored bottom
+        "max-md:fixed max-md:z-[430] max-md:inset-x-0 max-md:bottom-0 max-md:w-full max-md:rounded-t-3xl max-md:rounded-b-none max-md:bg-white max-md:shadow-2xl max-md:border-t max-md:border-slate-200/80 max-md:overflow-hidden max-md:flex max-md:flex-col",
+        !isOpen && "hidden",
       )}
+      style={
+        isMobile
+          ? {
+              height: isDragging
+                ? `${dragHeight}px`
+                : `${getMobileSnapHeight(sheetSnap, windowHeight)}px`,
+              maxHeight: "90vh",
+              transition: isDragging
+                ? "none"
+                : "height 0.28s cubic-bezier(0.16, 1, 0.3, 1)",
+            }
+          : {
+              maxHeight: "calc(100vh - 3rem)",
+            }
+      }
     >
-      {/* Header */}
-      <div className="p-4 border-b border-slate-200 bg-white/70 backdrop-blur-xs">
+      {/* Header with touch/drag handlers for mobile */}
+      <div
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        className="p-4 border-b border-slate-200 bg-white/95 backdrop-blur-xs select-none max-md:cursor-grab max-md:active:cursor-grabbing max-md:touch-none shrink-0"
+      >
+        {/* Mobile bottom sheet drag handle */}
+        <div
+          data-mobile-drag-handle
+          onClick={handleToggleSnap}
+          className="md:hidden flex flex-col items-center justify-center -mt-1.5 mb-2 py-1 cursor-pointer select-none"
+          title="Ketuk atau geser untuk ubah ukuran panel"
+        >
+          <div className="w-12 h-1.5 rounded-full bg-slate-300 transition-colors hover:bg-slate-400" />
+          <div className="flex items-center gap-1 text-[10px] text-muted font-medium mt-1">
+            {sheetSnap === "collapsed" && (
+              <span className="flex items-center gap-0.5 text-primary font-semibold">
+                <ChevronUp size={12} /> Buka panel rute
+              </span>
+            )}
+            {sheetSnap === "half" && (
+              <span className="flex items-center gap-1 text-slate-500">
+                <ChevronUp size={11} /> Tarik ke atas / bawah <ChevronDown size={11} />
+              </span>
+            )}
+            {sheetSnap === "expanded" && (
+              <span className="flex items-center gap-0.5 text-slate-500">
+                <ChevronDown size={12} /> Perkecil panel
+              </span>
+            )}
+          </div>
+        </div>
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600">
@@ -1213,13 +1920,24 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-muted"
-          >
-            <X size={16} />
-          </button>
+          <div className="flex items-center gap-1">
+            {/* Mobile Snap Toggle button */}
+            <button
+              type="button"
+              onClick={handleToggleSnap}
+              title={sheetSnap === "collapsed" ? "Perbesar panel" : "Perkecil panel"}
+              className="md:hidden p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-muted cursor-pointer"
+            >
+              {sheetSnap === "collapsed" ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-muted cursor-pointer"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
         {/* Tab Switcher */}
@@ -1327,9 +2045,8 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
                     Titik {activeWaypointIndex + 1}/{targetsRef.current.length || activeWaypoints.length}
                   </span>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/25 flex items-center gap-1">
-                    <span className={`size-1.5 rounded-full ${
-                      gpsAccuracyLevel === "good" ? "bg-emerald-400" : gpsAccuracyLevel === "medium" ? "bg-amber-400" : "bg-red-400"
-                    }`} />
+                    <span className={`size-1.5 rounded-full ${gpsAccuracyLevel === "good" ? "bg-emerald-400" : gpsAccuracyLevel === "medium" ? "bg-amber-400" : "bg-red-400"
+                      }`} />
                     <span className="text-[10px] text-blue-100">
                       {gpsAccuracyLevel === "good" ? "GPS Baik" : gpsAccuracyLevel === "medium" ? "GPS Sedang" : "GPS Lemah"}
                     </span>
@@ -1438,11 +2155,16 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
                   <button
                     type="button"
                     onClick={handleUseCurrentLocation}
-                    disabled={!userLocation}
+                    disabled={isLocating}
+                    title="Gunakan lokasi saat ini sebagai titik awal"
+                    aria-label="Gunakan lokasi saat ini sebagai titik awal"
                     className="w-full py-2 rounded-xl bg-white border border-slate-200 text-ink font-bold text-xs flex items-center justify-center gap-2 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
-                    <Navigation size={13} />
-                    Lokasi Saya
+                    <Navigation
+                      size={13}
+                      className={cn(isLocating && "animate-spin")}
+                    />
+                    {isLocating ? "Memuat Lokasi..." : "Lokasi Saya"}
                   </button>
 
                   <button
@@ -1878,78 +2600,519 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
             </div>
           )}
 
-          {/* TAB 2: RECOMMENDATIONS */}
+          {/* TAB 2: SPOT JITU — Area-based AI Route Analysis */}
           {activeTab === "recommendations" && (
-            <div className="space-y-3">
-              <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200/80">
-                <h4 className="font-bold text-xs text-amber-900 flex items-center gap-1.5 mb-1">
-                  <Sparkles size={13} className="text-amber-600" />
-                  Rekomendasi Titik Mangkal Berpotensi
-                </h4>
-                <p className="text-[11px] text-amber-800 leading-relaxed">
-                  Dihitung dari kepadatan fasilitas umum pejalan kaki tinggi
-                  (kampus, sekolah, pasar, sentral transit) di sekitar rute
-                  Anda.
-                </p>
-              </div>
-
-              {loadingRecs ? (
-                <div className="py-12 text-center space-y-2">
-                  <RefreshCw className="size-5 text-primary animate-spin mx-auto" />
-                  <p className="text-xs text-muted">
-                    Menganalisis titik ramai di sekitar...
-                  </p>
-                </div>
-              ) : recommendations.length === 0 ? (
-                <div className="text-center py-12 text-muted text-xs">
-                  Tidak ada rekomendasi di radius ini. Coba geser pusat peta ke
-                  kawasan kota.
-                </div>
-              ) : (
-                recommendations.map((rec) => (
-                  <div
-                    key={rec.id}
-                    className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-xs space-y-2"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-primary bg-primary-soft px-1.5 py-0.5 rounded">
-                          {rec.category}
-                        </span>
-                        <h4 className="font-bold text-ink text-xs mt-1">
-                          {rec.name}
-                        </h4>
-                      </div>
-                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full shrink-0">
-                        Skor Ramai: {rec.footfall_score}
+            <div className="space-y-4">
+              {/* ── STEP 1: Pilih Bisnis Konteks ──────────────────────── */}
+              <div className="p-3 bg-gradient-to-br from-indigo-50/90 via-purple-50/70 to-emerald-50/60 rounded-2xl border border-indigo-200/80 shadow-xs space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="size-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                    <Sparkles size={14} className="text-amber-300" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-xs text-indigo-950 flex items-center gap-1.5">
+                      Spot Jitu AI
+                      <span className="text-[9.5px] uppercase tracking-wider font-extrabold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">
+                        DeepSeek
                       </span>
-                    </div>
-
-                    <p className="text-[11px] text-muted leading-relaxed">
-                      {rec.reason}
+                    </h4>
+                    <p className="text-[10.5px] text-indigo-800/80">
+                      Analisis area & rancang rute optimal dengan AI
                     </p>
+                  </div>
+                </div>
 
-                    <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-                      <span className="text-[10.5px] text-muted">
-                        ~{rec.distance_meters}m dari titik acuan
-                      </span>
+                {/* Pilih bisnis konteks */}
+                <div className="space-y-1.5">
+                  <label className="text-[10.5px] font-semibold text-indigo-900/80 block">
+                    1. Konteks Usaha (opsional)
+                  </label>
+                  <select
+                    value={selectedBusinessId}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSelectedBusinessId(val);
+                      const biz = businesses.find((b) => String(b.id) === val);
+                      const bLat = Number(biz?.latitude ?? biz?.lat);
+                      const bLng = Number(biz?.longitude ?? biz?.lng);
+                      if (!isNaN(bLat) && !isNaN(bLng) && !analysisAreaCenter) {
+                        onAnalysisAreaCenterChange?.({ lat: bLat, lng: bLng });
+                      }
+                    }}
+                    className="w-full text-xs p-2 rounded-xl border border-indigo-200 bg-white/95 text-ink focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                    disabled={isAiPlanning || spotJituStreaming}
+                  >
+                    <option value="">— Tanpa konteks spesifik —</option>
+                    {businesses.map((b) => (
+                      <option key={b.id} value={String(b.id)}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* ── STEP 2: Pilih Area di Peta ────────────────────────── */}
+                <div className="space-y-1.5">
+                  <label className="text-[10.5px] font-semibold text-indigo-900/80 block">
+                    2. Pilih Area Analisis di Peta
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={isAiPlanning || spotJituStreaming}
+                      onClick={() => onSelectAnalysisArea?.()}
+                      className="flex-1 py-2 px-3 rounded-xl border-2 border-dashed border-indigo-300 bg-white/80 text-indigo-800 font-semibold text-xs hover:bg-indigo-50 hover:border-indigo-400 transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    >
+                      <CircleDot size={14} className="text-indigo-600" />
+                      {analysisAreaCenter
+                        ? `📍 ${analysisAreaCenter.lat.toFixed(4)}, ${analysisAreaCenter.lng.toFixed(4)}`
+                        : "Klik Lokasi di Peta"}
+                    </button>
+                  </div>
+                  {!analysisAreaCenter && (
+                    <p className="text-[10px] text-indigo-700/60 italic">
+                      Klik tombol di atas, lalu klik titik di peta sebagai pusat area
+                    </p>
+                  )}
+                </div>
+
+                {/* ── STEP 3: Pilih Radius ──────────────────────────────── */}
+                <div className="space-y-1.5">
+                  <label className="text-[10.5px] font-semibold text-indigo-900/80 block">
+                    3. Radius Analisis
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {[1000, 2000, 3000, 5000].map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        disabled={isAiPlanning || spotJituStreaming}
+                        onClick={() => setSpotJituRadius(r)}
+                        className={cn(
+                          "flex-1 py-1.5 rounded-xl text-[10.5px] font-bold transition-all cursor-pointer border",
+                          spotJituRadius === r
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                            : "bg-white text-indigo-800 border-indigo-200 hover:bg-indigo-50",
+                        )}
+                      >
+                        {r >= 1000 ? `${r / 1000} km` : `${r}m`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ── STEP 4: Preferensi Tambahan (opsional) ─────────────── */}
+                <div className="space-y-1.5">
+                  <label className="text-[10.5px] font-semibold text-indigo-900/80 block">
+                    4. Catatan Preferensi Rute (opsional)
+                  </label>
+                  <input
+                    type="text"
+                    value={customPromptNotes}
+                    onChange={(e) => setCustomPromptNotes(e.target.value)}
+                    disabled={isAiPlanning || spotJituStreaming}
+                    placeholder="Contoh: Fokus dekat kampus saat jam siang, hindari tanjakan..."
+                    className="w-full text-xs p-2 rounded-xl border border-indigo-200 bg-white/95 text-ink placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                  />
+                </div>
+
+                {/* ── Tombol Analisis Area AI Lengkap ─────────────────── */}
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-indigo-100">
+                  <span className="text-[10.5px] text-muted flex items-center gap-1">
+                    <Lightbulb size={12} className="text-amber-500 shrink-0" />
+                    DeepSeek + OpenStreetMap + OSRM
+                  </span>
+
+                  <button
+                    type="button"
+                    disabled={isAiPlanning || (!analysisAreaCenter && !selectedBusinessId)}
+                    onClick={() => void handleStartAiAreaPlan()}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 transition-all cursor-pointer"
+                  >
+                    {isAiPlanning ? (
+                      <>
+                        <Loader2 size={13} className="animate-spin" />
+                        <span>Menganalisis...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Radar size={13} />
+                        <span>Rancang Rute AI</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* ── Status Tahapan AI ───────────────────────────────── */}
+                {isAiPlanning && (
+                  <div className="p-2.5 bg-indigo-50/80 border border-indigo-200 rounded-xl flex items-center gap-2 text-indigo-900 text-xs animate-pulse">
+                    <Loader2 size={14} className="animate-spin text-indigo-600 shrink-0" />
+                    <span className="text-[11px] font-medium">
+                      {aiPlanStage === "fetching_osm" && "📡 Mengumpulkan fasilitas umum sekitar (OpenStreetMap)..."}
+                      {aiPlanStage === "analyzing_ai" && "🤖 AI menganalisis area & merancang alur rute optimal..."}
+                      {aiPlanStage === "calculating_route" && "🚗 Menghitung jalur jaringan jalan & durasi (OSRM)..."}
+                      {aiPlanStage === "idle" && "Memproses rute..."}
+                    </span>
+                  </div>
+                )}
+
+                {/* ── Error alert ────────────────────────────────────── */}
+                {aiError && (
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-rose-800 text-[11px]">
+                    <AlertCircle size={14} className="shrink-0 text-rose-600 mt-0.5" />
+                    <span className="flex-1">{aiError}</span>
+                  </div>
+                )}
+
+                {/* ── COMPLETE AI ROUTE RECOMMENDATION CARD ──────────── */}
+                {currentAreaResponse && !isAiPlanning && (
+                  <div className="p-3 bg-white rounded-xl border-2 border-emerald-500/80 shadow-md space-y-3 animate-in fade-in slide-in-from-top-2">
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2">
+                      <div className="min-w-0">
+                        <span className="text-[9.5px] uppercase font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full inline-block mb-1">
+                          Rekomendasi Rute Lengkap
+                        </span>
+                        <h4 className="font-bold text-ink text-sm truncate">
+                          {currentAreaResponse.route_name}
+                        </h4>
+                        <p className="text-[10px] text-muted truncate">
+                          Konteks Usaha: {currentAreaResponse.selected_business.name} (
+                          {currentAreaResponse.selected_business.business_type || "Usaha Keliling"})
+                        </p>
+                      </div>
                       <button
                         type="button"
-                        onClick={() => handleAddRecommendationToRoute(rec)}
-                        className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold text-[10.5px] hover:bg-emerald-700 transition-colors cursor-pointer"
+                        onClick={() => setAreaResponse(null)}
+                        className="text-muted hover:text-ink cursor-pointer p-0.5 shrink-0"
+                        title="Tutup pratinjau"
                       >
-                        + Jadikan Titik Singgah
+                        <X size={15} />
+                      </button>
+                    </div>
+
+                    {/* Metrics Banner */}
+                    <div className="grid grid-cols-3 gap-1.5 p-2 bg-slate-50 rounded-xl border border-slate-100 text-center">
+                      <div>
+                        <span className="text-[9.5px] text-muted block">Jarak Total</span>
+                        <span className="text-xs font-extrabold text-ink">
+                          {currentAreaResponse.route_metrics.distance_km != null
+                            ? `${currentAreaResponse.route_metrics.distance_km} km`
+                            : currentAreaResponse.route_metrics.distance_meters != null
+                              ? `${(currentAreaResponse.route_metrics.distance_meters / 1000).toFixed(1)} km`
+                              : "-"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[9.5px] text-muted block">Estimasi Waktu</span>
+                        <span className="text-xs font-extrabold text-ink">
+                          {currentAreaResponse.route_metrics.duration_minutes != null
+                            ? `${currentAreaResponse.route_metrics.duration_minutes} mnt`
+                            : currentAreaResponse.route_metrics.duration_seconds != null
+                              ? `${Math.round(currentAreaResponse.route_metrics.duration_seconds / 60)} mnt`
+                              : "-"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[9.5px] text-muted block">Total Titik</span>
+                        <span className="text-xs font-extrabold text-indigo-700">
+                          {currentAreaResponse.recommended_waypoints.length + 2} titik
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Timeline Titik Perjalanan */}
+                    <div className="space-y-2">
+                      <p className="text-[10.5px] font-bold text-muted uppercase tracking-wider">
+                        Runtutan Perjalanan Rute:
+                      </p>
+
+                      <div className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
+                        {/* 1. START POINT */}
+                        <div
+                          onClick={() => setHighlightedStop(currentAreaResponse.start_point.id)}
+                          className={cn(
+                            "p-2 rounded-xl text-xs border transition-all cursor-pointer space-y-1",
+                            currentHighlightedStopId === currentAreaResponse.start_point.id
+                              ? "bg-emerald-50/80 border-emerald-400 ring-2 ring-emerald-300"
+                              : "bg-slate-50/80 border-slate-200/80 hover:bg-slate-100/70",
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="size-5 rounded-full bg-emerald-600 text-white font-extrabold text-[9px] flex items-center justify-center shrink-0">
+                              <Play size={10} className="fill-white translate-x-0.5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded">
+                                  START
+                                </span>
+                                <p className="text-xs font-bold text-ink truncate">
+                                  {currentAreaResponse.start_point.name}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-[9px] font-semibold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-100 shrink-0">
+                              {currentAreaResponse.start_point.source === "business"
+                                ? "Bisnis"
+                                : currentAreaResponse.start_point.source === "internal_poi"
+                                  ? "POI"
+                                  : "Fasum"}
+                            </span>
+                          </div>
+                          <p className="text-[10.5px] text-slate-600 leading-snug pl-7">
+                            {currentAreaResponse.start_point.reason}
+                          </p>
+                        </div>
+
+                        {/* 2. INTERMEDIATE WAYPOINTS */}
+                        {currentAreaResponse.recommended_waypoints.map((wp, idx) => (
+                          <div
+                            key={`wp-${wp.id}-${idx}`}
+                            onClick={() => setHighlightedStop(wp.id)}
+                            className={cn(
+                              "p-2 rounded-xl text-xs border transition-all cursor-pointer space-y-1",
+                              currentHighlightedStopId === wp.id
+                                ? "bg-indigo-50/80 border-indigo-400 ring-2 ring-indigo-300"
+                                : "bg-slate-50/80 border-slate-200/80 hover:bg-slate-100/70",
+                            )}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className="size-5 rounded-full bg-indigo-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0">
+                                {idx + 1}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-xs font-bold text-ink truncate">
+                                    {wp.name}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2 text-[10px] text-muted">
+                                  <span className="capitalize">{wp.category || "Fasilitas"}</span>
+                                  <span>•</span>
+                                  <span>Mangkal ~{wp.stop_duration_minutes || 30} mnt</span>
+                                </div>
+                              </div>
+                              <span className="text-[9px] font-semibold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-100 shrink-0">
+                                {wp.source === "business"
+                                  ? "Bisnis"
+                                  : wp.source === "internal_poi"
+                                    ? "POI"
+                                    : "Fasum"}
+                              </span>
+                            </div>
+                            <p className="text-[10.5px] text-slate-600 leading-snug pl-7">
+                              {wp.reason}
+                            </p>
+                          </div>
+                        ))}
+
+                        {/* 3. END POINT */}
+                        <div
+                          onClick={() => setHighlightedStop(currentAreaResponse.end_point.id)}
+                          className={cn(
+                            "p-2 rounded-xl text-xs border transition-all cursor-pointer space-y-1",
+                            currentHighlightedStopId === currentAreaResponse.end_point.id
+                              ? "bg-rose-50/80 border-rose-400 ring-2 ring-rose-300"
+                              : "bg-slate-50/80 border-slate-200/80 hover:bg-slate-100/70",
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="size-5 rounded-full bg-rose-600 text-white font-extrabold text-[9px] flex items-center justify-center shrink-0">
+                              <Flag size={10} className="fill-white" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[9px] font-bold bg-rose-100 text-rose-800 px-1.5 py-0.2 rounded">
+                                  END
+                                </span>
+                                <p className="text-xs font-bold text-ink truncate">
+                                  {currentAreaResponse.end_point.name}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-[9px] font-semibold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-100 shrink-0">
+                              {currentAreaResponse.end_point.source === "business"
+                                ? "Bisnis"
+                                : currentAreaResponse.end_point.source === "internal_poi"
+                                  ? "POI"
+                                  : "Fasum"}
+                            </span>
+                          </div>
+                          <p className="text-[10.5px] text-slate-600 leading-snug pl-7">
+                            {currentAreaResponse.end_point.reason}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Faktor Analisis Geografis (Collapsible) */}
+                    {Array.isArray(currentAreaResponse.analysis_factors) &&
+                      currentAreaResponse.analysis_factors.length > 0 && (
+                        <div className="rounded-xl border border-indigo-200/80 bg-white overflow-hidden shadow-2xs">
+                          <button
+                            type="button"
+                            onClick={() => setShowAnalysisFactors((prev) => !prev)}
+                            className="w-full p-2.5 flex items-center justify-between text-left hover:bg-indigo-50/50 transition-colors cursor-pointer"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <Layers size={13} className="text-indigo-600" />
+                              <span className="text-xs font-bold text-indigo-950">
+                                Faktor Pertimbangan Geografis (
+                                {currentAreaResponse.analysis_factors.length})
+                              </span>
+                            </div>
+                            {showAnalysisFactors ? (
+                              <ChevronUp size={14} className="text-indigo-600" />
+                            ) : (
+                              <ChevronDown size={14} className="text-indigo-600" />
+                            )}
+                          </button>
+                          {showAnalysisFactors && (
+                            <div className="p-2 pt-0 space-y-1.5 border-t border-indigo-100 mt-1 max-h-48 overflow-y-auto">
+                              {currentAreaResponse.analysis_factors.map((factor, idx) => (
+                                <div
+                                  key={idx}
+                                  className="p-2 rounded-lg bg-indigo-50/40 border border-indigo-100/70 text-[11px] space-y-0.5"
+                                >
+                                  <div className="font-bold text-indigo-900 flex items-center gap-1">
+                                    <span className="size-1.5 rounded-full bg-indigo-500 shrink-0" />
+                                    <span>{factor.factor}</span>
+                                  </div>
+                                  <p className="text-slate-700 pl-2.5">
+                                    <span className="font-semibold text-slate-900">Temuan: </span>
+                                    {factor.finding}
+                                  </p>
+                                  <p className="text-indigo-800 pl-2.5">
+                                    <span className="font-semibold text-indigo-950">Dampak: </span>
+                                    {factor.impact_on_route}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                    {/* Penjelasan Rute AI */}
+                    <div className="p-2.5 bg-gradient-to-br from-indigo-50/60 to-purple-50/60 rounded-xl border border-indigo-100 space-y-1">
+                      <div className="flex items-center gap-1.5 text-indigo-950 font-bold text-xs">
+                        <Info size={13} className="text-indigo-600" />
+                        <span>Penjelasan & Rasional Rute AI</span>
+                      </div>
+                      <p className="text-[11px] text-slate-700 leading-relaxed whitespace-pre-line">
+                        {currentAreaResponse.explanation}
+                      </p>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setAreaResponse(null)}
+                        className="flex-1 py-2 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 transition-colors cursor-pointer text-center"
+                      >
+                        Rancang Ulang
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleApplyAiAreaRoute}
+                        className="flex-[2] py-2 px-3 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Check size={14} />
+                        <span>Terapkan Rute ke Peta</span>
                       </button>
                     </div>
                   </div>
-                ))
-              )}
+                )}
+              </div>
+
+              {/* ── MANUAL POI RECOMMENDATION CARDS (TERDEKAT) ───────────── */}
+              <div className="space-y-3 pt-1">
+                <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200/80">
+                  <h4 className="font-bold text-xs text-amber-900 flex items-center gap-1.5 mb-1">
+                    <Sparkles size={13} className="text-amber-600" />
+                    Titik Mangkal Satuan Berpotensi
+                  </h4>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Dihitung dari kepadatan fasilitas umum pejalan kaki tinggi
+                    (kampus, sekolah, pasar, sentral transit) di sekitar titik acuan Anda.
+                  </p>
+                </div>
+
+                {loadingRecs ? (
+                  <div className="py-8 text-center space-y-2">
+                    <RefreshCw className="size-5 text-primary animate-spin mx-auto" />
+                    <p className="text-xs text-muted">
+                      Menganalisis titik ramai di sekitar...
+                    </p>
+                  </div>
+                ) : recommendations.length === 0 ? (
+                  <div className="text-center py-8 text-muted text-xs">
+                    Tidak ada rekomendasi di radius ini. Coba geser pusat peta ke
+                    kawasan kota.
+                  </div>
+                ) : (
+                  recommendations.map((rec) => (
+                    <div
+                      key={rec.id}
+                      className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-xs space-y-2"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-primary bg-primary-soft px-1.5 py-0.5 rounded">
+                            {rec.category}
+                          </span>
+                          <h4 className="font-bold text-ink text-xs mt-1">
+                            {rec.name}
+                          </h4>
+                        </div>
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full shrink-0">
+                          Skor Ramai: {rec.footfall_score}
+                        </span>
+                      </div>
+
+                      <p className="text-[11px] text-muted leading-relaxed">
+                        {rec.reason}
+                      </p>
+
+                      <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+                        <span className="text-[10.5px] text-muted">
+                          ~{rec.distance_meters}m dari titik acuan
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleAddRecommendationToRoute(rec)}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold text-[10.5px] hover:bg-emerald-700 transition-colors cursor-pointer"
+                        >
+                          + Jadikan Titik Singgah
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
 
           {/* TAB 3: SAVED ROUTES */}
           {activeTab === "saved" && (
             <div className="space-y-3">
+              {/* Search bar */}
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Cari rute tersimpan..."
+                  value={savedRoutesSearch}
+                  onChange={(e) => {
+                    setSavedRoutesSearch(e.target.value);
+                    setSavedRoutesPage(1);
+                  }}
+                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-primary"
+                />
+              </div>
+
               {loadingSaved ? (
                 <div className="py-12 text-center space-y-2">
                   <RefreshCw className="size-5 text-primary animate-spin mx-auto" />
@@ -1961,11 +3124,12 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
                 <div className="text-center py-12 text-muted text-xs space-y-1">
                   <Route size={24} className="mx-auto text-slate-300 mb-1" />
                   <p className="font-semibold text-ink">
-                    Belum ada rute tersimpan
+                    {debouncedSavedRoutesSearch ? "Tidak ada rute yang cocok" : "Belum ada rute tersimpan"}
                   </p>
                   <p>
-                    Gunakan tab "Perencana" untuk membuat dan menyimpan rute
-                    Anda.
+                    {debouncedSavedRoutesSearch
+                      ? "Coba kata kunci pencarian yang lain."
+                      : 'Gunakan tab "Perencana" untuk membuat dan menyimpan rute Anda.'}
                   </p>
                 </div>
               ) : (
@@ -2079,6 +3243,33 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
                     </div>
                   </div>
                 ))
+              )}
+
+              {/* Server-side Pagination for Saved Routes */}
+              {savedRoutesTotalPages > 1 && (
+                <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-[11px] text-muted">
+                  <span>
+                    Hal {savedRoutesPage} dari {savedRoutesTotalPages} ({savedRoutesTotal} rute)
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={savedRoutesPage <= 1}
+                      onClick={() => setSavedRoutesPage((p) => Math.max(1, p - 1))}
+                      className="px-2 py-1 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      Sebelumnya
+                    </button>
+                    <button
+                      type="button"
+                      disabled={savedRoutesPage >= savedRoutesTotalPages}
+                      onClick={() => setSavedRoutesPage((p) => p + 1)}
+                      className="px-2 py-1 text-xs rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      Selanjutnya
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           )}

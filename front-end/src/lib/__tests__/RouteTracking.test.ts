@@ -10,6 +10,8 @@
  * 7. Adaptive stationary threshold and immediate heading responsiveness.
  */
 
+import { describe, it, expect } from "vitest";
+
 export interface TestLatLng {
   lat: number;
   lng: number;
@@ -433,4 +435,8 @@ export function testRouteTracking() {
   return allPassed;
 }
 
-testRouteTracking();
+describe("Route Tracking & Navigation Verification", () => {
+  it("passes all 57 route tracking and navigation tests", () => {
+    expect(testRouteTracking()).toBe(true);
+  });
+});
