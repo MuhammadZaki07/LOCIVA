@@ -21,7 +21,8 @@ class BusinessController extends Controller
     public function __construct(
         protected BusinessRepositoryInterface $businessRepository,
         protected SimulationServiceInterface $simulationService
-    ) {}
+    ) {
+    }
 
     /**
      * Get LOCIVA Internal businesses for the map layer.
@@ -82,13 +83,13 @@ class BusinessController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name'             => 'required|string|max:150',
-            'description'      => 'nullable|string',
+            'name' => 'required|string|max:150',
+            'description' => 'nullable|string',
             'business_type_id' => 'required|exists:business_types,id',
-            'latitude'         => 'required|numeric|between:-90,90',
-            'longitude'        => 'required|numeric|between:-180,180',
-            'address'          => 'nullable|string|max:500',
-            'image'            => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'latitude' => 'required|numeric|between:-90,90',
+            'longitude' => 'required|numeric|between:-180,180',
+            'address' => 'nullable|string|max:500',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
         if (isset($validated['image'])) {
@@ -206,24 +207,28 @@ class BusinessController extends Controller
     public function getSimulationSessions(Request $request)
     {
         $validated = $request->validate([
-            'search'   => ['nullable', 'string', 'max:255'],
+            'search' => ['nullable', 'string', 'max:255'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
-            'page'     => ['nullable', 'integer', 'min:1'],
+            'business_id' => ['nullable', 'string'],
+            'business_type_id' => ['nullable', 'string'],
+            'page' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $perPage = min(max((int) ($validated['per_page'] ?? 10), 1), 100);
         $sessions = $this->simulationService->getUserSimulationSessions(
             (string) Auth::id(),
             $validated['search'] ?? '',
-            $perPage
+            (int) ($validated['per_page'] ?? 10),
+            $validated['business_id'] ?? null,
+            $validated['business_type_id'] ?? null
         );
 
-        $resource = SimulationSessionResource::collection($sessions);
-
-        return ApiResponse::success([
-            'data' => $resource->resolve(),
+        return response()->json([
+            'success' => true,
+            'message' => 'Saved simulation sessions retrieved successfully',
+            'data' => SimulationSessionResource::collection($sessions)->resolve(),
             'meta' => PaginationHelper::meta($sessions),
-        ], 'Saved simulation sessions retrieved successfully');
+        ]);
     }
 
     /**
@@ -242,11 +247,11 @@ class BusinessController extends Controller
     public function indexUser(Request $request)
     {
         $validated = $request->validate([
-            'search'           => 'nullable|string|max:200',
+            'search' => 'nullable|string|max:200',
             'business_type_id' => 'nullable|string|max:50',
-            'sort_by'          => 'nullable|in:name,created_at,address',
-            'sort_order'       => 'nullable|in:asc,desc',
-            'per_page'         => 'nullable|integer|min:1|max:100',
+            'sort_by' => 'nullable|in:name,created_at,address',
+            'sort_order' => 'nullable|in:asc,desc',
+            'per_page' => 'nullable|integer|min:1|max:100',
         ]);
 
         try {

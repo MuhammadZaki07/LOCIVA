@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 /**
  * Route Tracking & Navigation Verification Tests
  * Validates:
@@ -435,8 +436,8 @@ export function testRouteTracking() {
   return allPassed;
 }
 
-describe("Route Tracking & Navigation Verification", () => {
-  it("passes all 57 route tracking and navigation tests", () => {
+describe("RouteTracking", () => {
+  it("runs all 57 route tracking verification assertions", () => {
     expect(testRouteTracking()).toBe(true);
   });
 });

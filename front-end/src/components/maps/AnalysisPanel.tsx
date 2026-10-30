@@ -30,6 +30,8 @@ import {
   MapPin,
   Navigation,
   Scale,
+  Lock,
+  ArrowRight,
 } from 'lucide-react';
 import LogoPuzzleLoader from '../ui/Logopuzzleloader';
 
@@ -50,6 +52,9 @@ interface AnalysisPanelProps {
   isStale?: boolean;
   candidateId?: string;
   analysisStage?: string;
+  isLoggedIn?: boolean;
+  onStartPickLocation?: () => void;
+  isPickingLocation?: boolean;
 }
 
 export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
@@ -69,6 +74,9 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   isStale = false,
   candidateId = 'A',
   analysisStage,
+  isLoggedIn = false,
+  onStartPickLocation,
+  isPickingLocation = false,
 }) => {
   const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
 
@@ -209,6 +217,28 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-5">
+        {onStartPickLocation && (
+          <button
+            type="button"
+            onClick={onStartPickLocation}
+            className={cn(
+              "w-full py-2.5 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 border transition-all cursor-pointer shadow-xs",
+              isPickingLocation
+                ? "bg-primary text-white border-primary animate-pulse"
+                : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
+            )}
+          >
+            <MapPin size={14} className={isPickingLocation ? "text-white" : "text-primary"} />
+            <span>
+              {isPickingLocation
+                ? "Klik pada Peta untuk Memilih Titik..."
+                : candidateExists
+                ? "Ubah Titik Lokasi di Peta"
+                : "Pilih Titik Lokasi di Peta"}
+            </span>
+          </button>
+        )}
+
         <RadiusControl
           radius={radius}
           onChange={onRadiusChange}
@@ -217,80 +247,105 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           disabled={isAnalyzing}
         />
 
-        {/* Primary Manual Analyze Button */}
-        {candidateExists && onAnalyze && (
-          <button
-            type="button"
-            onClick={onAnalyze}
-            disabled={isAnalyzing || result?.isValidLocation === false}
-            className={cn(
-              "w-full py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer",
-              candidateStatus === 'stale'
-                ? "bg-amber-600 hover:bg-amber-700 text-white"
-                : "bg-indigo-600 hover:bg-indigo-700 text-white",
-              (isAnalyzing || result?.isValidLocation === false) && "opacity-50 cursor-not-allowed",
-            )}
-          >
-            <Play size={16} className="fill-current" />
-            <span>
-              {candidateStatus === 'stale'
-                ? "Analisis Ulang Lokasi Terkini"
-                : result
-                ? "Analisis Ulang"
-                : "Jalankan Analisis Lokasi"}
-            </span>
-          </button>
-        )}
-
-        {/* Stale Warning Banner */}
-        {candidateStatus === 'stale' && result && (
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-left flex items-start gap-2.5">
-            <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
-            <div className="text-xs text-amber-900 space-y-1">
-              <p className="font-bold">Koordinat atau radius telah diubah</p>
-              <p className="text-amber-800 text-[11px]">
-                Hasil di bawah mengacu pada riwayat posisi sebelumnya. Klik tombol <strong>Analisis Ulang Lokasi Terkini</strong> untuk memperbarui data analitik.
-              </p>
+        {/* Unauthenticated Login Gate */}
+        {!isLoggedIn ? (
+          <div className="p-4 bg-indigo-50/90 border border-indigo-200/90 rounded-2xl text-left space-y-3">
+            <div className="flex items-start gap-2.5 text-xs text-indigo-950">
+              <Lock size={16} className="text-indigo-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-bold text-xs">Login Diperlukan untuk Analisis</p>
+                <p className="text-[11px] text-indigo-800/90 mt-0.5 leading-relaxed">
+                  Silakan masuk atau daftar akun untuk menjalankan kalkulasi potensi lokasi, penilaian kelayakan, dan menyimpan kandidat.
+                </p>
+              </div>
             </div>
+            <a
+              href="/login?redirect=/view-maps"
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <span>Masuk Sekarang</span>
+              <ArrowRight size={13} />
+            </a>
           </div>
-        )}
+        ) : (
+          <>
+            {/* Primary Manual Analyze Button */}
+            {candidateExists && onAnalyze && (
+              <button
+                type="button"
+                data-tour="analyze-btn"
+                onClick={onAnalyze}
+                disabled={isAnalyzing || result?.isValidLocation === false}
+                className={cn(
+                  "w-full py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer",
+                  candidateStatus === 'stale'
+                    ? "bg-amber-600 hover:bg-amber-700 text-white"
+                    : "bg-indigo-600 hover:bg-indigo-700 text-white",
+                  (isAnalyzing || result?.isValidLocation === false) && "opacity-50 cursor-not-allowed",
+                )}
+              >
+                <Play size={16} className="fill-current" />
+                <span>
+                  {candidateStatus === 'stale'
+                    ? "Analisis Ulang Lokasi Terkini"
+                    : result
+                    ? "Analisis Ulang"
+                    : "Jalankan Analisis Lokasi"}
+                </span>
+              </button>
+            )}
 
-        {/* Explicit save button */}
-        {candidateExists && (
-          <button
-            type="button"
-            onClick={onSaveCandidate}
-            disabled={
-              isPersistedInDb ||
-              isAnalyzing ||
-              result?.isValidLocation === false
-            }
-            className={cn(
-              "w-full py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all",
-              result?.isValidLocation === false
-                ? "bg-slate-200 text-slate-500 cursor-not-allowed opacity-60"
-                : isPersistedInDb
-                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default"
-                  : "bg-primary text-white hover:bg-primary/90 shadow-sm cursor-pointer",
+            {/* Stale Warning Banner */}
+            {candidateStatus === 'stale' && result && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-left flex items-start gap-2.5">
+                <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-amber-900 space-y-1">
+                  <p className="font-bold">Koordinat atau radius telah diubah</p>
+                  <p className="text-amber-800 text-[11px]">
+                    Hasil di bawah mengacu pada riwayat posisi sebelumnya. Klik tombol <strong>Analisis Ulang Lokasi Terkini</strong> untuk memperbarui data analitik.
+                  </p>
+                </div>
+              </div>
             )}
-          >
-            {result?.isValidLocation === false ? (
-              <>
-                <AlertTriangle size={16} />
-                Lokasi Non-Daratan Tidak Dapat Disimpan
-              </>
-            ) : isPersistedInDb ? (
-              <>
-                <CheckCircle2 size={16} />
-                Kandidat Tersimpan di Database
-              </>
-            ) : (
-              <>
-                <Save size={16} />
-                Simpan Kandidat ke Database
-              </>
+
+            {/* Explicit save button */}
+            {candidateExists && (
+              <button
+                type="button"
+                onClick={onSaveCandidate}
+                disabled={
+                  isPersistedInDb ||
+                  isAnalyzing ||
+                  result?.isValidLocation === false
+                }
+                className={cn(
+                  "w-full py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all",
+                  result?.isValidLocation === false
+                    ? "bg-slate-200 text-slate-500 cursor-not-allowed opacity-60"
+                    : isPersistedInDb
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-default"
+                      : "bg-primary text-white hover:bg-primary/90 shadow-sm cursor-pointer",
+                )}
+              >
+                {result?.isValidLocation === false ? (
+                  <>
+                    <AlertTriangle size={16} />
+                    Lokasi Non-Daratan Tidak Dapat Disimpan
+                  </>
+                ) : isPersistedInDb ? (
+                  <>
+                    <CheckCircle2 size={16} />
+                    Kandidat Tersimpan di Database
+                  </>
+                ) : (
+                  <>
+                    <Save size={16} />
+                    Simpan Kandidat ke Database
+                  </>
+                )}
+              </button>
             )}
-          </button>
+          </>
         )}
 
         {/* Draft guidance */}

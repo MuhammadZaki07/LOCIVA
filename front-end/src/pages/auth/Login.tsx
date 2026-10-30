@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { ClayButton } from "@/components/ui/ClayButton";
 import { ArrowLeft, Mail, Lock, Eye, EyeOff, AlertCircle } from "lucide-react";
@@ -19,6 +19,7 @@ interface ValidationErrors {
 export default function Login() {
   const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
 
   const [email, setEmail] = useState("");
@@ -75,10 +76,11 @@ export default function Login() {
         variant: "success",
       });
 
+      const redirectParam = searchParams.get("redirect");
       if (loggedInUser.role === "admin") {
-        navigate("/admin", { replace: true });
+        navigate(redirectParam || "/admin", { replace: true });
       } else {
-        navigate("/dashboard", { replace: true });
+        navigate(redirectParam || "/dashboard", { replace: true });
       }
     } catch (err: unknown) {
       setEmail("");

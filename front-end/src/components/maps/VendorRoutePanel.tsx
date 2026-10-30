@@ -2001,7 +2001,7 @@ export const VendorRoutePanel: React.FC<VendorRoutePanelProps> = ({
             <button
               type="button"
               onClick={() => {
-                window.location.href = "/login";
+                window.location.href = "/login?redirect=/view-maps";
               }}
               className="w-full py-2.5 rounded-xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary-deep transition-all shadow-sm"
             >

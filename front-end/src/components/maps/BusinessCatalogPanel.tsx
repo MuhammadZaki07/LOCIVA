@@ -73,7 +73,39 @@ export const BusinessCatalogPanel: React.FC<BusinessCatalogPanelProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [activeSourceTab, setActiveSourceTab] = useState<"catalog" | "my_businesses">("catalog");
+  const [userBusinesses, setUserBusinesses] = useState<any[]>([]);
+  const [loadingUserBusinesses, setLoadingUserBusinesses] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+
+  const fetchUserBusinesses = useCallback(async () => {
+    if (!token) return;
+    setLoadingUserBusinesses(true);
+    try {
+      const res = await api.get("/businesses/user");
+      const data = res.data?.data;
+      const items = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.Data)
+          ? data.Data
+          : Array.isArray(data?.data)
+            ? data.data
+            : [];
+      setUserBusinesses(items);
+    } catch (err) {
+      console.warn("Failed to load user businesses:", err);
+    } finally {
+      setLoadingUserBusinesses(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (isOpen && token) {
+      fetchUserBusinesses();
+    }
+  }, [isOpen, token, fetchUserBusinesses]);
 
   // Close on Escape key
   useEffect(() => {
@@ -149,6 +181,37 @@ export const BusinessCatalogPanel: React.FC<BusinessCatalogPanelProps> = ({
     return () => clearTimeout(timer);
   }, [isOpen, search, selectedCategory, fetchCatalog]);
 
+  const handleUserBusinessSelect = (biz: any) => {
+    const bType = biz.business_type || {};
+    const IconComp =
+      bType.icon && iconMap[bType.icon] ? iconMap[bType.icon] : Store;
+
+    const transformed: BusinessType = {
+      id: bType.id || biz.business_type_id,
+      business_id: biz.id,
+      name: biz.name,
+      category: (bType.category as BusinessCategory) || "Makanan & Minuman",
+      scale: (bType.scale as BusinessScale) || "warung",
+      description: biz.address || bType.description || "",
+      icon: IconComp as any,
+      defaultRadius: bType.default_radius_m || 500,
+      minRadius: bType.min_radius_m || 100,
+      maxRadius: bType.max_radius_m || 2000,
+      targetDemographics: bType.target_demographics || [
+        { category: "commercial", weight: 15 },
+        { category: "residential", weight: 15 },
+      ],
+      competitorCategories: bType.competitor_categories || [
+        "fast_food",
+        "restaurant",
+        "cafe",
+      ],
+    };
+
+    onSelect(transformed);
+    onClose();
+  };
+
   const handleItemSelect = (item: ApiBusinessType) => {
     const IconComp =
       item.icon && iconMap[item.icon] ? iconMap[item.icon] : Store;
@@ -196,10 +259,39 @@ export const BusinessCatalogPanel: React.FC<BusinessCatalogPanelProps> = ({
             <h2 className="text-lg sm:text-xl font-display font-bold text-ink">
               Business Catalog
             </h2>
-            <p className="text-xs text-muted">
-              Select a business type to analyze spatial suitability, footfall,
-              and competitor density
-            </p>
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                type="button"
+                onClick={() => setActiveSourceTab("catalog")}
+                className={cn(
+                  "px-3 py-1 text-xs rounded-lg font-bold transition-all cursor-pointer",
+                  activeSourceTab === "catalog"
+                    ? "bg-primary text-white shadow-xs"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+                )}
+              >
+                Katalog Model Usaha
+              </button>
+              {token && (
+                <button
+                  type="button"
+                  onClick={() => setActiveSourceTab("my_businesses")}
+                  className={cn(
+                    "px-3 py-1 text-xs rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5",
+                    activeSourceTab === "my_businesses"
+                      ? "bg-primary text-white shadow-xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+                  )}
+                >
+                  Usaha Terdaftar Saya
+                  {userBusinesses.length > 0 && (
+                    <span className="size-4 rounded-full bg-white/20 text-[10px] flex items-center justify-center">
+                      {userBusinesses.length}
+                    </span>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -292,7 +384,72 @@ export const BusinessCatalogPanel: React.FC<BusinessCatalogPanelProps> = ({
         </div>
       </div>
 
+      {/* My Businesses View */}
+      {activeSourceTab === "my_businesses" && (
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+          {loadingUserBusinesses ? (
+            <div className="flex flex-col items-center justify-center py-20 space-y-3">
+              <RefreshCw className="size-7 text-primary animate-spin" />
+              <p className="text-xs text-muted font-medium">Memuat usaha terdaftar Anda...</p>
+            </div>
+          ) : userBusinesses.length === 0 ? (
+            <div className="p-8 text-center space-y-3 max-w-md mx-auto">
+              <Store size={36} className="mx-auto text-slate-400" />
+              <p className="text-sm font-bold text-ink">Belum Ada Usaha Terdaftar</p>
+              <p className="text-xs text-muted">
+                Anda belum mendaftarkan usaha di akun ini. Anda dapat menggunakan tab Katalog Usaha atau mendaftarkan usaha Anda melalui Dashboard.
+              </p>
+              <button
+                type="button"
+                onClick={() => setActiveSourceTab("catalog")}
+                className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-xl"
+              >
+                Pilih dari Katalog Usaha
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {userBusinesses.map((biz) => {
+                const isSelected = selectedTypeId === biz.id || selectedTypeId === biz.business_type_id;
+                return (
+                  <div
+                    key={biz.id}
+                    onClick={() => handleUserBusinessSelect(biz)}
+                    className={cn(
+                      "p-4 rounded-2xl border transition-all cursor-pointer text-left flex flex-col justify-between hover:shadow-md",
+                      isSelected
+                        ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                        : "border-slate-200 bg-white hover:border-primary/40",
+                    )}
+                  >
+                    <div>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                          <Store size={16} />
+                        </span>
+                        <h3 className="text-sm font-bold text-ink truncate">{biz.name}</h3>
+                      </div>
+                      <p className="text-xs text-muted mb-1">
+                        {biz.business_type?.name || "Usaha Terdaftar"} · {biz.business_type?.category || "UMKM"}
+                      </p>
+                      {biz.address && (
+                        <p className="text-[11px] text-slate-500 line-clamp-2">{biz.address}</p>
+                      )}
+                    </div>
+                    <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                      <span className="text-primary font-semibold">Pilih untuk Simulasi</span>
+                      <span className="text-slate-400">Radius ~{biz.business_type?.default_radius_m || 500}m</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Catalog Items Container */}
+      {activeSourceTab === "catalog" && (
       <div className="flex-1 overflow-y-auto p-4 sm:p-5">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 space-y-3">
@@ -496,6 +653,7 @@ export const BusinessCatalogPanel: React.FC<BusinessCatalogPanelProps> = ({
 
         )}
       </div>
+      )}
 
       {/* Footer Bar */}
       <div className="p-3.5 border-t border-slate-200 bg-white/70 text-center text-xs text-muted flex items-center justify-between px-6">

@@ -42,7 +42,7 @@ export const CandidateTabs: React.FC<CandidateTabsProps> = ({
   maxTabs = 8,
 }) => {
   return (
-    <div className="flex items-center space-x-2 mb-4 overflow-x-auto pb-1">
+    <div data-tour="candidate-tabs" className="flex items-center space-x-2 mb-4 overflow-x-auto pb-1">
       {candidates.filter(c => c.exists).map(c => {
         const activeClass = colors[c.id] || 'bg-slate-700 text-white';
         const inactiveClass = inactiveColors[c.id] || 'text-slate-700 border-slate-300 hover:bg-slate-100';

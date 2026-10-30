@@ -19,7 +19,9 @@ interface SimulationServiceInterface
     public function getUserSimulationSessions(
         string $userId,
         string $search = '',
-        int $perPage = 10
+        int $perPage = 10,
+        ?string $businessId = null,
+        ?string $businessTypeId = null
     ): LengthAwarePaginator;
 
     /**

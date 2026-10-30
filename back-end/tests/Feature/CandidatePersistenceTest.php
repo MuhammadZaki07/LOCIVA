@@ -40,6 +40,15 @@ class CandidatePersistenceTest extends TestCase
         );
     }
 
+    protected function tearDown(): void
+    {
+        Business::where('user_id', $this->user->id)
+            ->where('id', '!=', $this->business->id)
+            ->forceDelete();
+
+        parent::tearDown();
+    }
+
     public function test_can_create_persistent_draft_candidate_when_adding_candidate(): void
     {
         Sanctum::actingAs($this->user);
@@ -69,7 +78,7 @@ class CandidatePersistenceTest extends TestCase
             'radius_m'      => 500,
         ]);
 
-        $simulation = Simulation::where('target_market', 'Candidate_cand_alpha_01')->first();
+        $simulation = Simulation::find($response->json('data.simulation_id'));
         $this->assertNotNull($simulation);
         $this->assertEquals('draft', $simulation->score?->status);
     }
@@ -189,6 +198,177 @@ class CandidatePersistenceTest extends TestCase
         $response->assertStatus(403);
     }
 
+    public function test_catalog_exploration_without_business_or_with_type_fallback_does_not_abort_403(): void
+    {
+        Sanctum::actingAs($this->user);
+
+        // Client passes business_type_id as business_id fallback
+        $response = $this->postJson('/api/simulations/candidate', [
+            'candidate_id'     => 'CAND_CATALOG',
+            'latitude'         => -7.9800,
+            'longitude'        => 112.6300,
+            'radius_m'         => 500,
+            'business_type_id' => $this->businessType->id,
+            'business_id'      => $this->businessType->id, // faulty fallback from catalog
+            'status'           => 'draft',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.candidate_id', 'CAND_CATALOG');
+    }
+
+    public function test_sessions_for_same_business_are_reused_preventing_orphaned_sessions(): void
+    {
+        Sanctum::actingAs($this->user);
+
+        // Add candidate A without passing session_id
+        $resA = $this->postJson('/api/simulations/candidate', [
+            'candidate_id'     => 'A',
+            'latitude'         => -7.9800,
+            'longitude'        => 112.6300,
+            'radius_m'         => 500,
+            'business_type_id' => $this->businessType->id,
+            'business_id'      => $this->business->id,
+            'status'           => 'draft',
+        ]);
+        $resA->assertStatus(200);
+        $sessionId = $resA->json('data.session_id');
+
+        // Add candidate B without passing session_id
+        $resB = $this->postJson('/api/simulations/candidate', [
+            'candidate_id'     => 'B',
+            'latitude'         => -7.9810,
+            'longitude'        => 112.6310,
+            'radius_m'         => 500,
+            'business_type_id' => $this->businessType->id,
+            'business_id'      => $this->business->id,
+            'status'           => 'draft',
+        ]);
+        $resB->assertStatus(200);
+
+        // Both candidates must be grouped under the same session
+        $this->assertEquals($sessionId, $resB->json('data.session_id'));
+    }
+
+    public function test_saved_candidate_sessions_can_be_filtered_by_selected_business(): void
+    {
+        Sanctum::actingAs($this->user);
+
+        // Create second business
+        $business2 = Business::create([
+            'user_id'          => $this->user->id,
+            'business_type_id' => $this->businessType->id,
+            'name'             => 'Bisnis Kedua Saya',
+            'latitude'         => -7.9800,
+            'longitude'        => 112.6300,
+        ]);
+
+        $session1 = SimulationSession::create([
+            'user_id'     => $this->user->id,
+            'name'        => 'Session For Business 1',
+            'description' => "Linked [business_id:{$this->business->id}]",
+        ]);
+
+        $session2 = SimulationSession::create([
+            'user_id'     => $this->user->id,
+            'name'        => 'Session For Business 2',
+            'description' => "Linked [business_id:{$business2->id}]",
+        ]);
+
+        // Query filtered by business 1
+        $res1 = $this->getJson('/api/simulations/sessions?business_id=' . $this->business->id);
+        $res1->assertStatus(200);
+        $ids1 = collect($res1->json('data'))->pluck('id');
+        $this->assertTrue($ids1->contains($session1->id));
+        $this->assertFalse($ids1->contains($session2->id));
+
+        // Query with unauthorized business_id fails 403
+        $otherUser = User::factory()->create();
+        $otherBiz = Business::create([
+            'user_id'          => $otherUser->id,
+            'business_type_id' => $this->businessType->id,
+            'name'             => 'Bisnis Orang Lain',
+            'latitude'         => -7.9800,
+            'longitude'        => 112.6300,
+        ]);
+        $resForbidden = $this->getJson('/api/simulations/sessions?business_id=' . $otherBiz->id);
+        $resForbidden->assertStatus(403);
+    }
+
+    public function test_saved_candidate_sessions_support_search_pagination_and_type_filtering(): void
+    {
+        Sanctum::actingAs($this->user);
+
+        $slug = 'warung-padang-' . uniqid();
+        $secondType = BusinessType::create([
+            'name'                  => 'Warung Makan Padang',
+            'slug'                  => $slug,
+            'category'              => 'Makanan & Minuman',
+            'scale'                 => 'warung',
+            'default_radius_m'      => 600,
+            'is_active'             => true,
+            'target_demographics'   => [['category' => 'commercial', 'weight' => 20]],
+            'competitor_categories' => ['restaurant'],
+        ]);
+
+        $sessionType1 = SimulationSession::create([
+            'user_id'     => $this->user->id,
+            'name'        => 'Kandidat Seblak Malang',
+            'description' => 'Sesi simulasi seblak',
+        ]);
+        Simulation::create([
+            'session_id'       => $sessionType1->id,
+            'business_type_id' => $this->businessType->id,
+            'latitude'         => -7.9810,
+            'longitude'        => 112.6310,
+            'radius_m'         => 500,
+            'target_market'    => 'Candidate_A',
+        ]);
+
+        $sessionType2 = SimulationSession::create([
+            'user_id'     => $this->user->id,
+            'name'        => 'Kandidat Nasi Padang Suhat',
+            'description' => 'Sesi simulasi padang',
+        ]);
+        Simulation::create([
+            'session_id'       => $sessionType2->id,
+            'business_type_id' => $secondType->id,
+            'latitude'         => -7.9820,
+            'longitude'        => 112.6320,
+            'radius_m'         => 600,
+            'target_market'    => 'Candidate_A',
+        ]);
+
+        // 1. Filter by business_type_id
+        $resType1 = $this->getJson('/api/simulations/sessions?per_page=100&business_type_id=' . $this->businessType->id);
+        $resType1->assertStatus(200);
+        $idsType1 = collect($resType1->json('data'))->pluck('id');
+        $this->assertTrue($idsType1->contains($sessionType1->id));
+        $this->assertFalse($idsType1->contains($sessionType2->id));
+
+        // 2. Search filtering
+        $resSearch = $this->getJson('/api/simulations/sessions?per_page=100&search=Seblak');
+        $resSearch->assertStatus(200);
+        $idsSearch = collect($resSearch->json('data'))->pluck('id');
+        $this->assertTrue($idsSearch->contains($sessionType1->id));
+        $this->assertFalse($idsSearch->contains($sessionType2->id));
+
+        // 3. Server-side pagination
+        $resPage = $this->getJson('/api/simulations/sessions?per_page=1&page=1');
+        $resPage->assertStatus(200)
+            ->assertJsonPath('meta.per_page', 1)
+            ->assertJsonPath('meta.current_page', 1);
+        $this->assertCount(1, $resPage->json('data'));
+
+        // Clean up second type simulations
+        Simulation::where('session_id', $sessionType2->id)->forceDelete();
+        $sessionType2->forceDelete();
+        $secondType->forceDelete();
+        Simulation::where('session_id', $sessionType1->id)->forceDelete();
+        $sessionType1->forceDelete();
+    }
+
     public function test_reopening_session_restores_saved_candidates_and_business_id(): void
     {
         Sanctum::actingAs($this->user);
@@ -268,6 +448,31 @@ class CandidatePersistenceTest extends TestCase
         ]);
         $resRadius->assertStatus(422)
             ->assertJsonValidationErrors(['radius_m']);
+    }
+
+    public function test_location_analysis_does_not_automatically_save_candidate(): void
+    {
+        Sanctum::actingAs($this->user);
+
+        $simulationsBefore = Simulation::count();
+
+        $response = $this->postJson('/api/analysis/location', [
+            'lat'           => -7.9810,
+            'lng'           => 112.6320,
+            'radius'        => 500,
+            'business_type' => $this->businessType->slug,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonStructure([
+                'data' => [
+                    'opportunity_score',
+                ],
+            ]);
+
+        // Running location analysis must NOT automatically create a candidate or simulation record
+        $this->assertEquals($simulationsBefore, Simulation::count());
     }
 }
 

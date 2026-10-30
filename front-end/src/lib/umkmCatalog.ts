@@ -18,6 +18,7 @@ export interface POIWeight {
 
 export interface BusinessType {
   id: string;
+  business_id?: string;
   slug?: string;
   name: string;
   category: BusinessCategory;

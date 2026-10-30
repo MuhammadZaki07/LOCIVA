@@ -14,6 +14,7 @@ import {
   Target,
   HelpCircle,
   Search,
+  Store,
 } from "lucide-react";
 
 export interface SavedCandidateItem {
@@ -48,10 +49,22 @@ export interface SavedSimulationSession {
   created_at: string;
 }
 
+export interface UserBusinessItem {
+  id: string;
+  name: string;
+  business_type?: {
+    id: string;
+    name: string;
+  };
+}
+
 interface SavedCandidatesPanelProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectCandidate: (candidate: SavedCandidateItem) => void;
+  selectedBusinessId?: string | null;
+  selectedBusinessTypeId?: string | null;
+  selectedBusinessName?: string | null;
 }
 
 interface PaginationMeta {
@@ -106,6 +119,9 @@ export const SavedCandidatesPanel: React.FC<SavedCandidatesPanelProps> = ({
   isOpen,
   onClose,
   onSelectCandidate,
+  selectedBusinessId,
+  selectedBusinessTypeId,
+  selectedBusinessName,
 }) => {
   const [sessions, setSessions] = useState<SavedSimulationSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -120,9 +136,61 @@ export const SavedCandidatesPanel: React.FC<SavedCandidatesPanelProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
 
+  // Internal filter state synchronized with props but user-changeable
+  const [filterBusinessId, setFilterBusinessId] = useState<string | null>(selectedBusinessId ?? null);
+  const [filterBusinessTypeId, setFilterBusinessTypeId] = useState<string | null>(selectedBusinessTypeId ?? null);
+  const [filterBusinessName, setFilterBusinessName] = useState<string | null>(selectedBusinessName ?? null);
+  const [userBusinesses, setUserBusinesses] = useState<UserBusinessItem[]>([]);
+  const [loadingBusinesses, setLoadingBusinesses] = useState(false);
+
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const loadingMoreRef = useRef(false);
   const requestIdRef = useRef(0);
+  const prevBusinessRef = useRef<string | null>(null);
+
+  // Sync with incoming props when changed from parent
+  useEffect(() => {
+    setFilterBusinessId(selectedBusinessId ?? null);
+    setFilterBusinessTypeId(selectedBusinessTypeId ?? null);
+    setFilterBusinessName(selectedBusinessName ?? null);
+  }, [selectedBusinessId, selectedBusinessTypeId, selectedBusinessName]);
+
+  // Load user businesses to populate the business filter dropdown
+  useEffect(() => {
+    if (!isOpen) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    const fetchBiz = async () => {
+      setLoadingBusinesses(true);
+      try {
+        const res = await api.get("/businesses/user");
+        const data = res.data?.data;
+        const items = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.Data)
+          ? data.Data
+          : Array.isArray(data?.data)
+          ? data.data
+          : [];
+        setUserBusinesses(items);
+      } catch (err) {
+        console.warn("Failed to load user businesses in SavedCandidatesPanel:", err);
+      } finally {
+        setLoadingBusinesses(false);
+      }
+    };
+    fetchBiz();
+  }, [isOpen]);
+
+  // Reset pencarian ketika usaha yang dipilih berubah
+  useEffect(() => {
+    const currentBizKey = `${filterBusinessId || ""}-${filterBusinessTypeId || ""}`;
+    if (prevBusinessRef.current !== null && prevBusinessRef.current !== currentBizKey) {
+      setSearchQuery("");
+    }
+    prevBusinessRef.current = currentBizKey;
+  }, [filterBusinessId, filterBusinessTypeId]);
 
   const { toast } = useToast();
 
@@ -153,13 +221,18 @@ export const SavedCandidatesPanel: React.FC<SavedCandidatesPanelProps> = ({
     }
 
     try {
-      const res = await api.get("/simulations/sessions", {
-        params: {
-          search: debouncedSearchQuery.trim(),
-          per_page: ITEMS_PER_PAGE,
-          page: 1,
-        },
-      });
+      const params: Record<string, any> = {
+        search: debouncedSearchQuery.trim(),
+        per_page: ITEMS_PER_PAGE,
+        page: 1,
+      };
+      if (filterBusinessId) {
+        params.business_id = filterBusinessId;
+      } else if (filterBusinessTypeId) {
+        params.business_type_id = filterBusinessTypeId;
+      }
+
+      const res = await api.get("/simulations/sessions", { params });
 
       // Abaikan response lama jika pencarian sudah berubah.
       if (requestId !== requestIdRef.current) return;
@@ -193,7 +266,7 @@ export const SavedCandidatesPanel: React.FC<SavedCandidatesPanelProps> = ({
         setIsLoading(false);
       }
     }
-  }, [debouncedSearchQuery]);
+  }, [debouncedSearchQuery, filterBusinessId, filterBusinessTypeId]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -227,13 +300,18 @@ export const SavedCandidatesPanel: React.FC<SavedCandidatesPanelProps> = ({
     setIsLoadingMore(true);
 
     try {
-      const res = await api.get("/simulations/sessions", {
-        params: {
-          search: debouncedSearchQuery.trim(),
-          per_page: ITEMS_PER_PAGE,
-          page: nextPage,
-        },
-      });
+      const params: Record<string, any> = {
+        search: debouncedSearchQuery.trim(),
+        per_page: ITEMS_PER_PAGE,
+        page: nextPage,
+      };
+      if (filterBusinessId) {
+        params.business_id = filterBusinessId;
+      } else if (filterBusinessTypeId) {
+        params.business_type_id = filterBusinessTypeId;
+      }
+
+      const res = await api.get("/simulations/sessions", { params });
 
       // Jangan gabungkan hasil dari pencarian sebelumnya.
       if (requestId !== requestIdRef.current) return;
@@ -293,6 +371,34 @@ export const SavedCandidatesPanel: React.FC<SavedCandidatesPanelProps> = ({
 
     if (nearBottom) {
       void loadMoreSessions();
+    }
+  };
+
+  const handleFilterSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    requestIdRef.current += 1;
+    setSessions([]);
+    setCurrentPage(1);
+    setSearchQuery("");
+
+    if (!val) {
+      setFilterBusinessId(null);
+      setFilterBusinessTypeId(null);
+      setFilterBusinessName(null);
+      return;
+    }
+
+    if (val.startsWith("biz:")) {
+      const bId = val.replace("biz:", "");
+      const found = userBusinesses.find((b) => b.id === bId);
+      setFilterBusinessId(bId);
+      setFilterBusinessTypeId(null);
+      setFilterBusinessName(found?.name || "Usaha");
+    } else if (val.startsWith("type:")) {
+      const tId = val.replace("type:", "");
+      setFilterBusinessId(null);
+      setFilterBusinessTypeId(tId);
+      setFilterBusinessName(selectedBusinessName || "Model Usaha");
     }
   };
 
@@ -383,6 +489,87 @@ export const SavedCandidatesPanel: React.FC<SavedCandidatesPanelProps> = ({
         </button>
       </div>
 
+      {/* Business Filter Selector */}
+      <div className="shrink-0 border-b border-slate-200/80 bg-slate-50/70 px-4 py-2.5 space-y-2">
+        <div className="flex items-center justify-between text-[11px] font-semibold text-slate-700">
+          <span className="flex items-center gap-1.5">
+            <Store size={12} className="text-primary shrink-0" />
+            Filter Berdasarkan Usaha:
+          </span>
+          {(filterBusinessId || filterBusinessTypeId) && (
+            <button
+              type="button"
+              onClick={() => {
+                requestIdRef.current += 1;
+                setSessions([]);
+                setCurrentPage(1);
+                setFilterBusinessId(null);
+                setFilterBusinessTypeId(null);
+                setFilterBusinessName(null);
+              }}
+              className="text-[10px] text-primary hover:underline font-medium cursor-pointer"
+            >
+              Semua Usaha
+            </button>
+          )}
+        </div>
+
+        <select
+          value={
+            filterBusinessId
+              ? `biz:${filterBusinessId}`
+              : filterBusinessTypeId
+              ? `type:${filterBusinessTypeId}`
+              : ""
+          }
+          onChange={handleFilterSelectChange}
+          aria-label="Filter kandidat berdasarkan usaha"
+          className="w-full text-xs bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 font-medium text-ink focus:border-primary/50 outline-none cursor-pointer shadow-2xs"
+        >
+          <option value="">Semua Usaha (Semua Kandidat Tersimpan)</option>
+          {userBusinesses.length > 0 && (
+            <optgroup label="Usaha Terdaftar Anda">
+              {userBusinesses.map((b) => (
+                <option key={b.id} value={`biz:${b.id}`}>
+                  {b.name} {b.business_type?.name ? `(${b.business_type.name})` : ""}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {selectedBusinessTypeId && (
+            <optgroup label="Model Usaha Terpilih di Peta">
+              <option value={`type:${selectedBusinessTypeId}`}>
+                {selectedBusinessName || "Model Usaha"}
+              </option>
+            </optgroup>
+          )}
+        </select>
+
+        {filterBusinessName && (
+          <div className="flex items-center justify-between rounded-lg bg-indigo-50 px-2.5 py-1.5 border border-indigo-100 text-xs text-indigo-900">
+            <div className="flex items-center gap-1.5 truncate">
+              <span className="font-semibold text-[10.5px] text-indigo-700">Aktif:</span>
+              <span className="truncate font-medium text-[10.5px]">{filterBusinessName}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                requestIdRef.current += 1;
+                setSessions([]);
+                setCurrentPage(1);
+                setFilterBusinessId(null);
+                setFilterBusinessTypeId(null);
+                setFilterBusinessName(null);
+              }}
+              className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold shrink-0 ml-2 cursor-pointer"
+              title="Hapus filter usaha"
+            >
+              Reset ✕
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Backend Search */}
       <div className="shrink-0 border-b border-slate-200/80 bg-white px-4 py-3">
         <div className="relative">
@@ -422,6 +609,8 @@ export const SavedCandidatesPanel: React.FC<SavedCandidatesPanelProps> = ({
 
           <span>{candidateList.length} kandidat dimuat</span>
         </div>
+
+
       </div>
 
       {/* Main Content Area */}
@@ -468,12 +657,16 @@ export const SavedCandidatesPanel: React.FC<SavedCandidatesPanelProps> = ({
               <h4 className="text-sm font-bold text-ink">
                 {debouncedSearchQuery.trim()
                   ? "Kandidat Tidak Ditemukan"
+                  : filterBusinessName
+                  ? `Belum Ada Kandidat untuk ${filterBusinessName}`
                   : "No Saved Candidates Yet"}
               </h4>
 
               <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted">
                 {debouncedSearchQuery.trim()
                   ? "Tidak ada kandidat yang cocok dengan pencarian. Coba kata kunci lain."
+                  : selectedBusinessName
+                  ? `Belum ada kandidat tersimpan untuk model usaha "${selectedBusinessName}". Tempatkan kandidat di peta dan simpan untuk menampilkannya di sini.`
                   : 'Select a business type in the Catalog, place Candidate A, B, or C on the map, and click "Save Candidate" to pin it here.'}
               </p>
             </div>

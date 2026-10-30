@@ -30,13 +30,33 @@ class SimulationService implements SimulationServiceInterface
             // Optional explicit business association check & resolution
             $business = null;
             if (!empty($payload['business_id'])) {
-                $business = \App\Models\Business::where('id', $payload['business_id'])
-                    ->where('user_id', $userId)
-                    ->first();
+                if (!empty($payload['business_type_id']) && $payload['business_id'] === $payload['business_type_id']) {
+                    $business = \App\Models\Business::where('id', $payload['business_id'])
+                        ->where('user_id', $userId)
+                        ->first();
+                    // If client mistakenly passed catalog type ID as business_id, treat as null (catalog exploration)
+                } else {
+                    $business = \App\Models\Business::where('id', $payload['business_id'])
+                        ->where('user_id', $userId)
+                        ->first();
 
-                if (!$business) {
-                    abort(403, 'Objek usaha tidak ditemukan atau Anda tidak memiliki akses ke usaha ini.');
+                    if (!$business) {
+                        abort(403, 'Objek usaha tidak ditemukan atau Anda tidak memiliki akses ke usaha ini.');
+                    }
                 }
+
+                if (!$session && $business) {
+                    $session = SimulationSession::where('user_id', $userId)
+                        ->where('description', 'like', "%[business_id:{$business->id}]%")
+                        ->latest()
+                        ->first();
+                }
+            }
+
+            if ($session && $business && !str_contains((string) ($session->description ?? ''), "business_id:{$business->id}")) {
+                $session->update([
+                    'description' => trim(($session->description ?? '') . " [business_id:{$business->id}]"),
+                ]);
             }
 
             if (!$session) {
@@ -239,8 +259,21 @@ class SimulationService implements SimulationServiceInterface
     public function getUserSimulationSessions(
         string $userId,
         string $search = '',
-        int $perPage = 10
+        int $perPage = 10,
+        ?string $businessId = null,
+        ?string $businessTypeId = null
     ): LengthAwarePaginator {
+        // Enforce authorization on business_id if supplied
+        if (!empty($businessId)) {
+            $business = \App\Models\Business::where('id', $businessId)
+                ->where('user_id', $userId)
+                ->first();
+
+            if (!$business) {
+                abort(403, 'Objek usaha tidak ditemukan atau Anda tidak memiliki akses ke usaha ini.');
+            }
+        }
+
         $query = SimulationSession::with([
             'simulations.businessType:id,name,slug',
             'simulations.location:id,name,address',
@@ -248,6 +281,15 @@ class SimulationService implements SimulationServiceInterface
             'simulations.snapshots',
         ])
             ->where('user_id', $userId);
+
+        // Server-side scoping to selected business or business type
+        if (!empty($businessId)) {
+            $query->where('description', 'like', "%[business_id:{$businessId}]%");
+        } elseif (!empty($businessTypeId)) {
+            $query->whereHas('simulations', function (Builder $b) use ($businessTypeId) {
+                $b->where('business_type_id', $businessTypeId);
+            });
+        }
 
         $search = trim($search);
 

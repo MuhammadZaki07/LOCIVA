@@ -44,6 +44,7 @@ export function MapPillNav({
             <div key={item.id} className="relative flex items-center">
               <button
                 type="button"
+                  data-tour={`${item.id}-btn`}
                 disabled={disabled}
                 title={
                   disabled && item.id === "analysis"

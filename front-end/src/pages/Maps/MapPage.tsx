@@ -52,6 +52,7 @@ import {
 import { VendorRoutePanel, type TrackingLocationUpdate } from "@/components/maps/VendorRoutePanel";
 import { RouteLayer } from "@/components/maps/RouteLayer";
 import { MapPillNav, type MapToolId } from "@/components/maps/MapPillNav";
+import { MapTour } from "@/components/maps/MapTour";
 import { SearchModal } from "@/components/maps/SearchModal";
 import {
   ReportMarker,
@@ -90,6 +91,7 @@ import {
   Target,
   Users,
   X,
+  HelpCircle,
 } from "lucide-react";
 
 // ─── Map Ready Gate: delays children until Leaflet fires whenReady ─────────────
@@ -312,6 +314,15 @@ export function MapPage() {
       setIsSearchOpen(true);
       return;
     }
+    // Auth-gate: require login for saved-candidates and routes panels
+    if (!isLoggedIn && (id === "candidates" || id === "routes")) {
+      toast({
+        title: "Masuk Diperlukan",
+        description: "Silakan masuk untuk mengakses fitur ini. Klik untuk menuju halaman masuk.",
+        duration: 4000,
+      });
+      return;
+    }
     setActiveTool((prev) => (prev === id ? null : id));
   };
 
@@ -333,6 +344,7 @@ export function MapPage() {
   const [selectedBusiness, setSelectedBusiness] = useState<BusinessType | null>(
     null,
   );
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isPersistedInDb, setIsPersistedInDb] = useState(false);
 
   // ── Layer toggles & Category filter ───────────────────────────────────────
@@ -542,6 +554,22 @@ export function MapPage() {
 
   const [isLoggedIn] = useState(() => Boolean(localStorage.getItem("token")));
 
+  // ── Candidate location picking mode (temporary interaction mode) ─────────
+  const [isPickingCandidateLocation, setIsPickingCandidateLocation] = useState(false);
+
+  // ── Onboarding tour ─────────────────────────────────────────────────────
+  const [tourRun, setTourRun] = useState(false);
+  useEffect(() => {
+    if (!localStorage.getItem("lociva_tour_done")) {
+      const t = setTimeout(() => setTourRun(true), 800);
+      return () => clearTimeout(t);
+    }
+  }, []);
+  const handleTourFinish = useCallback(() => {
+    setTourRun(false);
+    localStorage.setItem("lociva_tour_done", "1");
+  }, []);
+
   // ── Click mode: either placing candidate, waypoint, or report location ──────
   const clickMode = useMemo(():
     | "candidate"
@@ -557,7 +585,7 @@ export function MapPage() {
       return "waypoint";
     }
 
-    if (selectedBusiness) return "candidate";
+    if (selectedBusiness && isPickingCandidateLocation) return "candidate";
 
     return "none";
   }, [
@@ -567,6 +595,7 @@ export function MapPage() {
     isSelectingWaypoint,
     isSelectingAnalysisArea,
     selectedBusiness,
+    isPickingCandidateLocation,
   ]);
 
   // ── Privacy-Aware Opt-in User GPS Location (Section 6) ───────────────────
@@ -845,14 +874,17 @@ export function MapPage() {
         return;
       }
       try {
-        const businessId = (businessType as any).business_id || (businessType as any).id;
+        const businessId = (businessType as any).business_id && (businessType as any).business_id !== businessType.id
+          ? (businessType as any).business_id
+          : undefined;
         const payload: Record<string, any> = {
           candidate_id: candidate.id,
           latitude: candidate.lat,
           longitude: candidate.lng,
           radius_m: candidate.radius,
           business_type_id: businessType.id,
-          business_id: businessId,
+          ...(businessId ? { business_id: businessId } : {}),
+          ...(currentSessionId ? { session_id: currentSessionId } : {}),
           session_name: `Simulation ${businessType.name}`,
           location_name: `Candidate Point ${candidate.id}`,
           status: analysis ? "calculated" : "draft",
@@ -877,7 +909,10 @@ export function MapPage() {
           payload.limitations = analysis.limitations;
         }
 
-        await api.post("/simulations/candidate", payload);
+        const saveRes = await api.post("/simulations/candidate", payload);
+        if (saveRes.data?.data?.session_id) {
+          setCurrentSessionId(saveRes.data.data.session_id);
+        }
         setIsPersistedInDb(true);
         setPersistedCandidateMap((prev) => ({
           ...prev,
@@ -904,6 +939,14 @@ export function MapPage() {
 
   // ── Manual analysis trigger (explicit user action, no auto-trigger on drag) ──
   const handleRunAnalysis = useCallback(async () => {
+    if (!isLoggedIn) {
+      toast({
+        title: "Perlu Masuk Akun",
+        description: "Silakan masuk (login) terlebih dahulu untuk menjalankan analisis lokasi.",
+        variant: "warning",
+      });
+      return;
+    }
     const cand = candidates[activeCandidateId];
     if (!cand || !selectedBusiness) return;
 
@@ -928,9 +971,6 @@ export function MapPage() {
         variant: "success",
       });
 
-      if (isLoggedIn) {
-        persistCandidateToDatabase(cand, selectedBusiness, res);
-      }
     } else {
       setCandidateStatuses((prev) => ({ ...prev, [activeCandidateId]: "failed" }));
       toast({
@@ -980,6 +1020,7 @@ export function MapPage() {
 
   const handleBusinessSelect = (business: BusinessType) => {
     setSelectedBusiness(business);
+    setCurrentSessionId(null);
     setIsPersistedInDb(false);
     setCandidates({ A: null, B: null, C: null });
     setAnalysisResults({ A: null, B: null, C: null });
@@ -988,6 +1029,7 @@ export function MapPage() {
     setActiveCandidateId("A");
     setActiveTool("analysis");
     if (window.innerWidth < 768) setActiveTool(null);
+    setIsPickingCandidateLocation(true);
     toast({
       title: `${business.name} Selected`,
       description: "Click anywhere on the map to place Candidate Point A.",
@@ -1031,6 +1073,7 @@ export function MapPage() {
           [activeCandidateId]: false,
         }));
         setIsPersistedInDb(false);
+        setIsPickingCandidateLocation(false);
         if (activeTool !== "analysis") setActiveTool("analysis");
       } else if (clickMode === "waypoint") {
         if (isSelectingAnalysisArea) {
@@ -1146,6 +1189,14 @@ export function MapPage() {
   );
 
   const handleAddCandidate = async () => {
+    if (!isLoggedIn) {
+      toast({
+        title: "Perlu Masuk Akun",
+        description: "Silakan masuk (login) terlebih dahulu untuk menambah kandidat lokasi.",
+        variant: "warning",
+      });
+      return;
+    }
     const candidateKeys: CandidateId[] = ["A", "B", "C", "D", "E"];
     const nextAvailable = candidateKeys.find(
       (id) => !candidates[id],
@@ -1163,21 +1214,29 @@ export function MapPage() {
     setCandidateStatuses((prev) => ({ ...prev, [nextAvailable]: 'draft' }));
     setAnalysisResults((prev) => ({ ...prev, [nextAvailable]: null }));
     setPersistedCandidateMap((prev) => ({ ...prev, [nextAvailable]: false }));
+    setIsPickingCandidateLocation(true);
 
     // Create persistent draft in database via Laravel API
     if (isLoggedIn && selectedBusiness) {
       try {
-        await api.post("/simulations/candidate", {
+        const businessId = (selectedBusiness as any).business_id && (selectedBusiness as any).business_id !== selectedBusiness.id
+          ? (selectedBusiness as any).business_id
+          : undefined;
+        const draftRes = await api.post("/simulations/candidate", {
           candidate_id: nextAvailable,
           latitude: selectedBusiness.latitude || center[0] || -7.9800,
           longitude: selectedBusiness.longitude || center[1] || 112.6300,
           radius_m: selectedBusiness.defaultRadius || 500,
           business_type_id: selectedBusiness.id,
-          business_id: (selectedBusiness as any).business_id || (selectedBusiness as any).id,
+          ...(businessId ? { business_id: businessId } : {}),
+          ...(currentSessionId ? { session_id: currentSessionId } : {}),
           status: 'draft',
           session_name: `Simulasi ${selectedBusiness.name}`,
           location_name: `Draft Kandidat ${nextAvailable}`,
         });
+        if (draftRes.data?.data?.session_id) {
+          setCurrentSessionId(draftRes.data.data.session_id);
+        }
 
         toast({
           title: `Draft Kandidat ${nextAvailable} Dibuat`,
@@ -1352,7 +1411,7 @@ export function MapPage() {
       />
 
       {/* ── Main Interactive Map Canvas ────────────────────────────────────── */}
-      <div className="flex-1 relative flex flex-col min-w-0">
+      <div data-tour="map-canvas" className="flex-1 relative flex flex-col min-w-0">
         {/* ── Vertical Nav Pill (Anchored on Left, vertically centered) ──────── */}
         <MapPillNav
           active={activeTool}
@@ -1450,6 +1509,9 @@ export function MapPage() {
               <SavedCandidatesPanel
                 isOpen={true}
                 onClose={() => setActiveTool(null)}
+                selectedBusinessId={(selectedBusiness as any)?.business_id || null}
+                selectedBusinessTypeId={selectedBusiness?.id || null}
+                selectedBusinessName={selectedBusiness?.name || null}
                 onSelectCandidate={(saved) => {
                   setCandidates((prev) => ({
                     ...prev,
@@ -1514,6 +1576,9 @@ export function MapPage() {
                       isStale={candidateStatuses[activeCandidateId] === 'stale'}
                       candidateId={activeCandidateId}
                       analysisStage={getCandidateStage(activeCandidateId)}
+                      isLoggedIn={isLoggedIn}
+                      onStartPickLocation={() => setIsPickingCandidateLocation(true)}
+                      isPickingLocation={isPickingCandidateLocation}
                     />
                   </div>
                 </div>
@@ -1598,6 +1663,14 @@ export function MapPage() {
                   mapRef.current?.flyTo([lat, lng], 17);
                 }}
                 onOpenCreateModal={() => {
+                  if (!isLoggedIn) {
+                    toast({
+                      title: "Perlu Masuk Akun",
+                      description: "Silakan masuk (login) terlebih dahulu untuk membuat dan mengirim laporan warga.",
+                      variant: "warning",
+                    });
+                    return;
+                  }
                   setSelectedReportCoords(
                     activeUserLocation
                       ? { lat: activeUserLocation.lat, lng: activeUserLocation.lng }
@@ -1686,6 +1759,16 @@ export function MapPage() {
             >
               <Satellite size={14} />
               <span className="hidden sm:inline">Satellite</span>
+            </button>
+            <div className="w-px h-4 bg-slate-200 mx-0.5" />
+            <button
+              type="button"
+              onClick={() => setTourRun(true)}
+              className="px-2.5 py-1.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer text-muted hover:text-primary hover:bg-primary-soft"
+              title="Panduan Interaktif Peta (Onboarding Tour)"
+            >
+              <HelpCircle size={14} />
+              <span className="hidden sm:inline">Panduan</span>
             </button>
           </div>
 
@@ -2293,10 +2376,17 @@ export function MapPage() {
           </div>
 
           {/* Prompt: Candidate placement mode */}
-          {clickMode === "candidate" && activeCount === 0 && (
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[400] bg-slate-900/90 text-white px-6 py-3 rounded-full font-semibold text-xs animate-bounce shadow-xl pointer-events-none border border-white/20 flex items-center gap-2">
-              <Target size={16} className="text-primary" />
-              <span>Click anywhere on the map to place Candidate Point A</span>
+          {clickMode === "candidate" && (
+            <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[450] bg-slate-900/95 text-white px-5 py-2.5 rounded-full text-xs font-semibold shadow-xl flex items-center gap-3 border border-white/20 pointer-events-auto">
+              <Target size={15} className="text-primary shrink-0" />
+              <span>Klik pada peta untuk menempatkan titik Kandidat {activeCandidateId}</span>
+              <button
+                type="button"
+                onClick={() => setIsPickingCandidateLocation(false)}
+                className="rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] hover:bg-white/30 cursor-pointer"
+              >
+                Batal
+              </button>
             </div>
           )}
 
@@ -2389,6 +2479,15 @@ export function MapPage() {
       )}
 
       {/* Create report modal */}
+      {/* ── Onboarding Tour ─────────────────────────────────────────────── */}
+      <MapTour
+        run={tourRun}
+        onFinish={handleTourFinish}
+        isLoggedIn={isLoggedIn}
+        hasSelectedBusiness={!!selectedBusiness}
+        hasCandidate={activeCount > 0}
+      />
+
       <CreateReportModal
         isOpen={createReportModalOpen}
         onClose={() => {
